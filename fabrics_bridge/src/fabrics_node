@@ -3,8 +3,6 @@
 import numpy as np
 import time
 import datetime
-import argparse
-import yaml
 
 # fabrics imports
 # from fabrics.planner.fabricPlanner import DefaultFabricPlanner
