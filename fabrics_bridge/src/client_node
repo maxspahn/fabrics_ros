@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+# ros imports
+import rospy
+from fabrics_msgs.msg import FabricGoal
+from fabrics_msgs.msg import FabricGoalArray
+
+
+class ClientNode(object):
+    def __init__(self):
+        rospy.init_node('client_node')
+        self._rate = rospy.Rate(10)
+        self.set_goals_publisher()
+
+    def set_goals_publisher(self):
+        self._goals_publisher = rospy.Publisher(
+            '/planning_goals',
+            FabricGoalArray, queue_size=10
+        )
+
+    # TODO
+    # def obstacles_publisher()
+    # def publish_obstacles()
+
+    def publish_goals(self):
+        self._goals_data = FabricGoalArray()
+        self._goal_data = FabricGoal()
+        self._goal_data.position.x = 0.5
+        self._goal_data.position.y = -0.4
+        self._goal_data.position.z = 0.3
+        self._goal_data.parent_link = 0
+        self._goal_data.child_link = 7
+        self._goal_data.prime = True
+        self._goal_data.m = 3
+        self._goal_data.w = 1
+        self._goal_data.indices = [0, 1, 2]
+        self._goal_data.type = "staticSubGoal"
+        self._goal_data.epsilon = 0.05
+        self._goals_list = []
+        self._goals_list.append(self._goal_data)
+        self._goals_data.goals = self._goals_list
+        self._goals_publisher.publish(self._goals_data)
+
+    def run(self):
+        while not rospy.is_shutdown():
+            self.publish_goals()
+            self._rate.sleep()
+
+if __name__ == "__main__":
+    ClientNode = ClientNode()
+    try:
+        ClientNode.run()
+    except rospy.ROSInterruptException:
+        pass
+
+
+
