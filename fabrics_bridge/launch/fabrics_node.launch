@@ -1,0 +1,11 @@
+<launch>
+    <!-- load config files -->
+    <rosparam file="$(find fabrics_bridge)/config/fabric.yaml" />
+    <rosparam file="$(find fabrics_bridge)/config/exp.yaml"/>
+
+    <!-- start nodes -->
+    <node pkg="albert_helpers" type="joint_states_filter" name="joint_states_filter"/>
+    <node pkg="albert_helpers" type="ros_integrator" name="ros_integrator"/>
+    <node pkg="fabrics_bridge" type="client_node" name="client_node" output="screen"/>
+    <!-- <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen"/> -->
+</launch>
