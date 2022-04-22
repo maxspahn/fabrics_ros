@@ -72,7 +72,6 @@ class FabricNode(object):
         # initial setup
         # wait for /planning_goals being published, otherwise don't do anything
         goals = rospy.wait_for_message("/planning_goals", FabricGoalArray)
-        #self.set_planner_file()
         self.set_goal_subscriber()
         self.set_variables()
 
@@ -84,19 +83,19 @@ class FabricNode(object):
     # this function wrap params from fabric.yaml into a dictionary as an input for FabricPlanner()
     # ideally the dictionary shouldn't be necessary, but this is a temporary solution to make
     # sure every modules work correctly
-    def set_planner_file(self):
-        self._planner_file = {}
-        self._planner_file.update({"interval": rospy.get_param("interval")})
-        self._planner_file.update({"type": rospy.get_param("type")})
-        self._planner_file.update({"n": rospy.get_param("n")})
-        self._planner_file.update({"m_base": rospy.get_param("m_base")})
-        self._planner_file.update({"obst": rospy.get_param("obst")})
-        self._planner_file.update({"selfCol": rospy.get_param("selfCol")})
-        self._planner_file.update({"attractor": rospy.get_param("attractor")})
-        self._planner_file.update({"limits": rospy.get_param("limits")})
-        self._planner_file.update({"speed": rospy.get_param("speed")})
-        self._planner_file.update({"damper": rospy.get_param("damper")})
-        self._planner_file.update({"dynamic": rospy.get_param("dynamic")})
+    # def set_planner_file(self):
+    #     self._planner_file = {}
+    #     self._planner_file.update({"interval": rospy.get_param("interval")})
+    #     self._planner_file.update({"type": rospy.get_param("type")})
+    #     self._planner_file.update({"n": rospy.get_param("n")})
+    #     self._planner_file.update({"m_base": rospy.get_param("m_base")})
+    #     self._planner_file.update({"obst": rospy.get_param("obst")})
+    #     self._planner_file.update({"selfCol": rospy.get_param("selfCol")})
+    #     self._planner_file.update({"attractor": rospy.get_param("attractor")})
+    #     self._planner_file.update({"limits": rospy.get_param("limits")})
+    #     self._planner_file.update({"speed": rospy.get_param("speed")})
+    #     self._planner_file.update({"damper": rospy.get_param("damper")})
+    #     self._planner_file.update({"dynamic": rospy.get_param("dynamic")})
 
     # this function wrap params from exp.yaml into a dictionary as an input for Experiment()
     # ideally the dictionary shouldn't be necessary, but this is a temporary solution to make
@@ -152,9 +151,7 @@ class FabricNode(object):
             goal_marker.color.b = 0.0
             return goal_marker
 
-
     def set_goal_subscriber(self):
-        self._goal = np.array([0.8, 0.0, 0.6])
         self._goal_subscriber = rospy.Subscriber(
             '/planning_goals',
             FabricGoalArray, self.goal_callback
@@ -186,8 +183,9 @@ class FabricNode(object):
             goal_marker.scale.y = goal.epsilon
             goal_marker.scale.z = goal.epsilon
             self._goals_markers.markers.append(goal_marker)
+        # publish goal markers
         self._goals_markers_publisher.publish(self._goals_markers)
-
+        # only act when a goal has been received
         self.act()
 
     def set_joint_state_subscriber(self):
@@ -228,27 +226,16 @@ class FabricNode(object):
         self.publish_action(action)
         return action
 
-    # def RosConverter(self):
-    #     rate_int = int(1/self._dt)
-    #     self._rosConverter = ActionConverterNode(self._dt, rate_int, self._experiment.robotType())
-
-    # def applyAction(self, action, t_exp):
-    #     ob, t = self._rosConverter.publishAction(action)
-    #     self._rosConverter.setGoal(self._experiment.primeGoal(), t=t_exp)
-    #     for i, obst in enumerate(self._experiment.obstacles()):
-    #         self._rosConverter.setObstacle(obst, i, t=t_exp)
-    #     return ob, t
-
 
     @property
     def n(self):
         return self._n
 
+    # the run() has been moved to goal_callback
     # def run(self):
         # while not rospy.is_shutdown():
             # self.act()
             # self._rate.sleep()
-
 
 if __name__ == "__main__":
     my_fabric_node = FabricNode()
