@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <!-- load config files -->
+    <rosparam file="$(find fabrics_processing)/config/joint_states_integrator.yaml"/>
+    <rosparam file="$(find fabrics_processing)/config/joint_states_filter.yaml"/>
+
+    <!-- start nodes -->
+    <node pkg="fabrics_processing" type="joint_states_filter" name="joint_states_filter"/>
+    <node pkg="fabrics_processing" type="joint_states_integrator" name="joint_states_integrator"/>
+</launch>

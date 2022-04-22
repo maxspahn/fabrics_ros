@@ -1,0 +1,115 @@
+#!/usr/bin/env python
+
+import rospy
+import numpy as np
+
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64MultiArray, Bool
+from geometry_msgs.msg import Twist
+
+class IntegratorNode(object):
+    def __init__(self):
+        rospy.init_node("joint_states_integrator", anonymous=True)
+        rate_int = rospy.get_param("/joint_states_integrator/rate")
+        self._rate = rospy.Rate(rate_int)
+        self._n = 9
+        self._dt = 1.0/rate_int
+        self._motion_stop_sub = rospy.Subscriber(
+            "/motion_stop_request",
+            Bool, 
+            self.motion_stop_cb
+        )
+        self._joint_state_sub = rospy.Subscriber(
+            "/joint_states_filtered", 
+            JointState, 
+            self.joint_state_cb
+        )
+        self._acc_sub = rospy.Subscriber(
+            "/joint_acc_des", 
+            Float64MultiArray, 
+            self.acc_cb
+        )
+        self._vel_pub_panda = rospy.Publisher(
+            '/panda_joint_velocity_controller/command',
+            Float64MultiArray,
+            queue_size=10
+        )
+        self._vel_pub_boxer = rospy.Publisher(
+            '/cmd_vel',
+            Twist,
+            queue_size=10
+        )
+        self._q = np.zeros(self._n)
+        self._qdot = np.zeros(self._n)
+        self._acc = np.zeros(self._n)
+        self._maxVel = np.ones(self._n) * 1
+        self._minVel = np.ones(self._n) * -1
+        self._qdot_old = np.zeros(self._n)
+        self._qdot_int = np.zeros(self._n)
+        """ panda specifics """
+        self._vel_msg_panda = Float64MultiArray()
+        self._panda_indices = [2, 3, 4, 5, 6, 7, 8]
+        """ boxer specifics """
+        self._vel_msg_boxer = Twist()
+        self._boxer_indices = [0, 1]
+        self._latest_action_time_stamp = rospy.get_time()
+
+        
+
+    def motion_stop_cb(self, data):
+        self.stop_motion("user_call")
+
+    def stop_motion(self, cause):
+        rospy.logwarn("Stoping motion due to %s", cause)
+        self._acc = np.zeros(self._n)
+        self._qdot_old = np.zeros(self._n)
+        self._qdot = np.zeros(self._n)
+        self._qdot_int = np.zeros(self._n)
+        self._latest_action_time_stamp = rospy.get_time()
+
+
+    def joint_state_cb(self, data):
+        self._q = np.array(data.position[3:12])
+        self._qdot = np.array(data.velocity[3:12])
+
+    def acc_cb(self, data):
+        self._acc = np.array(data.data)
+        self._latest_action_time_stamp = rospy.get_time()
+
+    def integrateAction(self, indices, full_integration=False):
+        integration_threshold = rospy.get_param("/joint_states_integrator/integration_threshold")
+        if full_integration:
+            self._qdot_int[indices] = self._qdot_old[indices] + self._acc[indices] * self._dt
+        else:
+            self._qdot_int[indices] = self._qdot[indices] + self._acc[indices] * self._dt
+        for i in indices:
+            if np.abs(self._qdot_int[i]) < integration_threshold:
+                self._qdot_int[i] = 0.0
+        self._qdot_int[indices] = np.clip(self._qdot_int[indices], self._minVel[indices], self._maxVel[indices])
+        self._qdot_old[indices] = self._qdot_int[indices]
+
+    def run(self):
+        self._rate.sleep()
+        print("Running integrator acc -> vel")
+        while not rospy.is_shutdown():
+            if rospy.get_time() > self._latest_action_time_stamp + 0.1:
+                self.stop_motion("timeout")
+            else:
+                self.integrateAction(self._panda_indices, full_integration=True)
+            #self.integrateAction(self._boxer_indices, full_integration=False)
+            self._vel_msg_panda.data = self._qdot_int.tolist()[2:]
+            #self._vel_msg_boxer.linear.x = self._qdot_int[0]
+            #self._vel_msg_boxer.angular.z = self._qdot_int[1]
+            self._vel_pub_panda.publish(self._vel_msg_panda)
+            #self._vel_pub_boxer.publish(self._vel_msg_boxer)
+            self._rate.sleep()
+        return []
+
+
+if __name__ == "__main__":
+    integratorNode = IntegratorNode()
+    try:
+        integratorNode.run()
+    except rospy.ROSInterruptException:
+        pass
+

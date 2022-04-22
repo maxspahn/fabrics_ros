@@ -1,0 +1,4 @@
+joint_states_filter:
+  rate: 500
+  polynomial_order: 2
+  observation_length: 10

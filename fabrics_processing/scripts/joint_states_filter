@@ -1,0 +1,134 @@
+#!/usr/bin/env python
+
+import numpy as np
+import rospy
+from sensor_msgs.msg import JointState
+from numpy.polynomial import Polynomial
+
+from tf.transformations import euler_from_quaternion
+from nav_msgs.msg import Odometry
+
+class JointStatesFilter(object):
+    """
+    This class filters the joint states by fitting a
+    polynomial curve through the last n observations.
+    The joint states of the boxer are obtained using tf listener and joint
+    states listener.
+    """
+
+    def __init__(self):
+        rospy.init_node('joint_states_filter')
+        rate_int = rospy.get_param("/joint_states_filter/rate")
+        self._rate = rospy.Rate(rate_int)
+        # Subscribe to the joint states topic
+        self._joint_states_sub = rospy.Subscriber(
+            '/joint_states',
+            JointState, self.joint_state_cb
+        )
+        # Subscribe to the odometry topic for boxer state information
+        self._odom_filtered_sub = rospy.Subscriber(
+            '/odometry/filtered',
+            Odometry, self.odom_filtered_cb
+        )
+        # Publisher of filtered joint states
+        self._filter_joint_states_pub = rospy.Publisher(
+            '/joint_states_filtered', 
+            JointState, queue_size=10
+        )
+        self.initializePubMessage()
+        self.setParameters(rate_int)
+
+    def initializePubMessage(self):
+        self._pub_message = JointState()
+        boxerJointNames = [
+            'boxer_x', 
+            'boxer_y', 
+            'boxer_theta',
+            'vel_forward',
+            'vel_rotational',
+        ]
+        pandaJointNames = ['panda_joint' + str(i+1) for i in range(7)]
+        self._pub_message.name = boxerJointNames + pandaJointNames
+        # panda data 
+        self._panda_positions = []
+        self._panda_velocities = []
+        # boxer data
+        self._boxer_positions = [0, ] * 5
+        self._boxer_velocities = [0, ] * 5
+        # output data
+        self._velocities = []
+
+    def setParameters(self, rate):
+        self._polyFitOrder = rospy.get_param('/joint_states_filter/polynomial_order')
+        self._n_poly = rospy.get_param("/joint_states_filter/observation_length")
+        self._dt = 1/rate
+
+    def joint_state_cb(self, data):
+        self._panda_positions.append(np.array(data.position[3:10]))
+        self._panda_velocities.append(np.array(data.velocity[3:10]))
+        if len(self._panda_velocities) > self._n_poly:
+            self._panda_positions = self._panda_positions[-self._n_poly:]
+            self._panda_velocities = self._panda_velocities[-self._n_poly:]
+
+    def filterPolyFit(self):
+        """
+        Filter panda state information
+        """
+        if len(self._panda_positions) < self._n_poly:
+            print("No entries")
+            return np.zeros(7), np.zeros(7), -1
+        meanPos = self._panda_positions[-1]
+        t = np.array([0.001 * i for i in range(self._n_poly)])
+        meanVel = []
+        for i in range(7):
+            veliArray = np.array(self._panda_velocities)[-self._n_poly:, i]
+            poly = Polynomial.fit(t, veliArray, deg=self._polyFitOrder)
+            meanVel.append(poly(t[-1]))
+        return meanPos, np.array(meanVel), 0
+
+
+    def odom_filtered_cb(self, data):
+        """
+        Odometry call back for boxer state information
+        """
+        eulers = euler_from_quaternion([
+            data.pose.pose.orientation.x, 
+            data.pose.pose.orientation.y, 
+            data.pose.pose.orientation.z, 
+            data.pose.pose.orientation.w
+        ])
+        theta = eulers[2]
+        self._boxer_positions[0:3] = [
+            data.pose.pose.position.x,
+            data.pose.pose.position.y,
+            theta, 
+        ]
+        self._boxer_velocities[3] = data.twist.twist.linear.x
+        self._boxer_velocities[4] = data.twist.twist.angular.z
+        self._boxer_velocities[0:3] = [
+            np.cos(theta) * self._boxer_velocities[3],
+            np.sin(theta) * self._boxer_velocities[3],
+            self._boxer_velocities[4]
+        ]
+
+
+    def run(self):
+        self._rate.sleep()
+        while not rospy.is_shutdown():
+            self._pub_message.header.stamp = rospy.Time.now()
+            panda_pos, panda_vel, errorFlag = self.filterPolyFit()
+            boxer_pos = self._boxer_positions
+            boxer_vel = self._boxer_velocities
+            if errorFlag >= 0:
+                self._pub_message.position = boxer_pos + panda_pos.tolist()
+                self._pub_message.velocity = boxer_vel + panda_vel.tolist()
+                self._filter_joint_states_pub.publish(self._pub_message)
+            self._rate.sleep()
+
+
+if __name__ == "__main__":
+    myJointStatesFilter = JointStatesFilter()
+    try:
+        myJointStatesFilter.run()
+    except rospy.ROSInterruptException:
+        pass
