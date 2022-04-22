@@ -9,7 +9,7 @@ import datetime
 # TODO
 # ask why DefaultFabricPlanner doesn't have setObstacles() and setGoal()
 # difference??
-from fabricPlanner import FabricPlanner
+# from fabricPlanner import FabricPlanner
 
 
 # ros imports
@@ -24,21 +24,58 @@ from fabrics_msgs.msg import FabricGoalArray
 from ros_converter_node import ActionConverterNode
 from experiment import Experiment
 
+from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
+from forwardkinematics.urdfFks.pandaFk import PandaFk
+
+def set_planner():
+    degrees_of_freedom = 7
+    damper = {
+            "alpha_b": 0.5,
+            "alpha_eta": 0.5,
+            "alpha_shift": 0.5,
+            "beta_distant": 0.01,
+            "beta_close": 6.5,
+            "radius_shift": 0.3
+    }
+    attractor_potential = "10 * ca.norm_2(x)**2"
+    planner = ParameterizedFabricPlanner(
+            degrees_of_freedom,
+            damper=damper
+    )
+    q = planner.variables.position_variable()
+    panda_fk = PandaFk()
+    forward_kinematics = []
+    for i in range(1, degrees_of_freedom):
+        forward_kinematics.append(panda_fk.fk(q, i, positionOnly=True))
+    forward_kinematics_end_effector = panda_fk.fk(
+        q, 7, positionOnly=True
+    )
+    forward_kinematics.append(forward_kinematics_end_effector)
+    planner.set_components(
+        forward_kinematics,
+        forward_kinematics_end_effector,
+        number_obstacles=0,
+        goal=True,
+    )
+    planner.concretize()
+    return planner
+
 
 class FabricNode(object):
     def __init__(self):
         rospy.init_node('fabric_node')
-        self._rate = rospy.Rate(500)
+        self._rate = rospy.Rate(100)
 
         # initial setup
         # wait for /planning_goals being published
-        goals = rospy.wait_for_message("/planning_goals", FabricGoalArray)
-        self.set_planner_file()
+        # goals = rospy.wait_for_message("/planning_goals", FabricGoalArray)
+        #self.set_planner_file()
         self.set_goal_subscriber()
         self.set_variables()
 
         self.set_action_publisher()
         self.set_joint_state_subscriber()
+        self._planner = set_planner()
 
 
     # this function wrap params from fabric.yaml into a dictionary as an input for FabricPlanner()
@@ -81,12 +118,13 @@ class FabricNode(object):
         self.run()
 
     def set_planner(self):
-        self._planner = FabricPlanner(self._experiment, self._planner_file)
-        self._planner.setJointLimits(self._experiment.limits())
-        self._planner.setSelfCollisionAvoidance(self._experiment.rBody())
-        self._planner.setObstacles(self._experiment.obstacles(), self._experiment.rBody())
-        self._planner.setGoal(self._experiment.goal())
-        self._planner.concretize()
+        print("DEPRECATED")
+        #self._planner = FabricPlanner(self._experiment, self._planner_file)
+        #self._planner.setJointLimits(self._experiment.limits())
+        #self._planner.setSelfCollisionAvoidance(self._experiment.rBody())
+        #self._planner.setObstacles(self._experiment.obstacles(), self._experiment.rBody())
+        #self._planner.setGoal(self._experiment.goal())
+        #self._planner.concretize()
 
     def set_variables(self):
         # plannar.param
@@ -95,7 +133,7 @@ class FabricNode(object):
         self._T = 5000
 
     def set_goal_subscriber(self):
-        self._goal = np.zeros(3)
+        self._goal = np.array([0.8, 0.0, 0.6])
         self._goal_subscriber = rospy.Subscriber(
             '/planning_goals',
             FabricGoalArray, self.goal_callback
@@ -112,11 +150,12 @@ class FabricNode(object):
             "child_link": goal.child_link, "desired_position": [goal.position.x, goal.position.y, goal.position.z],
             "type": goal.type, "epsilon": goal.epsilon}
             }
+            self._goal = np.array([goal.position.x, goal.position.y, goal.position.z])
         self.set_exp_file()
 
     def set_joint_state_subscriber(self):
-        self._joint_positions = np.zeros(self.n)
-        self._joint_velocities = np.zeros(self.n)
+        self._joint_positions = np.zeros(3 + self.n)
+        self._joint_velocities = np.zeros(3 + self.n)
         self._joint_state_subscriber = rospy.Subscriber(
             '/joint_states',
             JointState, self.joint_states_callback
@@ -128,17 +167,22 @@ class FabricNode(object):
 
     def set_action_publisher(self):
         self._action_publisher = rospy.Publisher(
-            '/joint_desired_accelerations', 
+            '/joint_acc_des', 
             Float64MultiArray, queue_size=10
         )
-        self._action_message = Float64MultiArray(data=np.zeros(self.n))
+        self._action_message = Float64MultiArray(data=np.zeros(9))
 
     def compute_action(self):
         # here the observation is not filtered, it's directly from /joint_states
-        return self._planner.computeAction(self._joint_positions[3:10], self._joint_velocities[3:10])
+        rospy.loginfo("Going to goal (%f, %f, %f)", self._goal[0], self._goal[1], self._goal[2])
+        return self._planner.compute_action(
+            q=self._joint_positions[3:10],
+            qdot=self._joint_velocities[3:10],
+            x_goal=self._goal,
+        )
 
     def publish_action(self, action: np.ndarray):
-        self._action_message.data = action
+        self._action_message.data[2:] = action
         self._action_publisher.publish(self._action_message)
 
     def act(self):
@@ -149,23 +193,6 @@ class FabricNode(object):
     def RosConverter(self):
         rate_int = int(1/self._dt)
         self._rosConverter = ActionConverterNode(self._dt, rate_int, self._experiment.robotType())
-
-    def run(self):
-        print("start run")
-        start=time.perf_counter()
-        print(f"Planner composed in {np.round(time.perf_counter()-start, decimals=2)} sec")
-        timeStamp = "{:%Y%m%d_%H%M%S}".format(datetime.datetime.now())
-        t = 0.0
-        t0 = 0.0
-        for i in range(self._T):
-
-            if i % 1000 == 0:
-                print("Timestep : %d" %i)
-
-            action = self.act()
-            ob, t_new = self.applyAction(action, t)
-            t = t_new - t0
-
 
     def applyAction(self, action, t_exp):
         ob, t = self._rosConverter.publishAction(action)
@@ -179,15 +206,15 @@ class FabricNode(object):
     def n(self):
         return self._n
 
-    # def run(self):
-    #     while not rospy.is_shutdown():
-    #         self.act()
-    #         self._rate.sleep()
+    def run(self):
+        while not rospy.is_shutdown():
+            self.act()
+            #self._rate.sleep()
 
 
 if __name__ == "__main__":
-    myFabricNode = FabricNode()
+    my_fabric_node = FabricNode()
     try:
-        rospy.spin()
+        my_fabric_node.run()
     except rospy.ROSInterruptException:
         pass
