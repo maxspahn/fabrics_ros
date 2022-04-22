@@ -34,8 +34,8 @@ def set_planner():
             "alpha_eta": 0.5,
             "alpha_shift": 0.5,
             "beta_distant": 0.01,
-            "beta_close": 6.5,
-            "radius_shift": 0.3
+            "beta_close": 20,
+            "radius_shift": 0.1
     }
     attractor_potential = "10 * ca.norm_2(x)**2"
     planner = ParameterizedFabricPlanner(
@@ -64,7 +64,7 @@ def set_planner():
 class FabricNode(object):
     def __init__(self):
         rospy.init_node('fabric_node')
-        self._rate = rospy.Rate(100)
+        self._rate = rospy.Rate(500)
 
         # initial setup
         # wait for /planning_goals being published
@@ -209,7 +209,7 @@ class FabricNode(object):
     def run(self):
         while not rospy.is_shutdown():
             self.act()
-            #self._rate.sleep()
+            self._rate.sleep()
 
 
 if __name__ == "__main__":
