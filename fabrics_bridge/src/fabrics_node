@@ -17,6 +17,8 @@ import rospy
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point
+from visualization_msgs.msg import Marker, MarkerArray
+
 
 from fabrics_msgs.msg import FabricGoal
 from fabrics_msgs.msg import FabricGoalArray
@@ -64,18 +66,19 @@ def set_planner():
 class FabricNode(object):
     def __init__(self):
         rospy.init_node('fabric_node')
+        self._planner = set_planner()
         self._rate = rospy.Rate(500)
 
         # initial setup
-        # wait for /planning_goals being published
-        # goals = rospy.wait_for_message("/planning_goals", FabricGoalArray)
+        # wait for /planning_goals being published, otherwise don't do anything
+        goals = rospy.wait_for_message("/planning_goals", FabricGoalArray)
         #self.set_planner_file()
         self.set_goal_subscriber()
         self.set_variables()
 
         self.set_action_publisher()
+        self.set_goals_markers_publisher()
         self.set_joint_state_subscriber()
-        self._planner = set_planner()
 
 
     # this function wrap params from fabric.yaml into a dictionary as an input for FabricPlanner()
@@ -98,27 +101,28 @@ class FabricNode(object):
     # this function wrap params from exp.yaml into a dictionary as an input for Experiment()
     # ideally the dictionary shouldn't be necessary, but this is a temporary solution to make
     # sure every modules work correctly
-    def set_exp_file(self):
-        self._exp_file = {}
-        self._exp_file.update({"T": rospy.get_param("T")})
-        self._exp_file.update({"dynamic": rospy.get_param("dynamic")})
-        self._exp_file.update({"dt": rospy.get_param("dt")})
-        self._exp_file.update({"robot_type": rospy.get_param("robot_type")})
-        self._exp_file.update({"n": rospy.get_param("n")})
-        self._exp_file.update({"limits": rospy.get_param("limits")})
-        self._exp_file.update({"r_body": rospy.get_param("r_body")})
-        self._exp_file.update({"selfCollision": rospy.get_param("selfCollision")})
-        self._exp_file.update({"obstacles": rospy.get_param("obstacles")})
-        self._exp_file.update(self._goal_dic)
-        self._experiment = Experiment(self._exp_file)
+    # def set_exp_file(self):
+    #   print("DEPRECATED")
+    #     self._exp_file = {}
+    #     self._exp_file.update({"T": rospy.get_param("T")})
+    #     self._exp_file.update({"dynamic": rospy.get_param("dynamic")})
+    #     self._exp_file.update({"dt": rospy.get_param("dt")})
+    #     self._exp_file.update({"robot_type": rospy.get_param("robot_type")})
+    #     self._exp_file.update({"n": rospy.get_param("n")})
+    #     self._exp_file.update({"limits": rospy.get_param("limits")})
+    #     self._exp_file.update({"r_body": rospy.get_param("r_body")})
+    #     self._exp_file.update({"selfCollision": rospy.get_param("selfCollision")})
+    #     self._exp_file.update({"obstacles": rospy.get_param("obstacles")})
+    #     self._exp_file.update(self._goal_dic)
+    #     self._experiment = Experiment(self._exp_file)
 
         # set goals and obstacles in the callback loop as they could be changing in run-time
-        self.set_planner()
-        self.RosConverter()
-        self.run()
+        # self.set_planner()
+        # self.RosConverter()
+        # self.run()
 
-    def set_planner(self):
-        print("DEPRECATED")
+    # def set_planner(self):
+        # print("DEPRECATED")
         #self._planner = FabricPlanner(self._experiment, self._planner_file)
         #self._planner.setJointLimits(self._experiment.limits())
         #self._planner.setSelfCollisionAvoidance(self._experiment.rBody())
@@ -132,6 +136,23 @@ class FabricNode(object):
         self._dt = rospy.get_param("dt")
         self._T = 5000
 
+    def set_goals_markers_publisher(self):
+        self._goals_markers_publisher = rospy.Publisher(
+            '/planning_goals/markers',
+            MarkerArray, queue_size=10
+        )
+    def init_goal_marker(self):
+            goal_marker = Marker()
+            goal_marker.header.frame_id = "panda_link0"
+            goal_marker.type = goal_marker.SPHERE
+            goal_marker.action = goal_marker.ADD
+            goal_marker.color.a = 1.0
+            goal_marker.color.r = 0.0
+            goal_marker.color.g = 1.0
+            goal_marker.color.b = 0.0
+            return goal_marker
+
+
     def set_goal_subscriber(self):
         self._goal = np.array([0.8, 0.0, 0.6])
         self._goal_subscriber = rospy.Subscriber(
@@ -142,6 +163,8 @@ class FabricNode(object):
     def goal_callback(self, goals_data: FabricGoalArray):
         self._goal_dic = {}
         self._goal_id = 0
+        self._goals_markers = MarkerArray()
+
         for goal in goals_data.goals:
             self._goal_id += 1
             self._goal_dic["goal"] = {
@@ -151,7 +174,21 @@ class FabricNode(object):
             "type": goal.type, "epsilon": goal.epsilon}
             }
             self._goal = np.array([goal.position.x, goal.position.y, goal.position.z])
-        self.set_exp_file()
+            rospy.loginfo("Going to goal (%f, %f, %f)", self._goal[0], self._goal[1], self._goal[2])
+            # section for filling in goal marker
+            goal_marker = self.init_goal_marker()
+            goal_marker.id = self._goal_id
+            goal_marker.pose.position.x = goal.position.x
+            goal_marker.pose.position.y = goal.position.y
+            goal_marker.pose.position.z = goal.position.z
+            goal_marker.pose.orientation.w = 1.0
+            goal_marker.scale.x = goal.epsilon
+            goal_marker.scale.y = goal.epsilon
+            goal_marker.scale.z = goal.epsilon
+            self._goals_markers.markers.append(goal_marker)
+        self._goals_markers_publisher.publish(self._goals_markers)
+
+        self.act()
 
     def set_joint_state_subscriber(self):
         self._joint_positions = np.zeros(3 + self.n)
@@ -172,9 +209,10 @@ class FabricNode(object):
         )
         self._action_message = Float64MultiArray(data=np.zeros(9))
 
+
     def compute_action(self):
         # here the observation is not filtered, it's directly from /joint_states
-        rospy.loginfo("Going to goal (%f, %f, %f)", self._goal[0], self._goal[1], self._goal[2])
+        # rospy.loginfo("Going to goal (%f, %f, %f)", self._goal[0], self._goal[1], self._goal[2])
         return self._planner.compute_action(
             q=self._joint_positions[3:10],
             qdot=self._joint_velocities[3:10],
@@ -190,31 +228,32 @@ class FabricNode(object):
         self.publish_action(action)
         return action
 
-    def RosConverter(self):
-        rate_int = int(1/self._dt)
-        self._rosConverter = ActionConverterNode(self._dt, rate_int, self._experiment.robotType())
+    # def RosConverter(self):
+    #     rate_int = int(1/self._dt)
+    #     self._rosConverter = ActionConverterNode(self._dt, rate_int, self._experiment.robotType())
 
-    def applyAction(self, action, t_exp):
-        ob, t = self._rosConverter.publishAction(action)
-        self._rosConverter.setGoal(self._experiment.primeGoal(), t=t_exp)
-        for i, obst in enumerate(self._experiment.obstacles()):
-            self._rosConverter.setObstacle(obst, i, t=t_exp)
-        return ob, t
+    # def applyAction(self, action, t_exp):
+    #     ob, t = self._rosConverter.publishAction(action)
+    #     self._rosConverter.setGoal(self._experiment.primeGoal(), t=t_exp)
+    #     for i, obst in enumerate(self._experiment.obstacles()):
+    #         self._rosConverter.setObstacle(obst, i, t=t_exp)
+    #     return ob, t
 
 
     @property
     def n(self):
         return self._n
 
-    def run(self):
-        while not rospy.is_shutdown():
-            self.act()
-            self._rate.sleep()
+    # def run(self):
+        # while not rospy.is_shutdown():
+            # self.act()
+            # self._rate.sleep()
 
 
 if __name__ == "__main__":
     my_fabric_node = FabricNode()
     try:
-        my_fabric_node.run()
+        # my_fabric_node.run()
+        rospy.spin()
     except rospy.ROSInterruptException:
         pass

@@ -11,17 +11,11 @@ class ClientNode(object):
         rospy.init_node('client_node')
         self._rate = rospy.Rate(10)
         self.set_goals_publisher()
-        self.set_goals_markers_publisher()
 
     def set_goals_publisher(self):
         self._goals_publisher = rospy.Publisher(
             '/planning_goals',
             FabricGoalArray, queue_size=10
-        )
-    def set_goals_markers_publisher(self):
-        self._goals_markers_publisher = rospy.Publisher(
-            '/planning_goals/markers',
-            MarkerArray, queue_size=10
         )
 
     # TODO
@@ -60,27 +54,9 @@ class ClientNode(object):
         self._goals_data.goals = self._goals_list
         self._goals_publisher.publish(self._goals_data)
 
-    def publish_goals_markers(self):
-        self._goals_markers = MarkerArray()
-        id_count = 0
-        for goal in self._goals_list:
-            id_count += 1
-            goal_marker = self.init_goal_marker()
-            goal_marker.id = id_count
-            goal_marker.pose.position.x = goal.position.x
-            goal_marker.pose.position.y = goal.position.y
-            goal_marker.pose.position.z = goal.position.z
-            goal_marker.pose.orientation.w = 1.0
-            goal_marker.scale.x = goal.epsilon
-            goal_marker.scale.y = goal.epsilon
-            goal_marker.scale.z = goal.epsilon
-            self._goals_markers.markers.append(goal_marker)
-        self._goals_markers_publisher.publish(self._goals_markers)
-
     def run(self):
         while not rospy.is_shutdown():
             self.publish_goals()
-            self.publish_goals_markers()
             self._rate.sleep()
 
 if __name__ == "__main__":
