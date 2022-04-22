@@ -1,3 +1,11 @@
 std_msgs/Header header
 geometry_msgs/Point position
 float32[] velocity
+int32 parent_link
+int32 child_link
+bool prime
+float32 m
+float32 w
+int32[] indices
+string type
+float32 epsilon
