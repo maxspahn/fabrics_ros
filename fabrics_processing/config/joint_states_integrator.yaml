@@ -1,0 +1,3 @@
+joint_states_integrator:
+  rate: 500
+  integration_threshold: 0.0001
