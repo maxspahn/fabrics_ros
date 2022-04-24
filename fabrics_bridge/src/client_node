@@ -38,9 +38,9 @@ class ClientNode(object):
     def publish_goals(self):
         self._goals_data = FabricGoalArray()
         self._goal_data = FabricGoal()
-        self._goal_data.position.x = 0.5
-        self._goal_data.position.y = -0.4
-        self._goal_data.position.z = 0.3
+        self._goal_data.position.x = rospy.get_param("position_x")
+        self._goal_data.position.y = rospy.get_param("position_y")
+        self._goal_data.position.z = rospy.get_param("position_z")
         self._goal_data.parent_link = 0
         self._goal_data.child_link = 7
         self._goal_data.prime = True
