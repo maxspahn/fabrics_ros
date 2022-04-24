@@ -69,9 +69,7 @@ class FabricNode(object):
         self._planner = set_planner()
         self._rate = rospy.Rate(500)
 
-        # initial setup
-        # wait for /planning_goals being published, otherwise don't do anything
-        goals = rospy.wait_for_message("/planning_goals", FabricGoalArray)
+        self._goal = np.array([])
         self.set_goal_subscriber()
         self.set_variables()
 
@@ -185,8 +183,6 @@ class FabricNode(object):
             self._goals_markers.markers.append(goal_marker)
         # publish goal markers
         self._goals_markers_publisher.publish(self._goals_markers)
-        # only act when a goal has been received
-        self.act()
 
     def set_joint_state_subscriber(self):
         self._joint_positions = np.zeros(3 + self.n)
@@ -231,16 +227,15 @@ class FabricNode(object):
     def n(self):
         return self._n
 
-    # the run() has been moved to goal_callback
-    # def run(self):
-        # while not rospy.is_shutdown():
-            # self.act()
-            # self._rate.sleep()
+    def run(self):
+        while not rospy.is_shutdown():
+            if self._goal.size != 0:
+                self.act()
+                self._rate.sleep()
 
 if __name__ == "__main__":
     my_fabric_node = FabricNode()
     try:
-        # my_fabric_node.run()
-        rospy.spin()
+        my_fabric_node.run()
     except rospy.ROSInterruptException:
         pass
