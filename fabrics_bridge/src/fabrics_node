@@ -80,6 +80,7 @@ class FabricNode(object):
             '/planning_goals/markers',
             MarkerArray, queue_size=10
         )
+
     def init_goal_marker(self):
             goal_marker = Marker()
             goal_marker.header.frame_id = "panda_link0"
@@ -111,7 +112,6 @@ class FabricNode(object):
             "type": goal.type, "epsilon": goal.epsilon}
             }
             self._goal = np.array([goal.position.x, goal.position.y, goal.position.z])
-            rospy.loginfo("Going to goal (%f, %f, %f)", self._goal[0], self._goal[1], self._goal[2])
             # section for filling in goal marker
             goal_marker = self.init_goal_marker()
             goal_marker.id = self._goal_id
@@ -148,7 +148,6 @@ class FabricNode(object):
 
     def compute_action(self):
         # here the observation is not filtered, it's directly from /joint_states
-        # rospy.loginfo("Going to goal (%f, %f, %f)", self._goal[0], self._goal[1], self._goal[2])
         return self._planner.compute_action(
             q=self._joint_positions[3:10],
             qdot=self._joint_velocities[3:10],
