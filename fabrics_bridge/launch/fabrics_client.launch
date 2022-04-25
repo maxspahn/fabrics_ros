@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <!-- to make it easy to pass arguments using position_x:= value to this launch file -->
+    <arg name="position_x" default="0.5" />
+    <arg name="position_y" default="-0.4" />
+    <arg name="position_z" default="0.3" />
+
+    <!-- set goal position on the parameter server -->
+    <param name="position_x" type="double" value="$(arg position_x)" />
+    <param name="position_y" type="double" value="$(arg position_y)" />
+    <param name="position_z" type="double" value="$(arg position_z)" />
+
+    <!-- start nodes -->
+    <node pkg="fabrics_bridge" type="client_node" name="client_node" output="screen"/>
+</launch>
