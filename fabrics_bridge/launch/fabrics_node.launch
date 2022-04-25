@@ -1,9 +1,13 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
+    <arg name="goal_tolerance" default="0.025" />
 
     <!-- load config files -->
     <rosparam file="$(find fabrics_bridge)/config/fabric.yaml" />
     <rosparam file="$(find fabrics_bridge)/config/exp.yaml"/>
+
+    <!-- set goal tolerance on the parameter server -->
+    <param name="goal_tolerance" type="double" value="$(arg goal_tolerance)" />
 
     <!-- start nodes -->
     <node pkg="fabrics_bridge" type="tf_node" name="tf_node" output="screen"/>
