@@ -1,16 +1,33 @@
 #!/usr/bin/env python3
+# general python imports
+import numpy as np
 # ros imports
 import rospy
 from fabrics_msgs.msg import FabricGoal
 from fabrics_msgs.msg import FabricGoalArray
 from visualization_msgs.msg import Marker, MarkerArray
 
+# message types for storing obstacle info
+from moveit_msgs.msg import CollisionObject
+from shape_msgs.msg import SolidPrimitive
+from geometry_msgs.msg import Pose
 
 class ClientNode(object):
     def __init__(self):
         rospy.init_node('client_node')
         self._rate = rospy.Rate(10)
+        self._num_obs = rospy.get_param("num_obs")
+        self._is_randomized_obs = False
         self.set_goals_publisher()
+        self.set_obs_publisher()
+        self._sphere_r_low = 0.1
+        self._sphere_r_high = 0.5
+        self._obs_pos_low = -0.5
+        self._obs_pos_high = 0.5
+        if self._is_randomized_obs:
+            self._randomized_radius_list = np.zeros([self._num_obs, 1], dtype = float)
+            self._randomized_pose_list = np.zeros([self._num_obs, 3], dtype = float)
+            self.generate_random_obs()
 
     def set_goals_publisher(self):
         self._goals_publisher = rospy.Publisher(
@@ -18,10 +35,41 @@ class ClientNode(object):
             FabricGoalArray, queue_size=10
         )
 
-    # TODO
-    # def obstacles_publisher()
-    # def publish_obstacles()
+    def set_obs_publisher(self):
+        self._obs_publisher = rospy.Publisher(
+            '/planning_obs',
+            CollisionObject, queue_size=10
+        )
 
+    # a function generates random obstacle with random radius and position (given a range
+    # this function is only called once if self._is_randomized_obs is set True
+    def generate_random_obs(self):
+        for i in range(rospy.get_param("num_obs")):
+            # assign a random value from [self._sphere_r_low, self._sphere_r_high), includes low but excludes high
+            self._randomized_radius_list[i] = np.random.uniform(self._sphere_r_low, self._sphere_r_high)
+            # assign a random value from [self._obs_pos_low, self._obs_pos_high) to obs pos_x/y/z
+            self._randomized_pose_list[i] = np.random.uniform(self._obs_pos_low, self._obs_pos_high, 3)
+        print(self._randomized_radius_list)
+        print(self._randomized_pose_list)
+
+    def init_sphere_size(self, radius):
+        s = SolidPrimitive()
+        s.dimensions = [radius]
+        s.type = SolidPrimitive.SPHERE
+        return s
+
+    def init_sphere_pose(self, pos_x, pos_y, pos_z):
+        pose = Pose()
+        pose.position.x = pos_x
+        pose.position.y = pos_y
+        pose.position.z = pos_z
+        # since current obs is always a sphere, orientatation does not matter
+        # by default, we set values for no rotation
+        pose.orientation.x = 0
+        pose.orientation.y = 0
+        pose.orientation.z = 0
+        pose.orientation.w = 1
+        return pose
     # a function returns Marker() message type with some default settings,
     # i.e. [frame_id: panda_link0, color: green, shape: sphere]
     def init_goal_marker(self):
@@ -53,10 +101,27 @@ class ClientNode(object):
         self._goals_list.append(self._goal_data)
         self._goals_data.goals = self._goals_list
         self._goals_publisher.publish(self._goals_data)
+    def publish_obs(self):
+        obs = CollisionObject()
+        obs.header.stamp = rospy.Time.now()
+        obs.header.frame_id = "panda_link0"
+        obs.id = "sphere_obs"
+        if self._is_randomized_obs:
+            for i in range(self._num_obs):
+                obs.primitives.append(self.init_sphere_size(self._randomized_radius_list[i]))
+                obs.primitive_poses.append(self.init_sphere_pose(*self._randomized_pose_list[i]))
+        # manually set obstacles
+        else:
+            obs.primitives.append(self.init_sphere_size(0.15))
+            obs.primitive_poses.append(self.init_sphere_pose(0.46422371, -0.1226168, 0.29426042))
+            obs.primitives.append(self.init_sphere_size(0.2))
+            obs.primitive_poses.append(self.init_sphere_pose(0.16422371, -0.3226168, 0.29426042))
+        self._obs_publisher.publish(obs)
 
     def run(self):
         while not rospy.is_shutdown():
             self.publish_goals()
+            self.publish_obs()
             self._rate.sleep()
 
 if __name__ == "__main__":

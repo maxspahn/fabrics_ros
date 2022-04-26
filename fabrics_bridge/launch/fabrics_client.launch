@@ -4,11 +4,14 @@
     <arg name="position_x" default="0.5" />
     <arg name="position_y" default="-0.4" />
     <arg name="position_z" default="0.3" />
+    <arg name="num_obs" default="2" />
 
     <!-- set goal position on the parameter server -->
     <param name="position_x" type="double" value="$(arg position_x)" />
     <param name="position_y" type="double" value="$(arg position_y)" />
     <param name="position_z" type="double" value="$(arg position_z)" />
+    <!-- set number of obstacles on the parameter server -->
+    <param name="num_obs" type="int" value="$(arg num_obs)" />
 
     <!-- start nodes -->
     <node pkg="fabrics_bridge" type="client_node" name="client_node" output="screen"/>
