@@ -17,7 +17,7 @@ class TfNode():
         rospy.init_node('tf_node')
         self._rate = rospy.Rate(500)
         self._goal_reached = False
-        self._goal_tolerance = 0.025
+        self._goal_tolerance = rospy.get_param("goal_tolerance")
         self._tf_listener = tf.TransformListener()
         self.set_goal_subscriber()
         self.set_goal_reached_publisher()
@@ -38,7 +38,6 @@ class TfNode():
         for goal in goals_data.goals:
             self._goal = np.array([goal.position.x, goal.position.y, goal.position.z])
             (trans,_) = self._tf_listener.lookupTransform('/panda_link0', '/panda_link8', rospy.Time(0))
-
             abs_diff = abs(trans - self._goal)
             ideal_array = np.array([0,0,0])
             goal_euclidean_distance = numpy.linalg.norm(abs_diff-ideal_array)
