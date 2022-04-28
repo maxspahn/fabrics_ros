@@ -1,0 +1,57 @@
+#!/usr/bin/env python2
+
+# ros imports
+import rospy
+import tf
+from fabrics_msgs.msg import FabricGoalArray
+from std_msgs.msg import Bool
+
+# general imports
+import numpy as np
+import numpy
+
+
+class TfNode():
+    def __init__(self):
+        # initial setups
+        rospy.init_node('tf_node')
+        self._rate = rospy.Rate(500)
+        self._goal_reached = False
+        self._goal_tolerance = rospy.get_param("goal_tolerance")
+        self._tf_listener = tf.TransformListener()
+        self.set_goal_subscriber()
+        self.set_goal_reached_publisher()
+
+    def set_goal_subscriber(self):
+        self._goal_subscriber = rospy.Subscriber(
+            '/planning_goals',
+            FabricGoalArray, self.goal_callback
+        )
+    # not yet used, for now, this node only prints out if a goal is reached
+    def set_goal_reached_publisher(self):
+        self._goal_reached_publisher = rospy.Publisher(
+            '/goal_reached',
+            Bool, queue_size=10
+        )
+
+    def goal_callback(self, goals_data):
+        for goal in goals_data.goals:
+            self._goal = np.array([goal.position.x, goal.position.y, goal.position.z])
+            (trans,_) = self._tf_listener.lookupTransform('/panda_link0', '/panda_link8', rospy.Time(0))
+            abs_diff = abs(trans - self._goal)
+            ideal_array = np.array([0,0,0])
+            goal_euclidean_distance = numpy.linalg.norm(abs_diff-ideal_array)
+            # print(goal_euclidean_distance)
+            if goal_euclidean_distance < self._goal_tolerance:
+                print("goal_reached")
+
+    def run(self):
+        while not rospy.is_shutdown():
+            self._rate.sleep()
+
+if __name__ == "__main__":
+    my_tf_node = TfNode()
+    try:
+        my_tf_node.run()
+    except rospy.ROSInterruptException:
+        pass
