@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 # general python imports
 import numpy as np
+import math
+
 # ros imports
 import rospy
 from fabrics_msgs.msg import FabricGoal
@@ -20,6 +22,13 @@ class ClientNode(object):
         self._is_randomized_obs = False
         self.set_goals_publisher()
         self.set_obs_publisher()
+        self.set_sphere_markers_publisher()
+        # radius of shelf (suppose it's a circular shelf)
+        self._radius_shelf = 0.5
+        # number of spheres to compose a ring (depending on the param num_obs)
+        self._num_sphere = rospy.get_param("num_obs")
+        #  radius of each sphere
+        self._radius_sphere = self._radius_shelf * 2 * math.sin(math.pi/self._num_sphere)
         self._sphere_r_low = 0.1
         self._sphere_r_high = 0.5
         self._obs_pos_low = -0.5
@@ -40,6 +49,11 @@ class ClientNode(object):
             '/planning_obs',
             CollisionObject, queue_size=10
         )
+    def set_sphere_markers_publisher(self):
+        self._sphere_markers_publisher = rospy.Publisher(
+            '/planning_sphere/markers',
+            MarkerArray, queue_size=10
+    )
 
     # a function generates random obstacle with random radius and position (given a range
     # this function is only called once if self._is_randomized_obs is set True
@@ -71,6 +85,24 @@ class ClientNode(object):
         pose.orientation.w = 1
         return pose
 
+    def init_marker(self, a, r, g, b):
+            goal_marker = Marker()
+            goal_marker.header.frame_id = "panda_link0"
+            goal_marker.type = goal_marker.SPHERE
+            goal_marker.action = goal_marker.ADD
+            goal_marker.color.a = a
+            goal_marker.color.r = r
+            goal_marker.color.g = g
+            goal_marker.color.b = b
+            return goal_marker
+
+    def generate_ring_spheres(self, x, y, z, n):
+        # return center of each sphere given a goal position and n-th iteration
+        # at the moment, the sphere is on the x-z plane only
+        # TODO
+        # the y coord should correspond to the pose of a goal
+        return [x + self._radius_shelf * math.cos(n*2*math.pi/self._num_sphere), y, z + self._radius_shelf * math.sin(n*2*math.pi/self._num_sphere)]
+
     def publish_goals(self):
         goals_data = FabricGoalArray()
         goal_data = FabricGoal()
@@ -89,6 +121,22 @@ class ClientNode(object):
         goals_list.append(goal_data)
         goals_data.goals = goals_list
         self._goals_publisher.publish(goals_data)
+        self._sphere_markers = MarkerArray()
+        for i in range(self._num_sphere):
+            # red sphere
+            sphere_marker = self.init_marker(1.0, 1.0, 0.0, 0.0)
+            sphere_marker.id = i
+            x,y,z = self.generate_ring_spheres(goal_data.position.x, goal_data.position.y, goal_data.position.z, i)
+            sphere_marker.pose.position.x = x
+            sphere_marker.pose.position.y = y
+            sphere_marker.pose.position.z = z
+            sphere_marker.pose.orientation.w = 1.0
+            sphere_marker.scale.x = self._radius_sphere
+            sphere_marker.scale.y = self._radius_sphere
+            sphere_marker.scale.z = self._radius_sphere
+            self._sphere_markers.markers.append(sphere_marker)
+        # publish sphere markers
+        self._sphere_markers_publisher.publish(self._sphere_markers)
 
     def publish_obs(self):
         obs = CollisionObject()
@@ -99,12 +147,15 @@ class ClientNode(object):
             for i in range(self._num_obs):
                 obs.primitives.append(self.init_sphere_size(self._randomized_radius_list[i]))
                 obs.primitive_poses.append(self.init_sphere_pose(*self._randomized_pose_list[i]))
-        # manually set obstacles
+        # set obstacles depending on the ring of spheres or manually set obstacles
         else:
-            obs.primitives.append(self.init_sphere_size(0.15))
-            obs.primitive_poses.append(self.init_sphere_pose(0.46422371, -0.1226168, 0.29426042))
-            obs.primitives.append(self.init_sphere_size(0.2))
-            obs.primitive_poses.append(self.init_sphere_pose(0.16422371, -0.3226168, 0.29426042))
+            for i in range(self._num_sphere):
+                obs.primitives.append(self.init_sphere_size(self._radius_sphere))
+                obs.primitive_poses.append(self._sphere_markers.markers[i].pose)
+            # obs.primitives.append(self.init_sphere_size(0.15))
+            # obs.primitive_poses.append(self.init_sphere_pose(0.46422371, -0.1226168, 0.29426042))
+            # obs.primitives.append(self.init_sphere_size(0.2))
+            # obs.primitive_poses.append(self.init_sphere_pose(0.16422371, -0.3226168, 0.29426042))
         self._obs_publisher.publish(obs)
 
     def run(self):
