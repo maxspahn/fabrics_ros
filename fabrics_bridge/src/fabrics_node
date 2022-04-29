@@ -49,6 +49,7 @@ def set_planner():
     planner.set_components(
         forward_kinematics,
         forward_kinematics_end_effector,
+        number_obstacles=10,
         number_obstacles=2,
         goal=True,
     )
@@ -193,17 +194,10 @@ class FabricNode(object):
             q=self._joint_positions[3:10],
             qdot=self._joint_velocities[3:10],
             x_goal=self._goal,
-            x_obst_0 = self._obs_pose_list[0],
-            x_obst_1 = self._obs_pose_list[1],
-            # x_obst_2 = self._obs_pose_list[2],
-            # x_obst_3 = self._obs_pose_list[3],
-            radius_obst_0 = self._obs_radius_list[0],
-            radius_obst_1 = self._obs_radius_list[1],
-            # radius_obst_2 = self._obs_radius_list[2],
-            # radius_obst_3 = self._obs_radius_list[3],
+            x_obst = self._obs_pose_list,
+            radius_obst = self._obs_radius_list,
             radius_body=np.array([0.02])
         )
-
     def publish_action(self, action: np.ndarray):
         self._action_message.data[2:] = action
         self._action_publisher.publish(self._action_message)

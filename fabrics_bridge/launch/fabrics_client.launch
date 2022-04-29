@@ -4,7 +4,7 @@
     <arg name="goal_position_x" default="0.5" />
     <arg name="goal_position_y" default="-0.4" />
     <arg name="goal_position_z" default="0.3" />
-    <arg name="num_obs" default="2" />
+    <arg name="num_obs" default="10" />
 
     <!-- set goal position on the parameter server -->
     <param name="goal_position_x" type="double" value="$(arg goal_position_x)" />
