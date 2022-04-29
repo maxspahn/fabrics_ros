@@ -50,7 +50,6 @@ def set_planner():
         forward_kinematics,
         forward_kinematics_end_effector,
         number_obstacles=10,
-        number_obstacles=2,
         goal=True,
     )
     planner.concretize()
@@ -160,13 +159,15 @@ class FabricNode(object):
             obs_marker.pose.position.y = obs.primitive_poses[i].position.y
             obs_marker.pose.position.z = obs.primitive_poses[i].position.z
             obs_marker.pose.orientation.w = 1.0
-            obs_marker.scale.x = obs.primitives[i].dimensions[0]
-            obs_marker.scale.y = obs.primitives[i].dimensions[0]
-            obs_marker.scale.z = obs.primitives[i].dimensions[0]
+            # primitives[i].dimensions[0] is radius of a sphere
+            # and Marker.scale of a sphere is diameter in x/y/z direction
+            # so multiply by 2
+            obs_marker.scale.x = 2*obs.primitives[i].dimensions[0]
+            obs_marker.scale.y = 2*obs.primitives[i].dimensions[0]
+            obs_marker.scale.z = 2*obs.primitives[i].dimensions[0]
             self._obs_markers.markers.append(obs_marker)
         # publish obs markers
         self._obs_markers_publisher.publish(self._obs_markers)
-
 
     def set_joint_state_subscriber(self):
         self._joint_positions = np.zeros(3 + self.n)

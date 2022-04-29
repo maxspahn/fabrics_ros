@@ -27,8 +27,16 @@ class ClientNode(object):
         self._radius_shelf = 0.5
         # number of spheres to compose a ring (depending on the param num_obs)
         self._num_sphere = rospy.get_param("num_obs")
-        #  radius of each sphere
-        self._radius_sphere = self._radius_shelf * 2 * math.sin(math.pi/self._num_sphere)
+        '''
+        using the formula:
+        radius = s / 2 * sin(pi/n)
+        which is given the lengh of any side (s) of a regular (n)-sided polygon,
+        the radius (distance from the center of a regular (n)-sided polygon to any vertex) is known
+        the formula can re-written as:
+        s = radius * 2 * sin(pi/n)
+        and s would be a diameter of each sphere
+        '''
+        self._diameter_sphere = self._radius_shelf * 2 * math.sin(math.pi/self._num_sphere)
         self._sphere_r_low = 0.1
         self._sphere_r_high = 0.5
         self._obs_pos_low = -0.5
@@ -131,9 +139,9 @@ class ClientNode(object):
             sphere_marker.pose.position.y = y
             sphere_marker.pose.position.z = z
             sphere_marker.pose.orientation.w = 1.0
-            sphere_marker.scale.x = self._radius_sphere
-            sphere_marker.scale.y = self._radius_sphere
-            sphere_marker.scale.z = self._radius_sphere
+            sphere_marker.scale.x = self._diameter_sphere
+            sphere_marker.scale.y = self._diameter_sphere
+            sphere_marker.scale.z = self._diameter_sphere
             self._sphere_markers.markers.append(sphere_marker)
         # publish sphere markers
         self._sphere_markers_publisher.publish(self._sphere_markers)
@@ -150,7 +158,7 @@ class ClientNode(object):
         # set obstacles depending on the ring of spheres or manually set obstacles
         else:
             for i in range(self._num_sphere):
-                obs.primitives.append(self.init_sphere_size(self._radius_sphere))
+                obs.primitives.append(self.init_sphere_size(self._diameter_sphere/2))
                 obs.primitive_poses.append(self._sphere_markers.markers[i].pose)
             # obs.primitives.append(self.init_sphere_size(0.15))
             # obs.primitive_poses.append(self.init_sphere_pose(0.46422371, -0.1226168, 0.29426042))
