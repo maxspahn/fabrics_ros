@@ -94,10 +94,10 @@ class FabricNode(object):
             MarkerArray, queue_size=10
     )
 
-    def init_marker(self, a, r, g, b):
+    def init_marker(self, a, r, g, b, type):
             goal_marker = Marker()
             goal_marker.header.frame_id = "panda_link0"
-            goal_marker.type = goal_marker.SPHERE
+            goal_marker.type = type
             goal_marker.action = goal_marker.ADD
             goal_marker.color.a = a
             goal_marker.color.r = r
@@ -118,21 +118,25 @@ class FabricNode(object):
 
         for goal in goals_data.goals:
             self._goal_id += 1
-            self._goal_dic["goal"] = {
-            "subgoal"+ str(self._goal_id):
-            {"prime": goal.prime, "m": goal.m, "w": goal.w, "indices": list(goal.indices), "parent_link": goal.parent_link,
-            "child_link": goal.child_link, "desired_position": [goal.position.x, goal.position.y, goal.position.z],
-            "type": goal.type, "epsilon": goal.epsilon}
-            }
-            self._goal = np.array([goal.position.x, goal.position.y, goal.position.z])
+            # self._goal_dic["goal"] = {
+            # "subgoal"+ str(self._goal_id):
+            # {"prime": goal.prime, "m": goal.m, "w": goal.w, "indices": list(goal.indices), "parent_link": goal.parent_link,
+            # "child_link": goal.child_link, "desired_position": [goal.position.x, goal.position.y, goal.position.z],
+            # "type": goal.type, "epsilon": goal.epsilon}
+            # }
+            self._goal = np.array([goal.pose.position.x, goal.pose.position.y, goal.pose.position.z])
             # section for filling in goal marker
             # green markers for goals
-            goal_marker = self.init_marker(1.0, 0.0, 1.0, 0.0)
+            # the parameter are color (a,r,g,b) and marker type (ARROW=0)
+            goal_marker = self.init_marker(1.0, 0.0, 1.0, 0.0, 0)
             goal_marker.id = self._goal_id
-            goal_marker.pose.position.x = goal.position.x
-            goal_marker.pose.position.y = goal.position.y
-            goal_marker.pose.position.z = goal.position.z
-            goal_marker.pose.orientation.w = 1.0
+            goal_marker.pose.position.x = goal.pose.position.x
+            goal_marker.pose.position.y = goal.pose.position.y
+            goal_marker.pose.position.z = goal.pose.position.z
+            goal_marker.pose.orientation.x = goal.pose.orientation.x
+            goal_marker.pose.orientation.y = goal.pose.orientation.y
+            goal_marker.pose.orientation.z = goal.pose.orientation.z
+            goal_marker.pose.orientation.w = goal.pose.orientation.w
             goal_marker.scale.x = goal.epsilon
             goal_marker.scale.y = goal.epsilon
             goal_marker.scale.z = goal.epsilon
@@ -152,8 +156,8 @@ class FabricNode(object):
             self._obs_radius_list[i] = (obs.primitives[i].dimensions[0])
             self._obs_pose_list[i] = np.array([obs.primitive_poses[i].position.x, obs.primitive_poses[i].position.y, obs.primitive_poses[i].position.z])
             # section for filling in obstacle marker
-            # pass red color to initiate marker for obstacle
-            obs_marker = self.init_marker(1.0, 1.0, 0.0, 0.0)
+            # pass red color and sphere type (SPHERE=2) to initiate marker for obstacle
+            obs_marker = self.init_marker(1.0, 1.0, 0.0, 0.0, 2)
             obs_marker.id = i
             obs_marker.pose.position.x = obs.primitive_poses[i].position.x
             obs_marker.pose.position.y = obs.primitive_poses[i].position.y
