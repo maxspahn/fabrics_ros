@@ -132,7 +132,8 @@ class FabricNode(object):
         self._joint_velocities = np.zeros(3 + self.n)
         self._joint_state_subscriber = rospy.Subscriber(
             '/joint_states',
-            JointState, self.joint_states_callback
+            JointState, self.joint_states_callback,
+            tcp_nodelay=True
         )
 
     def joint_states_callback(self, joint_states_data: JointState):
