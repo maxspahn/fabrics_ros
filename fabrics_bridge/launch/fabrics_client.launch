@@ -1,14 +1,29 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
     <!-- to make it easy to pass arguments using position_x:= value to this launch file -->
-    <arg name="position_x" default="0.5" />
-    <arg name="position_y" default="-0.4" />
-    <arg name="position_z" default="0.3" />
+    <arg name="goal_position_x" default="0.1" />
+    <arg name="goal_position_y" default="-0.6" />
+    <arg name="goal_position_z" default="0.4" />
+
+    <arg name="goal_rotation_x" default="0.0" />
+    <arg name="goal_rotation_y" default="0.4" />
+    <arg name="goal_rotation_z" default="0.8" />
+    <arg name="goal_rotation_w" default="0.3" />
+
+    <arg name="num_obs" default="10" />
 
     <!-- set goal position on the parameter server -->
-    <param name="position_x" type="double" value="$(arg position_x)" />
-    <param name="position_y" type="double" value="$(arg position_y)" />
-    <param name="position_z" type="double" value="$(arg position_z)" />
+    <param name="goal_position_x" type="double" value="$(arg goal_position_x)" />
+    <param name="goal_position_y" type="double" value="$(arg goal_position_y)" />
+    <param name="goal_position_z" type="double" value="$(arg goal_position_z)" />
+    <param name="goal_rotation_x" type="double" value="$(arg goal_rotation_x)" />
+    <param name="goal_rotation_y" type="double" value="$(arg goal_rotation_y)" />
+    <param name="goal_rotation_z" type="double" value="$(arg goal_rotation_z)" />
+    <param name="goal_rotation_w" type="double" value="$(arg goal_rotation_w)" />
+
+
+    <!-- set number of obstacles on the parameter server -->
+    <param name="num_obs" type="int" value="$(arg num_obs)" />
 
     <!-- start nodes -->
     <node pkg="fabrics_bridge" type="client_node" name="client_node" output="screen"/>

@@ -1,16 +1,51 @@
 #!/usr/bin/env python3
+# general python imports
+import numpy as np
+import math
+from scipy.spatial.transform import Rotation
+
 # ros imports
 import rospy
 from fabrics_msgs.msg import FabricGoal
 from fabrics_msgs.msg import FabricGoalArray
 from visualization_msgs.msg import Marker, MarkerArray
 
+# message types for storing obstacle info
+from moveit_msgs.msg import CollisionObject
+from shape_msgs.msg import SolidPrimitive
+from geometry_msgs.msg import Pose
 
 class ClientNode(object):
     def __init__(self):
         rospy.init_node('client_node')
         self._rate = rospy.Rate(10)
+        self._num_obs = rospy.get_param("num_obs")
+        self._is_randomized_obs = False
         self.set_goals_publisher()
+        self.set_obs_publisher()
+        self.set_sphere_markers_publisher()
+        # radius of shelf (suppose it's a circular shelf)
+        self._radius_shelf = 0.3
+        # number of spheres to compose a ring (depending on the param num_obs)
+        self._num_sphere = rospy.get_param("num_obs")
+        '''
+        using the formula:
+        radius = s / 2 * sin(pi/n)
+        which is given the lengh of any side (s) of a regular (n)-sided polygon,
+        the radius (distance from the center of a regular (n)-sided polygon to any vertex) is known
+        the formula can re-written as:
+        s = radius * 2 * sin(pi/n)
+        and s would be a diameter of each sphere
+        '''
+        self._diameter_sphere = self._radius_shelf * 2 * math.sin(math.pi/self._num_sphere)
+        self._sphere_r_low = 0.1
+        self._sphere_r_high = 0.5
+        self._obs_pos_low = -0.5
+        self._obs_pos_high = 0.5
+        if self._is_randomized_obs:
+            self._randomized_radius_list = np.zeros([self._num_obs, 1], dtype = float)
+            self._randomized_pose_list = np.zeros([self._num_obs, 3], dtype = float)
+            self.generate_random_obs()
 
     def set_goals_publisher(self):
         self._goals_publisher = rospy.Publisher(
@@ -18,45 +53,151 @@ class ClientNode(object):
             FabricGoalArray, queue_size=10
         )
 
-    # TODO
-    # def obstacles_publisher()
-    # def publish_obstacles()
+    def set_obs_publisher(self):
+        self._obs_publisher = rospy.Publisher(
+            '/planning_obs',
+            CollisionObject, queue_size=10
+        )
+    def set_sphere_markers_publisher(self):
+        self._sphere_markers_publisher = rospy.Publisher(
+            '/planning_sphere/markers',
+            MarkerArray, queue_size=10
+    )
 
-    # a function returns Marker() message type with some default settings,
-    # i.e. [frame_id: panda_link0, color: green, shape: sphere]
-    def init_goal_marker(self):
-        goal_marker = Marker()
-        goal_marker.header.frame_id = "panda_link0"
-        goal_marker.type = goal_marker.SPHERE
-        goal_marker.action = goal_marker.ADD
-        goal_marker.color.a = 1.0
-        goal_marker.color.r = 0.0
-        goal_marker.color.g = 1.0
-        goal_marker.color.b = 0.0
-        return goal_marker
+    # a function generates random obstacle with random radius and position (given a range
+    # this function is only called once if self._is_randomized_obs is set True
+    def generate_random_obs(self):
+        for i in range(rospy.get_param("num_obs")):
+            # assign a random value from [self._sphere_r_low, self._sphere_r_high), includes low but excludes high
+            self._randomized_radius_list[i] = np.random.uniform(self._sphere_r_low, self._sphere_r_high)
+            # assign a random value from [self._obs_pos_low, self._obs_pos_high) to obs pos_x/y/z
+            self._randomized_pose_list[i] = np.random.uniform(self._obs_pos_low, self._obs_pos_high, 3)
+        print(self._randomized_radius_list)
+        print(self._randomized_pose_list)
+
+    def init_sphere_size(self, radius):
+        s = SolidPrimitive()
+        s.dimensions = [radius]
+        s.type = SolidPrimitive.SPHERE
+        return s
+
+    def init_sphere_pose(self, pos_x, pos_y, pos_z):
+        pose = Pose()
+        pose.position.x = pos_x
+        pose.position.y = pos_y
+        pose.position.z = pos_z
+        # since current obs is always a sphere, orientatation does not matter
+        # by default, we set values for no rotation
+        pose.orientation.x = 0
+        pose.orientation.y = 0
+        pose.orientation.z = 0
+        pose.orientation.w = 1
+        return pose
+
+    def init_marker(self, a, r, g, b):
+            goal_marker = Marker()
+            goal_marker.header.frame_id = "panda_link0"
+            goal_marker.type = goal_marker.SPHERE
+            goal_marker.action = goal_marker.ADD
+            goal_marker.color.a = a
+            goal_marker.color.r = r
+            goal_marker.color.g = g
+            goal_marker.color.b = b
+            return goal_marker
+
+    # given a goal pose and n-th iteration
+    # returns point on circumference of a circle, i.e. center of each sphere
+    def generate_ring_spheres(self, pose, n):
+        # retrieve pose of a goal
+        pos_x = pose.position.x
+        pos_y = pose.position.y
+        pos_z = pose.position.z
+        quat_x = pose.orientation.x
+        quat_y = pose.orientation.y
+        quat_z = pose.orientation.z
+        quat_w = pose.orientation.w
+        # get rotation matrix
+        rot = Rotation.from_quat([quat_x, quat_y, quat_z, quat_w])
+        rot_matrix = rot.as_matrix()
+        '''
+        Given a center point (pos_x, pos_y, poz_z) of a circle
+        and an initial circle along y-z plane (when there is no rotation, the normal vector of a circle is along x axis) 
+        An initial circle can be be represented as [0, radius*cos(theta),radius*sin(theta)] (polar coordinates)
+        All points on a rotated circle can be obtained by using the rotation matrix
+        rotated_circle = [center_x, center_y, center_z] + rot_matrix*initial_circle
+        '''
+        initial_circle = np.array([[0], [self._radius_shelf * math.cos(n*2*math.pi/self._num_sphere)], [self._radius_shelf * math.sin(n*2*math.pi/self._num_sphere)]]) 
+        rotated_circle = np.array([[pos_x], [pos_y], [pos_z]]) + np.matmul(rot_matrix, initial_circle)
+        return rotated_circle
 
     def publish_goals(self):
-        self._goals_data = FabricGoalArray()
-        self._goal_data = FabricGoal()
-        self._goal_data.position.x = rospy.get_param("position_x")
-        self._goal_data.position.y = rospy.get_param("position_y")
-        self._goal_data.position.z = rospy.get_param("position_z")
-        self._goal_data.parent_link = 0
-        self._goal_data.child_link = 7
-        self._goal_data.prime = True
-        self._goal_data.m = 3
-        self._goal_data.w = 1
-        self._goal_data.indices = [0, 1, 2]
-        self._goal_data.type = "staticSubGoal"
-        self._goal_data.epsilon = 0.05
-        self._goals_list = []
-        self._goals_list.append(self._goal_data)
-        self._goals_data.goals = self._goals_list
-        self._goals_publisher.publish(self._goals_data)
+        goals_data = FabricGoalArray()
+        goal_data = FabricGoal()
+        goal_data.pose.position.x = rospy.get_param("goal_position_x")
+        goal_data.pose.position.y = rospy.get_param("goal_position_y")
+        goal_data.pose.position.z = rospy.get_param("goal_position_z")
+        # initialize rotation from euler angles (more intuitive)
+        r = Rotation.from_euler('yz', [20,-70], degrees=True)
+        # get quaternions
+        r_quat = r.as_quat()
+        goal_data.pose.orientation.x = r_quat[0]
+        goal_data.pose.orientation.y = r_quat[1]
+        goal_data.pose.orientation.z = r_quat[2]
+        goal_data.pose.orientation.w = r_quat[3]
+
+        goal_data.parent_link = 0
+        goal_data.child_link = 7
+        goal_data.prime = True
+        goal_data.m = 3
+        goal_data.w = 1
+        goal_data.indices = [0, 1, 2]
+        goal_data.type = "staticSubGoal"
+        goal_data.epsilon = 0.05
+        goals_list = []
+        goals_list.append(goal_data)
+        goals_data.goals = goals_list
+        self._goals_publisher.publish(goals_data)
+        self._sphere_markers = MarkerArray()
+        for i in range(self._num_sphere):
+            # red sphere
+            sphere_marker = self.init_marker(1.0, 0.0, 0.0, 1.0)
+            sphere_marker.id = i
+            x, y, z = self.generate_ring_spheres(goal_data.pose, i)
+            sphere_marker.pose.position.x = x
+            sphere_marker.pose.position.y = y
+            sphere_marker.pose.position.z = z
+            sphere_marker.pose.orientation.w = 1.0
+            sphere_marker.scale.x = self._diameter_sphere
+            sphere_marker.scale.y = self._diameter_sphere
+            sphere_marker.scale.z = self._diameter_sphere
+            self._sphere_markers.markers.append(sphere_marker)
+        # publish sphere markers
+        self._sphere_markers_publisher.publish(self._sphere_markers)
+
+    def publish_obs(self):
+        obs = CollisionObject()
+        obs.header.stamp = rospy.Time.now()
+        obs.header.frame_id = "panda_link0"
+        obs.id = "sphere_obs"
+        if self._is_randomized_obs:
+            for i in range(self._num_obs):
+                obs.primitives.append(self.init_sphere_size(self._randomized_radius_list[i]))
+                obs.primitive_poses.append(self.init_sphere_pose(*self._randomized_pose_list[i]))
+        # set obstacles depending on the ring of spheres or manually set obstacles
+        else:
+            for i in range(self._num_sphere):
+                obs.primitives.append(self.init_sphere_size(self._diameter_sphere/2))
+                obs.primitive_poses.append(self._sphere_markers.markers[i].pose)
+            # obs.primitives.append(self.init_sphere_size(0.15))
+            # obs.primitive_poses.append(self.init_sphere_pose(0.46422371, -0.1226168, 0.29426042))
+            # obs.primitives.append(self.init_sphere_size(0.2))
+            # obs.primitive_poses.append(self.init_sphere_pose(0.16422371, -0.3226168, 0.29426042))
+        self._obs_publisher.publish(obs)
 
     def run(self):
         while not rospy.is_shutdown():
             self.publish_goals()
+            self.publish_obs()
             self._rate.sleep()
 
 if __name__ == "__main__":

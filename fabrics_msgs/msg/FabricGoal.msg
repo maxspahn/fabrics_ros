@@ -1,5 +1,5 @@
 std_msgs/Header header
-geometry_msgs/Point position
+geometry_msgs/Pose pose
 float32[] velocity
 int32 parent_link
 int32 child_link
