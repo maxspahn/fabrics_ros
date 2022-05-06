@@ -17,50 +17,99 @@ from fabrics_msgs.msg import FabricGoal
 from fabrics_msgs.msg import FabricGoalArray
 
 from ros_converter_node import ActionConverterNode
-from experiment import Experiment
+# from experiment import Experiment
+from MotionPlanningGoal.goalComposition import GoalComposition
 
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
 from forwardkinematics.urdfFks.pandaFk import PandaFk
 
-def set_planner():
-    degrees_of_freedom = 7
-    damper = {
-            "alpha_b": 0.5,
-            "alpha_eta": 0.5,
-            "alpha_shift": 0.5,
-            "beta_distant": 0.01,
-            "beta_close": 20,
-            "radius_shift": 0.1
-    }
-    attractor_potential = "10 * ca.norm_2(x)**2"
-    planner = ParameterizedFabricPlanner(
-            degrees_of_freedom,
-            damper=damper
-    )
-    q = planner.variables.position_variable()
-    panda_fk = PandaFk()
-    forward_kinematics = []
-    for i in range(1, degrees_of_freedom):
-        forward_kinematics.append(panda_fk.fk(q, i, positionOnly=True))
-    forward_kinematics_end_effector = panda_fk.fk(
-        q, 7, positionOnly=True
-    )
-    forward_kinematics.append(forward_kinematics_end_effector)
-    planner.set_components(
-        forward_kinematics,
-        forward_kinematics_end_effector,
-        number_obstacles=10,
-        goal=True,
-    )
-    planner.concretize()
-    return planner
+from MotionPlanningEnv.sphereObstacle import SphereObstacle
+
+
+# def set_planner():
+#     degrees_of_freedom = 7
+#     robot_type = 'panda'
+#     damper = {
+#             "alpha_b": 0.5,
+#             "alpha_eta": 0.5,
+#             "alpha_shift": 0.5,
+#             "beta_distant": 0.01,
+#             "beta_close": 10,
+#             "radius_shift": 0.1
+#     }
+#     # beta_close is for: when you close to a close, how much damping do you want
+#     # change the 100 to higher or lower
+#     # the higher it is, the more potential it is hence faster
+
+#     attractor_potential = "100 * ca.norm_2(x)**2"
+#     planner = ParameterizedFabricPlanner(degrees_of_freedom, robot_type)
+#         goal_dict = {
+#         "subgoal0": {
+#             "m": 3,
+#             "w": 1.0,
+#             "prime": True,
+#             "indices": [0, 1, 2],
+#             "parent_link": 0,
+#             "child_link": 7,
+#             "desired_position": [0.1, -0.6, 0.4],
+#             "epsilon": 0.01,
+#             "type": "staticSubGoal",
+#         },
+#         "subgoal1": {
+#             "m": 2,
+#             "w": 20.0,
+#             "prime": False,
+#             "indices": [0, 1],
+#             "parent_link": 6,
+#             "child_link": 7,
+#             "angle": [0.0, 0.4, 0.8, 0.3],
+#             "desired_position": [0.0, 0.0],
+#             "epsilon": 0.05,
+#             "type": "staticSubGoal",
+#         }
+#     }
+#     goal = GoalComposition(name="goal", contentDict=goal_dict)
+
+#     planner = ParameterizedFabricPlanner(degrees_of_freedom, robot_type)
+#     q = planner.variables.position_variable()
+#     panda_fk = PandaFk()
+#     forward_kinematics = []
+#     for i in range(1, degrees_of_freedom+1):
+#         forward_kinematics.append(panda_fk.fk(q, i, positionOnly=True))
+#     # The planner hides all the logic behind the function set_components.
+#     planner.set_components(
+#         forward_kinematics,
+#         goal,
+#         number_obstacles=2,
+#     )
+#     planner.concretize()
+   
+#     # q = planner.variables.position_variable()
+#     # panda_fk = PandaFk()
+#     # forward_kinematics = []
+#     # for i in range(1, degrees_of_freedom):
+#     #     forward_kinematics.append(panda_fk.fk(q, i, positionOnly=True))
+#     # forward_kinematics_end_effector = panda_fk.fk(
+#     #     q, 7, positionOnly=True
+#     # )
+    
+  
+#     # forward_kinematics.append(forward_kinematics_end_effector)
+#     # planner.set_components(
+#     #     forward_kinematics,
+#     #     forward_kinematics_end_effector,
+#     #     number_obstacles=20,
+#     #     goal
+#     # )
+#     # planner.concretize()
+#     return planner
 
 
 class FabricNode(object):
     def __init__(self, home_position=np.array([0.5, 0, 0.5])):
         # initial setups
         rospy.init_node('fabric_node')
-        self._planner = set_planner()
+        self._planner = self.set_planner()
         self._rate = rospy.Rate(500)
         self._num_obs = rospy.get_param("num_obs")
         self._goal = np.array([])
@@ -75,6 +124,81 @@ class FabricNode(object):
         self.set_goals_markers_publisher()
         self.set_obs_markers_publisher()
         self.set_joint_state_subscriber()
+
+    def set_planner(self):
+        degrees_of_freedom = 7
+        robot_type = 'panda'
+        damper = {
+                "alpha_b": 0.5,
+                "alpha_eta": 0.5,
+                "alpha_shift": 0.5,
+                "beta_distant": 0.01,
+                "beta_close": 10,
+                "radius_shift": 0.1
+        }
+        # beta_close is for: when you close to a close, how much damping do you want
+        # change the 100 to higher or lower
+        # the higher it is, the more potential it is hence faster
+
+        attractor_potential = "100 * ca.norm_2(x)**2"
+        planner = ParameterizedFabricPlanner(degrees_of_freedom, robot_type)
+        # Definition of the obstacle.
+        static_obst_dict = {
+            "dim": 3,
+            "type": "sphere",
+            "geometry": {"position": [0.5, -0.3, 0.3], "radius": 0.1},
+        }
+        self.obst1 = SphereObstacle(name="staticObst", contentDict=static_obst_dict)
+        static_obst_dict = {
+            "dim": 3,
+            "type": "sphere",
+            "geometry": {"position": [-0.7, 0.0, 0.5], "radius": 0.1},
+        }
+        self.obst2 = SphereObstacle(name="staticObst", contentDict=static_obst_dict)
+        goal_dict = {
+        "subgoal0": {
+            "m": 3,
+            "w": 1.0,
+            "prime": True,
+            "indices": [0, 1, 2],
+            "parent_link": 0,
+            "child_link": 7,
+            "desired_position": [0.1, -0.6, 0.4],
+            "epsilon": 0.01,
+            "type": "staticSubGoal",
+        },
+        "subgoal1": {
+            "m": 2,
+            "w": 20.0,
+            "prime": False,
+            "indices": [0, 1],
+            "parent_link": 6,
+            "child_link": 7,
+            "angle": [0.0, 0.4, 0.8, 0.3],
+            "desired_position": [0.0, 0.0],
+            "epsilon": 0.05,
+            "type": "staticSubGoal",
+        }
+        }
+        self.goal = GoalComposition(name="goal", contentDict=goal_dict)
+
+        planner = ParameterizedFabricPlanner(degrees_of_freedom, robot_type)
+        q = planner.variables.position_variable()
+        panda_fk = PandaFk()
+        forward_kinematics = []
+        for i in range(1, degrees_of_freedom+1):
+            forward_kinematics.append(panda_fk.fk(q, i, positionOnly=True))
+        # The planner hides all the logic behind the function set_components.
+        planner.set_components(
+            forward_kinematics,
+            self.goal,
+            number_obstacles=2,
+        )
+        planner.concretize()
+    
+        return planner
+
+
 
     def set_variables(self):
         # plannar.param
@@ -112,7 +236,7 @@ class FabricNode(object):
         )
 
     def goal_callback(self, goals_data: FabricGoalArray):
-        self._goal_dic = {}
+        # self._goal_dic = {}
         self._goal_id = 0
         self._goals_markers = MarkerArray()
 
@@ -195,14 +319,64 @@ class FabricNode(object):
 
     def compute_action(self):
         # here the observation is not filtered, it's directly from /joint_states
+        
+        sub_goal_0_position = np.array(self.goal.subGoals()[0].position())
+        sub_goal_0_weight= np.array(self.goal.subGoals()[0].weight())
+        sub_goal_1_position = np.array(self.goal.subGoals()[1].position())
+        sub_goal_1_weight= np.array(self.goal.subGoals()[1].weight())
+        obst1_position = np.array(self.obst1.position())
+        obst2_position = np.array(self.obst2.position())
+        
+        # return self._planner.compute_action(
+        #     q=self._joint_positions[3:10],
+        #     qdot=self._joint_velocities[3:10],
+        #     x_goal_0=self._goal,
+        #     weight_goal_0=sub_goal_0_weight,
+        #     x_goal_1=sub_goal_1_position,
+
+        #     x_obst = self._obs_pose_list,
+        #     radius_obst = self._obs_radius_list,
+        #     radius_body=np.array([0.02])
+        # )
         return self._planner.compute_action(
             q=self._joint_positions[3:10],
             qdot=self._joint_velocities[3:10],
-            x_goal=self._goal,
-            x_obst = self._obs_pose_list,
-            radius_obst = self._obs_radius_list,
-            radius_body=np.array([0.02])
+            x_goal_0=sub_goal_0_position,
+            weight_goal_0=sub_goal_0_weight,
+            x_goal_1=sub_goal_1_position,
+            weight_goal_1=sub_goal_1_weight,
+            x_obst_0=obst2_position,
+            x_obst_1=obst1_position,
+            radius_obst_0=np.array([self.obst1.radius()]),
+            radius_obst_1=np.array([self.obst2.radius()]),
+            radius_body=np.array([0.02]),
         )
+
+        #             q=self._joint_positions[3:10],
+        #     qdot=self._joint_velocities[3:10],
+        #     x_goal=self._goal,
+        #     weight_goal_0=np.array([2]),
+        #     weight_goal_1=np.array([30]),
+        #     x_obst_0 = self._obs_pose_list[0],
+        #     x_obst_1 = self._obs_pose_list[1],
+        #     radius_obst_0 = self._obs_radius_list[0],
+        #     radius_obst_1 = self._obs_radius_list[1],           
+        #     radius_body=np.array([0.02])
+        # )
+
+        print("finished computing")
+    #    x_obst_0 = self._obs_pose_list[0],
+    #         x_obst_1 = self._obs_pose_list[1],
+    #         x_obst_2 = self._obs_pose_list[2],
+    #         x_obst_3 = self._obs_pose_list[3],
+    #         x_obst_4 = self._obs_pose_list[4],
+    #         x_obst_5 = self._obs_pose_list[5],
+    #         radius_obst_0 = self._obs_radius_list[0],
+    #         radius_obst_1 = self._obs_radius_list[1],
+    #         radius_obst_2 = self._obs_radius_list[2],
+    #         radius_obst_3 = self._obs_radius_list[3],
+    #         radius_obst_4 = self._obs_radius_list[4],
+    #         radius_obst_5 = self._obs_radius_list[5],
     def publish_action(self, action: np.ndarray):
         self._action_message.data[2:] = action
         self._action_publisher.publish(self._action_message)
