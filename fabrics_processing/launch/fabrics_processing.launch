@@ -9,9 +9,9 @@
     <!-- start nodes -->
     <group if="$(arg use_kf)">
       <node pkg="fabrics_processing" type="joint_states_kf" name="joint_states_kf"/>
-    <group/>
+    </group>
     <group unless="$(arg use_kf)">
       <node pkg="fabrics_processing" type="joint_states_filter" name="joint_states_filter"/>
-    <group/>
+    </group>
     <node pkg="fabrics_processing" type="joint_states_integrator" name="joint_states_integrator"/>
 </launch>
