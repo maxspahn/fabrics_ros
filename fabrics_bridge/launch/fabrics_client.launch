@@ -1,25 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
     <!-- to make it easy to pass arguments using position_x:= value to this launch file -->
-    <arg name="goal_position_x" default="0.1" />
-    <arg name="goal_position_y" default="-0.6" />
-    <arg name="goal_position_z" default="0.4" />
+    <arg name="goal_position_x" default="0.8" />
+    <arg name="goal_position_y" default="0.3" />
+    <arg name="goal_position_z" default="0.7" />
 
-    <arg name="goal_rotation_x" default="0.0" />
-    <arg name="goal_rotation_y" default="0.4" />
-    <arg name="goal_rotation_z" default="0.8" />
-    <arg name="goal_rotation_w" default="0.3" />
-
+    <arg name="goal_orientation_x" default="0.0" />
+    <arg name="goal_orientation_y" default="0.0" />
+    <arg name="goal_orientation_z" default="0.0" />
+    <arg name="goal_orientation_w" default="1" />
     <arg name="num_obs" default="10" />
 
     <!-- set goal position on the parameter server -->
     <param name="goal_position_x" type="double" value="$(arg goal_position_x)" />
     <param name="goal_position_y" type="double" value="$(arg goal_position_y)" />
     <param name="goal_position_z" type="double" value="$(arg goal_position_z)" />
-    <param name="goal_rotation_x" type="double" value="$(arg goal_rotation_x)" />
-    <param name="goal_rotation_y" type="double" value="$(arg goal_rotation_y)" />
-    <param name="goal_rotation_z" type="double" value="$(arg goal_rotation_z)" />
-    <param name="goal_rotation_w" type="double" value="$(arg goal_rotation_w)" />
+    <param name="goal_orientation_x" type="double" value="$(arg goal_orientation_x)" />
+    <param name="goal_orientation_y" type="double" value="$(arg goal_orientation_y)" />
+    <param name="goal_orientation_z" type="double" value="$(arg goal_orientation_z)" />
+    <param name="goal_orientation_w" type="double" value="$(arg goal_orientation_w)" />
 
 
     <!-- set number of obstacles on the parameter server -->

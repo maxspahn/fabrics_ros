@@ -10,6 +10,6 @@
     <param name="goal_tolerance" type="double" value="$(arg goal_tolerance)" />
 
     <!-- start nodes -->
-    <node pkg="fabrics_bridge" type="tf_node" name="tf_node" output="screen"/>
+    <!-- <node pkg="fabrics_bridge" type="tf_node" name="tf_node" output="screen"/> -->
     <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen"/>
 </launch>
