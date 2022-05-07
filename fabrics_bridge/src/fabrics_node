@@ -17,21 +17,23 @@ from fabrics_msgs.msg import FabricGoal
 from fabrics_msgs.msg import FabricGoalArray
 
 from ros_converter_node import ActionConverterNode
-# from experiment import Experiment
 from MotionPlanningGoal.goalComposition import GoalComposition
 
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
 from forwardkinematics.urdfFks.pandaFk import PandaFk
 
 from MotionPlanningEnv.sphereObstacle import SphereObstacle
+from scipy.spatial.transform import Rotation
+
+
 
 class FabricNode(object):
     def __init__(self, home_position=np.array([0.5, 0, 0.5])):
         # initial setups
         rospy.init_node('fabric_node')
-        self._planner = self.set_planner()
         self._rate = rospy.Rate(500)
-        self._num_obs = rospy.get_param("num_obs")
+        # if param num_obs is not set, default number of obstacles is 2
+        self._num_obs = 2 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
         self._goal = np.array([])
         self._goal_1_position = np.zeros(2)
         self._home_position = home_position
@@ -45,6 +47,7 @@ class FabricNode(object):
         self.set_goals_markers_publisher()
         self.set_obs_markers_publisher()
         self.set_joint_state_subscriber()
+        self._planner = self.set_planner()
 
     def set_planner(self):
         degrees_of_freedom = 7
@@ -114,7 +117,7 @@ class FabricNode(object):
         planner.set_components(
             forward_kinematics,
             self.goal,
-            number_obstacles=10,
+            number_obstacles=self._num_obs,
         )
         planner.concretize()
     
@@ -170,7 +173,9 @@ class FabricNode(object):
             # "child_link": goal.child_link, "desired_position": [goal.position.x, goal.position.y, goal.position.z],
             # "type": goal.type, "epsilon": goal.epsilon}
             # }
-            self._goal = np.array([goal.pose.position.x, goal.pose.position.y, goal.pose.position.z])
+            self._goal_position = np.array([goal.pose.position.x, goal.pose.position.y, goal.pose.position.z])
+            self._goal_orientation = [goal.pose.orientation.x, goal.pose.orientation.y, goal.pose.orientation.z, goal.pose.orientation.w]
+
             # section for filling in goal marker
             # green markers for goals
             # the parameter are color (a,r,g,b) and marker type (ARROW=0)
@@ -219,6 +224,9 @@ class FabricNode(object):
         # publish obs markers
         self._obs_markers_publisher.publish(self._obs_markers)
 
+    # here the observation is not filtered, it's directly from /joint_states
+    # if it's /joint_states_filtered it goes crazy
+    # TODO is /joint_states_filtered or /joint_states
     def set_joint_state_subscriber(self):
         self._joint_positions = np.zeros(3 + self.n)
         self._joint_velocities = np.zeros(3 + self.n)
@@ -241,19 +249,26 @@ class FabricNode(object):
 
 
     def compute_action(self):
-        # here the observation is not filtered, it's directly from /joint_states
-        
-        # sub_goal_0_position = np.array(self.goal.subGoals()[0].position())
+        sub_goal_0_position = np.array(self.goal.subGoals()[0].position())
         sub_goal_0_weight= np.array(self.goal.subGoals()[0].weight())
-        # sub_goal_1_position = np.array(self.goal.subGoals()[1].position())
+        sub_goal_1_position = np.array(self.goal.subGoals()[1].position())
         sub_goal_1_weight= np.array(self.goal.subGoals()[1].weight())
-        # obst1_position = np.array(self.obst1.position())
-        # obst2_position = np.array(self.obst2.position())
+        obst1_position = np.array(self.obst1.position())
+        obst2_position = np.array(self.obst2.position())
+        
+        sub_goal_0_angles = np.identity(3)
+        # sub_goal_1_angles = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
+        # get the goal orientation and convert to rotation matrix
+        sub_goal_before_rot = Rotation.from_quat(self._goal_orientation).as_euler('xyz')
+        # rotation correction
+        sub_goal_after_rot = sub_goal_before_rot + [0, -1.57 , 0]
+        sub_goal_1_angles = Rotation.from_euler('xyz',sub_goal_after_rot).as_matrix()
         
         return self._planner.compute_action(
             q=self._joint_positions[3:10],
             qdot=self._joint_velocities[3:10],
-            x_goal_0=self._goal,
+            x_goal_0=self._goal_position,
+            angle_goal_1=sub_goal_1_angles,
             weight_goal_0=sub_goal_0_weight,
             x_goal_1=self._goal_1_position,
             weight_goal_1=sub_goal_1_weight,
@@ -262,31 +277,20 @@ class FabricNode(object):
             radius_body=np.array([0.02]),
         )
 
-        # return self._planner.compute_action(
-        #     q=self._joint_positions[3:10],
-        #     qdot=self._joint_velocities[3:10],
-        #     x_goal_0=sub_goal_0_position,
-        #     weight_goal_0=sub_goal_0_weight,
-        #     x_goal_1=sub_goal_1_position,
-        #     weight_goal_1=sub_goal_1_weight,
-        #     x_obst_0=obst2_position,
-        #     x_obst_1=obst1_position,
-        #     radius_obst_0=np.array([self.obst1.radius()]),
-        #     radius_obst_1=np.array([self.obst2.radius()]),
-        #     radius_body=np.array([0.02]),
-        # )
-
-        #             q=self._joint_positions[3:10],
-        #     qdot=self._joint_velocities[3:10],
-        #     x_goal=self._goal,
-        #     weight_goal_0=np.array([2]),
-        #     weight_goal_1=np.array([30]),
-        #     x_obst_0 = self._obs_pose_list[0],
-        #     x_obst_1 = self._obs_pose_list[1],
-        #     radius_obst_0 = self._obs_radius_list[0],
-        #     radius_obst_1 = self._obs_radius_list[1],           
-        #     radius_body=np.array([0.02])
-        # )
+#  action = planner.compute_action(
+#             q=ob["x"],
+#             qdot=ob["xdot"],
+#             x_goal_0=sub_goal_0_position,
+#             angle_goal_1=sub_goal_1_angles,
+#             weight_goal_0=sub_goal_0_weight,
+#             x_goal_1=sub_goal_1_position,
+#             weight_goal_1=sub_goal_1_weight,
+#             x_obst_0=obst2_position,
+#             x_obst_1=obst1_position,
+#             radius_obst_0=np.array([obst1.radius()]),
+#             radius_obst_1=np.array([obst2.radius()]),
+#             radius_body=np.array([0.02]),
+#         )
 
         print("finished computing")
     def publish_action(self, action: np.ndarray):
