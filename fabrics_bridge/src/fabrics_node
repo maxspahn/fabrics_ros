@@ -32,8 +32,8 @@ class FabricNode(object):
         # initial setups
         rospy.init_node('fabric_node')
         self._rate = rospy.Rate(500)
-        # if param num_obs is not set, default number of obstacles is 2
-        self._num_obs = 2 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
+        # if param num_obs is not set, default number of obstacles is 0
+        self._num_obs = 0 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
         self._goal = np.array([])
         self._goal_1_position = np.zeros(2)
         self._home_position = home_position
@@ -83,7 +83,7 @@ class FabricNode(object):
         goal_dict = {
         "subgoal0": {
             "m": 3,
-            "w": 200.0,
+            "w": 1.0,
             "prime": True,
             "indices": [0, 1, 2],
             "parent_link": 0,
@@ -92,18 +92,18 @@ class FabricNode(object):
             "epsilon": 0.01,
             "type": "staticSubGoal",
         },
-        "subgoal1": {
-            "m": 2,
-            "w": 20.0,
-            "prime": False,
-            "indices": [0, 1],
-            "parent_link": 6,
-            "child_link": 7,
-            "angle": [0.0, 0.4, 0.8, 0.3],
-            "desired_position": [0.0, 0.0],
-            "epsilon": 0.05,
-            "type": "staticSubGoal",
-        }
+        # "subgoal1": {
+        #     "m": 2,
+        #     "w": 20.0,
+        #     "prime": False,
+        #     "indices": [0, 1],
+        #     "parent_link": 6,
+        #     "child_link": 7,
+        #     "angle": [0.0, 0.4, 0.8, 0.3],
+        #     "desired_position": [0.0, 0.0],
+        #     "epsilon": 0.05,
+        #     "type": "staticSubGoal",
+        # }
         }
         self.goal = GoalComposition(name="goal", contentDict=goal_dict)
 
@@ -224,14 +224,11 @@ class FabricNode(object):
         # publish obs markers
         self._obs_markers_publisher.publish(self._obs_markers)
 
-    # here the observation is not filtered, it's directly from /joint_states
-    # if it's /joint_states_filtered it goes crazy
-    # TODO is /joint_states_filtered or /joint_states
     def set_joint_state_subscriber(self):
         self._joint_positions = np.zeros(3 + self.n)
         self._joint_velocities = np.zeros(3 + self.n)
         self._joint_state_subscriber = rospy.Subscriber(
-            '/joint_states',
+            '/joint_states_filtered',
             JointState, self.joint_states_callback,
             tcp_nodelay=True
         )
@@ -251,8 +248,8 @@ class FabricNode(object):
     def compute_action(self):
         sub_goal_0_position = np.array(self.goal.subGoals()[0].position())
         sub_goal_0_weight= np.array(self.goal.subGoals()[0].weight())
-        sub_goal_1_position = np.array(self.goal.subGoals()[1].position())
-        sub_goal_1_weight= np.array(self.goal.subGoals()[1].weight())
+        # sub_goal_1_position = np.array(self.goal.subGoals()[1].position())
+        # sub_goal_1_weight= np.array(self.goal.subGoals()[1].weight())
         obst1_position = np.array(self.obst1.position())
         obst2_position = np.array(self.obst2.position())
         
@@ -264,33 +261,21 @@ class FabricNode(object):
         sub_goal_after_rot = sub_goal_before_rot + [0, -1.57 , 0]
         sub_goal_1_angles = Rotation.from_euler('xyz',sub_goal_after_rot).as_matrix()
         
+        # test without orientation (no subgoal1)
         return self._planner.compute_action(
-            q=self._joint_positions[3:10],
-            qdot=self._joint_velocities[3:10],
+            q=self._joint_positions[5:12],
+            qdot=self._joint_velocities[5:12],
             x_goal_0=self._goal_position,
-            angle_goal_1=sub_goal_1_angles,
             weight_goal_0=sub_goal_0_weight,
-            x_goal_1=self._goal_1_position,
-            weight_goal_1=sub_goal_1_weight,
-            x_obst = self._obs_pose_list,
-            radius_obst = self._obs_radius_list,
-            radius_body=np.array([0.02]),
+            radius_body=np.array([0.1]),
         )
 
-#  action = planner.compute_action(
-#             q=ob["x"],
-#             qdot=ob["xdot"],
-#             x_goal_0=sub_goal_0_position,
-#             angle_goal_1=sub_goal_1_angles,
-#             weight_goal_0=sub_goal_0_weight,
-#             x_goal_1=sub_goal_1_position,
-#             weight_goal_1=sub_goal_1_weight,
-#             x_obst_0=obst2_position,
-#             x_obst_1=obst1_position,
-#             radius_obst_0=np.array([obst1.radius()]),
-#             radius_obst_1=np.array([obst2.radius()]),
-#             radius_body=np.array([0.02]),
-#         )
+    #    angle_goal_1=sub_goal_1_angles,
+    #         x_goal_1=self._goal_1_position,
+    #         weight_goal_1=sub_goal_1_weight,
+    #         x_obst = self._obs_pose_list,
+    #         radius_obst = self._obs_radius_list,
+
 
         print("finished computing")
     def publish_action(self, action: np.ndarray):
@@ -365,8 +350,8 @@ class FabricNode(object):
             goal_connection = self._goal_subscriber.get_num_connections()
             if goal_connection == 0:
                 # go to home position if there is no /planning_goals received
-                self._goal = self._home_position
-                rospy.loginfo("Going home (%f, %f, %f)", self._goal[0], self._goal[1], self._goal[2])
+                self._goal_position = self._home_position
+                # rospy.loginfo("Going home (%f, %f, %f)", self._goal[0], self._goal[1], self._goal[2])
                 self.act()
             else:
                 self.act()
