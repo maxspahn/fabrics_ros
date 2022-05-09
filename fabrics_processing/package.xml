@@ -50,6 +50,16 @@
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
 
+  <!-- add run-time dependency -->
+  <exec_depend>python-pykalman</exec_depend>
+  <exec_depend>python-numpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>geometry_msgs</exec_depend>
+  <exec_depend>nav_msgs</exec_depend>
+  <exec_depend>tf</exec_depend>
+  <exec_depend>rospy</exec_depend>
+
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
