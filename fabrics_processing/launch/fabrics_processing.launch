@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-    <arg name="use_kf" value="true" />
+    <arg name="use_kf" default="true" />
 
     <!-- load config files -->
     <rosparam file="$(find fabrics_processing)/config/joint_states_integrator.yaml"/>
