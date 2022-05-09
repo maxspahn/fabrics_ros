@@ -40,7 +40,8 @@ class FabricNode(object):
         self._obs_radius_list = np.zeros([self._num_obs, 1], dtype = float)
         self.set_goal_subscriber()
         self.set_obs_subscriber()
-        self.set_variables()
+        # number of panda joint
+        self.n = 7
 
         self.set_action_publisher()
         self.set_goals_markers_publisher()
@@ -121,14 +122,6 @@ class FabricNode(object):
         planner.concretize()
     
         return planner
-
-
-
-    def set_variables(self):
-        # plannar.param
-        self._n =  rospy.get_param("n")
-        self._dt = rospy.get_param("dt")
-        self._T = 5000
 
     def set_goals_markers_publisher(self):
         self._goals_markers_publisher = rospy.Publisher(
@@ -224,8 +217,8 @@ class FabricNode(object):
         self._obs_markers_publisher.publish(self._obs_markers)
 
     def set_joint_state_subscriber(self):
-        self._joint_positions = np.zeros(3 + self.n)
-        self._joint_velocities = np.zeros(3 + self.n)
+        self._joint_positions = np.zeros(5 + self.n)
+        self._joint_velocities = np.zeros(5 + self.n)
         self._joint_state_subscriber = rospy.Subscriber(
             '/joint_states_filtered',
             JointState, self.joint_states_callback,
@@ -285,60 +278,6 @@ class FabricNode(object):
         action = self.compute_action()
         self.publish_action(action)
         return action
-
-    # legacy section
-    # this function wrap params from fabric.yaml into a dictionary as an input for FabricPlanner()
-    # ideally the dictionary shouldn't be necessary, but this is a temporary solution to make
-    # sure every modules work correctly
-    # def set_planner_file(self):
-    #     self._planner_file = {}
-    #     self._planner_file.update({"interval": rospy.get_param("interval")})
-    #     self._planner_file.update({"type": rospy.get_param("type")})
-    #     self._planner_file.update({"n": rospy.get_param("n")})
-    #     self._planner_file.update({"m_base": rospy.get_param("m_base")})
-    #     self._planner_file.update({"obst": rospy.get_param("obst")})
-    #     self._planner_file.update({"selfCol": rospy.get_param("selfCol")})
-    #     self._planner_file.update({"attractor": rospy.get_param("attractor")})
-    #     self._planner_file.update({"limits": rospy.get_param("limits")})
-    #     self._planner_file.update({"speed": rospy.get_param("speed")})
-    #     self._planner_file.update({"damper": rospy.get_param("damper")})
-    #     self._planner_file.update({"dynamic": rospy.get_param("dynamic")})
-
-    # this function wrap params from exp.yaml into a dictionary as an input for Experiment()
-    # ideally the dictionary shouldn't be necessary, but this is a temporary solution to make
-    # sure every modules work correctly
-    # def set_exp_file(self):
-    #   print("DEPRECATED")
-    #     self._exp_file = {}
-    #     self._exp_file.update({"T": rospy.get_param("T")})
-    #     self._exp_file.update({"dynamic": rospy.get_param("dynamic")})
-    #     self._exp_file.update({"dt": rospy.get_param("dt")})
-    #     self._exp_file.update({"robot_type": rospy.get_param("robot_type")})
-    #     self._exp_file.update({"n": rospy.get_param("n")})
-    #     self._exp_file.update({"limits": rospy.get_param("limits")})
-    #     self._exp_file.update({"r_body": rospy.get_param("r_body")})
-    #     self._exp_file.update({"selfCollision": rospy.get_param("selfCollision")})
-    #     self._exp_file.update({"obstacles": rospy.get_param("obstacles")})
-    #     self._exp_file.update(self._goal_dic)
-    #     self._experiment = Experiment(self._exp_file)
-
-        # set goals and obstacles in the callback loop as they could be changing in run-time
-        # self.set_planner()
-        # self.RosConverter()
-        # self.run()
-
-    # def set_planner(self):
-        # print("DEPRECATED")
-        #self._planner = FabricPlanner(self._experiment, self._planner_file)
-        #self._planner.setJointLimits(self._experiment.limits())
-        #self._planner.setSelfCollisionAvoidance(self._experiment.rBody())
-        #self._planner.setObstacles(self._experiment.obstacles(), self._experiment.rBody())
-        #self._planner.setGoal(self._experiment.goal())
-        #self._planner.concretize()
-
-    @property
-    def n(self):
-        return self._n
 
     def run(self):
         while not rospy.is_shutdown():
