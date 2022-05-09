@@ -28,7 +28,7 @@ from scipy.spatial.transform import Rotation
 
 
 class FabricNode(object):
-    def __init__(self, home_position=np.array([0.5, 0, 0.5])):
+    def __init__(self):
         # initial setups
         rospy.init_node('fabric_node')
         self._rate = rospy.Rate(500)
@@ -36,7 +36,6 @@ class FabricNode(object):
         self._num_obs = 0 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
         self._goal = np.array([])
         self._goal_1_position = np.zeros(2)
-        self._home_position = home_position
         self._obs_pose_list = np.zeros([self._num_obs, 3], dtype = float)
         self._obs_radius_list = np.zeros([self._num_obs, 1], dtype = float)
         self.set_goal_subscriber()
@@ -343,18 +342,7 @@ class FabricNode(object):
 
     def run(self):
         while not rospy.is_shutdown():
-            # check if there is connection between self._goal_subscriber
-            # i.e. check if there is goal(s) being published
-            # if goal_connection == 0 which means there is no connection
-            # then go to the home position
-            goal_connection = self._goal_subscriber.get_num_connections()
-            if goal_connection == 0:
-                # go to home position if there is no /planning_goals received
-                self._goal_position = self._home_position
-                # rospy.loginfo("Going home (%f, %f, %f)", self._goal[0], self._goal[1], self._goal[2])
-                self.act()
-            else:
-                self.act()
+            self.act()
             self._rate.sleep()
 
 if __name__ == "__main__":
