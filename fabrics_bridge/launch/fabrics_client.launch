@@ -9,7 +9,7 @@
     <arg name="goal_orientation_y" default="0.0" />
     <arg name="goal_orientation_z" default="0.0" />
     <arg name="goal_orientation_w" default="1" />
-    <arg name="num_obs" default="10" />
+    <arg name="num_obs" default="0" />
 
     <!-- set goal position on the parameter server -->
     <param name="goal_position_x" type="double" value="$(arg goal_position_x)" />
