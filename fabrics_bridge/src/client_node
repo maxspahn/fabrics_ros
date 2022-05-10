@@ -19,29 +19,25 @@ class ClientNode(object):
     def __init__(self):
         rospy.init_node('client_node')
         self._rate = rospy.Rate(10)
-        self._num_obs = rospy.get_param("num_obs")
-        self._is_randomized_obs = False
+        # if param num_obs is not set, default number of obstacles is 2
+        self._num_obs = 2 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
+        print(self._num_obs)
         self.set_goals_publisher()
         self.set_obs_publisher()
         self.set_sphere_markers_publisher()
         # radius of shelf (suppose it's a circular shelf)
-        self._radius_shelf = 0.3
+        self._radius_shelf = 10
         # number of spheres to compose a ring (depending on the param num_obs)
-        self._num_sphere = rospy.get_param("num_obs")
-        '''
-        using the formula:
-        radius = s / 2 * sin(pi/n)
-        which is given the lengh of any side (s) of a regular (n)-sided polygon,
-        the radius (distance from the center of a regular (n)-sided polygon to any vertex) is known
-        the formula can re-written as:
-        s = radius * 2 * sin(pi/n)
-        and s would be a diameter of each sphere
-        '''
-        self._diameter_sphere = self._radius_shelf * 2 * math.sin(math.pi/self._num_sphere)
+        self._num_sphere = self._num_obs
+        self._sphere_resolution = 0.1
+
+        # obstacle randomization parts
+        self._is_randomized_obs = False
         self._sphere_r_low = 0.1
         self._sphere_r_high = 0.5
-        self._obs_pos_low = -0.5
-        self._obs_pos_high = 0.5
+        # put obstacles to ultra far
+        self._obs_pos_low = 10
+        self._obs_pos_high = 20
         if self._is_randomized_obs:
             self._randomized_radius_list = np.zeros([self._num_obs, 1], dtype = float)
             self._randomized_pose_list = np.zeros([self._num_obs, 3], dtype = float)
@@ -136,14 +132,18 @@ class ClientNode(object):
         goal_data.pose.position.x = rospy.get_param("goal_position_x")
         goal_data.pose.position.y = rospy.get_param("goal_position_y")
         goal_data.pose.position.z = rospy.get_param("goal_position_z")
+        goal_data.pose.orientation.x = rospy.get_param("goal_orientation_x")
+        goal_data.pose.orientation.y = rospy.get_param("goal_orientation_y")
+        goal_data.pose.orientation.z = rospy.get_param("goal_orientation_z")
+        goal_data.pose.orientation.w = rospy.get_param("goal_orientation_w")
         # initialize rotation from euler angles (more intuitive)
-        r = Rotation.from_euler('yz', [20,-70], degrees=True)
-        # get quaternions
-        r_quat = r.as_quat()
-        goal_data.pose.orientation.x = r_quat[0]
-        goal_data.pose.orientation.y = r_quat[1]
-        goal_data.pose.orientation.z = r_quat[2]
-        goal_data.pose.orientation.w = r_quat[3]
+        # r = Rotation.from_euler('yz', [0,-90], degrees=True)
+        # # get quaternions
+        # r_quat = r.as_quat()
+        # goal_data.pose.orientation.x = r_quat[0]
+        # goal_data.pose.orientation.y = r_quat[1]
+        # goal_data.pose.orientation.z = r_quat[2]
+        # goal_data.pose.orientation.w = r_quat[3]
 
         goal_data.parent_link = 0
         goal_data.child_link = 7
@@ -167,9 +167,9 @@ class ClientNode(object):
             sphere_marker.pose.position.y = y
             sphere_marker.pose.position.z = z
             sphere_marker.pose.orientation.w = 1.0
-            sphere_marker.scale.x = self._diameter_sphere
-            sphere_marker.scale.y = self._diameter_sphere
-            sphere_marker.scale.z = self._diameter_sphere
+            sphere_marker.scale.x = self._sphere_resolution
+            sphere_marker.scale.y = self._sphere_resolution
+            sphere_marker.scale.z = self._sphere_resolution
             self._sphere_markers.markers.append(sphere_marker)
         # publish sphere markers
         self._sphere_markers_publisher.publish(self._sphere_markers)
@@ -186,7 +186,7 @@ class ClientNode(object):
         # set obstacles depending on the ring of spheres or manually set obstacles
         else:
             for i in range(self._num_sphere):
-                obs.primitives.append(self.init_sphere_size(self._diameter_sphere/2))
+                obs.primitives.append(self.init_sphere_size(self._sphere_resolution/2))
                 obs.primitive_poses.append(self._sphere_markers.markers[i].pose)
             # obs.primitives.append(self.init_sphere_size(0.15))
             # obs.primitive_poses.append(self.init_sphere_pose(0.46422371, -0.1226168, 0.29426042))
