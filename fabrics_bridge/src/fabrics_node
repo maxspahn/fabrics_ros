@@ -9,7 +9,7 @@ from scipy.spatial.transform import Rotation
 import rospy
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, PoseStamped
 from visualization_msgs.msg import Marker, MarkerArray
 # message types for storing obstacle info
 from moveit_msgs.msg import CollisionObject
@@ -80,7 +80,7 @@ class FabricNode(object):
         goal_dict = {
         "subgoal0": {
             "m": 3,
-            "w": 1.0,
+            "w": 0.6,
             "prime": True,
             "indices": [0, 1, 2],
             "parent_link": 0,
@@ -89,18 +89,18 @@ class FabricNode(object):
             "epsilon": 0.01,
             "type": "staticSubGoal",
         },
-        # "subgoal1": {
-        #     "m": 2,
-        #     "w": 20.0,
-        #     "prime": False,
-        #     "indices": [0, 1],
-        #     "parent_link": 6,
-        #     "child_link": 7,
-        #     "angle": [0.0, 0.4, 0.8, 0.3],
-        #     "desired_position": [0.0, 0.0],
-        #     "epsilon": 0.05,
-        #     "type": "staticSubGoal",
-        # }
+        "subgoal1": {
+            "m": 2,
+            "w": 20.0,
+            "prime": False,
+            "indices": [0, 1],
+            "parent_link": 6,
+            "child_link": 7,
+            "angle": [0.0, 0.4, 0.8, 0.3],
+            "desired_position": [0.0, 0.0],
+            "epsilon": 0.01,
+            "type": "staticSubGoal",
+        }
         }
         self.goal = GoalComposition(name="goal", contentDict=goal_dict)
 
@@ -145,9 +145,36 @@ class FabricNode(object):
 
     def set_goal_subscriber(self):
         self._goal_subscriber = rospy.Subscriber(
-            '/planning_goals',
-            FabricGoalArray, self.goal_callback
+            '/planning_goal',
+            PoseStamped, self.interactive_marker_cb
         )
+        # Note: Temporarily replaced goal subscriber with interactive marker subscriber
+        # self._goal_subscriber = rospy.Subscriber(
+        #     '/planning_goals',
+        #     FabricGoalArray, self.goal_callback
+        # )
+
+    def interactive_marker_cb(self, goal: PoseStamped):
+        self._goal_id = 0
+        self._goals_markers = MarkerArray()
+
+        self._goal_position = np.array([goal.pose.position.x, goal.pose.position.y, goal.pose.position.z])
+        self._goal_orientation = [goal.pose.orientation.x, goal.pose.orientation.y, goal.pose.orientation.z, goal.pose.orientation.w]
+
+        goal_marker = self.init_marker(1.0, 0.0, 1.0, 0.0, 0)
+        goal_marker.id = self._goal_id
+        goal_marker.pose.position.x = goal.pose.position.x
+        goal_marker.pose.position.y = goal.pose.position.y
+        goal_marker.pose.position.z = goal.pose.position.z
+        goal_marker.pose.orientation.x = goal.pose.orientation.x
+        goal_marker.pose.orientation.y = goal.pose.orientation.y
+        goal_marker.pose.orientation.z = goal.pose.orientation.z
+        goal_marker.pose.orientation.w = goal.pose.orientation.w
+        goal_marker.scale.x = 0.1
+        goal_marker.scale.y = 0.1
+        goal_marker.scale.z = 0.1
+        self._goals_markers.markers.append(goal_marker)
+        self._goals_markers_publisher.publish(self._goals_markers)
 
     def goal_callback(self, goals_data: FabricGoalArray):
         # self._goal_dic = {}
@@ -237,18 +264,19 @@ class FabricNode(object):
     def compute_action(self):
         sub_goal_0_position = np.array(self.goal.subGoals()[0].position())
         sub_goal_0_weight= np.array(self.goal.subGoals()[0].weight())
-        # sub_goal_1_position = np.array(self.goal.subGoals()[1].position())
-        # sub_goal_1_weight= np.array(self.goal.subGoals()[1].weight())
+        sub_goal_1_position = np.array(self.goal.subGoals()[1].position())
+        sub_goal_1_weight= np.array(self.goal.subGoals()[1].weight())
         obst1_position = np.array(self.obst1.position())
         obst2_position = np.array(self.obst2.position())
         
         sub_goal_0_angles = np.identity(3)
-        # sub_goal_1_angles = np.array([[1.0, 0.0, 0.0], [0.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
-        # get the goal orientation and convert to rotation matrix
-        sub_goal_before_rot = Rotation.from_quat(self._goal_orientation).as_euler('xyz')
-        # rotation correction
-        sub_goal_after_rot = sub_goal_before_rot + [0, -1.57 , 0]
-        sub_goal_1_angles = Rotation.from_euler('xyz',sub_goal_after_rot).as_matrix()
+
+        # Get euler angles in intrinsic frame
+        sub_goal_1_euler = Rotation.from_quat(self._goal_orientation).as_euler('XYZ')
+        sub_goal_1_intrinsic = [-sub_goal_1_euler[1], -sub_goal_1_euler[0]]
+        # NOTE: Fabrics will only align the axis between panda_link7 and panda_link8 with the Z axis of our goal.
+        #       So the intrinsic Z angle doesn't matter, rotation about the this axis is allowed and therefore ommitted from the rotation matrix.
+        sub_goal_1_angles = Rotation.from_euler('YX',sub_goal_1_intrinsic).as_matrix()
         
         # test without orientation (no subgoal1)
         return self._planner.compute_action(
@@ -256,14 +284,14 @@ class FabricNode(object):
             qdot=self._joint_velocities[5:12],
             x_goal_0=self._goal_position,
             weight_goal_0=sub_goal_0_weight,
-            radius_body=np.array([0.1]),
+            radius_body=np.array([0.01]),
+            angle_goal_1=sub_goal_1_angles,
+            x_goal_1=self._goal_1_position,
+            weight_goal_1=sub_goal_1_weight,
+            # x_obst = self._obs_pose_list,
+            # radius_obst = self._obs_radius_list,
         )
 
-    #    angle_goal_1=sub_goal_1_angles,
-    #         x_goal_1=self._goal_1_position,
-    #         weight_goal_1=sub_goal_1_weight,
-    #         x_obst = self._obs_pose_list,
-    #         radius_obst = self._obs_radius_list,
 
 
         print("finished computing")
@@ -283,6 +311,7 @@ class FabricNode(object):
 
 if __name__ == "__main__":
     my_fabric_node = FabricNode()
+    rospy.sleep(1)
     try:
         my_fabric_node.run()
     except rospy.ROSInterruptException:

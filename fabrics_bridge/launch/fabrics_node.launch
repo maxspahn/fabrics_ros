@@ -10,4 +10,8 @@
     <!-- start nodes -->
     <!-- <node pkg="fabrics_bridge" type="tf_node" name="tf_node" output="screen"/> -->
     <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen"/>
+    <node name="interactive_marker" pkg="franka_example_controllers" type="interactive_marker.py">
+      <param name="link_name" value="panda_link0" />
+      <remap to="planning_goal" from="equilibrium_pose" />
+    </node>
 </launch>
