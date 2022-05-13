@@ -195,7 +195,7 @@ class ClientNode(object):
         self._obs_publisher.publish(obs)
 
     def run(self):
-        while not rospy.is_shutdown():
+        while not rospy.is_shutdown():     
             self.publish_goals()
             self.publish_obs()
             self._rate.sleep()
