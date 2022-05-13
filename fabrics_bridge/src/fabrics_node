@@ -1,317 +1,225 @@
 #!/usr/bin/env python3
-# general python imports
 import numpy as np
 import time
 import datetime
-from scipy.spatial.transform import Rotation
-
-# ros imports
 import rospy
-from std_msgs.msg import Float64MultiArray
-from sensor_msgs.msg import JointState
-from geometry_msgs.msg import Point, PoseStamped
-from visualization_msgs.msg import Marker, MarkerArray
-# message types for storing obstacle info
-from moveit_msgs.msg import CollisionObject
-from fabrics_msgs.msg import FabricGoal
-from fabrics_msgs.msg import FabricGoalArray
+import tf
 
-# fabrics import
+from std_msgs.msg import Float64MultiArray, ColorRGBA
+from sensor_msgs.msg import JointState
+from geometry_msgs.msg import Point, PoseStamped, Pose, Quaternion, Vector3
+from visualization_msgs.msg import Marker, MarkerArray
+
+from fabrics_msgs.msg import FabricGoal, FabricGoalArray, FabricsObstacle, FabricsObstacleArray
+
 from MotionPlanningGoal.goalComposition import GoalComposition
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
 from forwardkinematics.urdfFks.pandaFk import PandaFk
-from MotionPlanningEnv.sphereObstacle import SphereObstacle
 
+# Helpers
+def _it(self):
+    yield self.x
+    yield self.y
+    yield self.z
+Point.__iter__ = _it
 
+def _it(self):
+    yield self.x
+    yield self.y
+    yield self.z
+    yield self.w
+Quaternion.__iter__ = _it
 
-class FabricNode(object):
+class FabricsNode(object):
     def __init__(self):
-        # initial setups
-        rospy.init_node('fabric_node')
-        self._rate = rospy.Rate(500)
-        # if param num_obs is not set, default number of obstacles is 0
-        self._num_obs = 0 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
-        self._goal = np.array([])
-        self._goal_1_position = np.zeros(2)
-        self._obs_pose_list = np.zeros([self._num_obs, 3], dtype = float)
-        self._obs_radius_list = np.zeros([self._num_obs, 1], dtype = float)
-        self.set_goal_subscriber()
-        self.set_obs_subscriber()
-        # number of panda joint
-        self.n = 7
+        rospy.init_node('fabrics_node')
+        self.rate = rospy.Rate(500)
+        self.num_obstacles = 0 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
+        self.planner = self.init_planner()
 
-        self.set_action_publisher()
-        self.set_goals_markers_publisher()
-        self.set_obs_markers_publisher()
-        self.set_joint_state_subscriber()
-        self._planner = self.set_planner()
+        self.init_publishers()
+        self.init_subscribers()
 
-    def set_planner(self):
+        self.goal_reached = False
+        self.goal_tolerance = 0.05
+
+        self.init_markers()
+
+        self.tf_listener = tf.TransformListener()
+        rospy.sleep(1.0)
+
+    def init_planner(self):
+        # TODO: Replace PandaFK by generic FK that reads from robot_description
+        # TODO: Add full body control robot type as an option
+        robot_type = "panda"
         degrees_of_freedom = 7
-        robot_type = 'panda'
-        damper = {
-                "alpha_b": 0.5,
-                "alpha_eta": 0.5,
-                "alpha_shift": 0.5,
-                "beta_distant": 0.01,
-                "beta_close": 10,
-                "radius_shift": 0.1
-        }
-        # beta_close is for: when you close to a close, how much damping do you want
-        # change the 100 to higher or lower
-        # the higher it is, the more potential it is hence faster
-
-        attractor_potential = "100 * ca.norm_2(x)**2"
         planner = ParameterizedFabricPlanner(degrees_of_freedom, robot_type)
-        # Definition of the obstacle.
-        static_obst_dict = {
-            "dim": 3,
-            "type": "sphere",
-            "geometry": {"position": [0.5, -0.3, 0.3], "radius": 0.1},
-        }
-        self.obst1 = SphereObstacle(name="staticObst", contentDict=static_obst_dict)
-        static_obst_dict = {
-            "dim": 3,
-            "type": "sphere",
-            "geometry": {"position": [-0.7, 0.0, 0.5], "radius": 0.1},
-        }
-        self.obst2 = SphereObstacle(name="staticObst", contentDict=static_obst_dict)
-        # weight of subgoal0 is the attractor_potential
-        goal_dict = {
-        "subgoal0": {
-            "m": 3,
-            "w": 0.6,
-            "prime": True,
-            "indices": [0, 1, 2],
-            "parent_link": 0,
-            "child_link": 7,
-            "desired_position": [0.1, -0.6, 0.4],
-            "epsilon": 0.01,
-            "type": "staticSubGoal",
-        },
-        "subgoal1": {
-            "m": 2,
-            "w": 20.0,
-            "prime": False,
-            "indices": [0, 1],
-            "parent_link": 6,
-            "child_link": 7,
-            "angle": [0.0, 0.4, 0.8, 0.3],
-            "desired_position": [0.0, 0.0],
-            "epsilon": 0.01,
-            "type": "staticSubGoal",
-        }
-        }
-        self.goal = GoalComposition(name="goal", contentDict=goal_dict)
-
-        planner = ParameterizedFabricPlanner(degrees_of_freedom, robot_type)
+        fk = PandaFk()
         q = planner.variables.position_variable()
-        panda_fk = PandaFk()
-        forward_kinematics = []
-        for i in range(1, degrees_of_freedom+1):
-            forward_kinematics.append(panda_fk.fk(q, i, positionOnly=True))
+        forward_kinematics = [fk.fk(q, i, positionOnly=True) for i in range(1, degrees_of_freedom+1)]
+
+        goal_dict = {
+            "position": {
+                "m": 3,
+                "w": 0.6, # attractor weight
+                "prime": True,
+                "indices": [0, 1, 2],
+                "parent_link": 0,
+                "child_link": 7,
+                "desired_position": [0.5, 0.0, 0.5],
+                "epsilon": 0.01,
+                "type": "staticSubGoal",
+            },
+            "orientation": {
+                "m": 2,
+                "w": 20, # attractor weight
+                "prime": False,
+                "indices": [0, 1],
+                "parent_link": 6,
+                "child_link": 7,
+                "angle": [0.707, 0.0, 0.0, 0.707],
+                "desired_position": [0.0, 0.0],
+                "epsilon": 0.01,
+                "type": "staticSubGoal",
+            },
+        }
+        self.planning_goal = GoalComposition(name="goal", contentDict=goal_dict)
+
         # The planner hides all the logic behind the function set_components.
         planner.set_components(
             forward_kinematics,
-            self.goal,
-            number_obstacles=self._num_obs,
+            self.planning_goal,
+            number_obstacles=self.num_obstacles,
         )
         planner.concretize()
     
         return planner
 
-    def set_goals_markers_publisher(self):
-        self._goals_markers_publisher = rospy.Publisher(
-            '/planning_goals/markers',
-            MarkerArray, queue_size=10
+    def init_publishers(self):
+        self.goal_marker_publisher = rospy.Publisher(
+            '/planning_goal/marker',
+            Marker, queue_size=10
         )
-
-    def set_obs_markers_publisher(self):
-        self._obs_markers_publisher = rospy.Publisher(
+        self.obs_markers_publisher = rospy.Publisher(
             '/planning_obs/markers',
             MarkerArray, queue_size=10
-    )
+        )
+        self.action_message = Float64MultiArray(data=np.zeros(9))
+        self.action_publisher = rospy.Publisher(
+            '/joint_acc_des', 
+            Float64MultiArray, queue_size=10
+        )
 
-    def init_marker(self, a, r, g, b, type):
+    def init_subscribers(self):
+        self.obs_subscriber = rospy.Subscriber(
+            '/planning_obs',
+            FabricsObstacleArray, self.goal_callback
+        )
+        self.obstacles = []
+        self.goal_subscriber = rospy.Subscriber(
+            '/planning_goal',
+            PoseStamped, self.goal_callback
+        )
+        self.joint_states = JointState()
+        self.joint_state_subscriber = rospy.Subscriber(
+            '/joint_states_filtered',
+            JointState, 
+            self.joint_states_callback,
+            # lambda msg: self._joint_states=msg,
+            tcp_nodelay=True
+        )
+
+    def obs_callback(self, msg: FabricsObstacleArray):
+        self.obstacles = msg.obstacles
+
+    def goal_callback(self, msg: PoseStamped):
+        self.goal = msg
+
+    def joint_states_callback(self, msg: JointState):
+        # TODO: better way of extracting just the panda joint states
+        self.joint_states.name = msg.name[5:]
+        self.joint_states.position = msg.position[5:]
+        self.joint_states.velocity = msg.velocity[5:]
+
+    def init_markers(self):
+        def init_marker(a, r, g, b, type=2):
             goal_marker = Marker()
             goal_marker.header.frame_id = "panda_link0"
             goal_marker.type = type
             goal_marker.action = goal_marker.ADD
-            goal_marker.color.a = a
-            goal_marker.color.r = r
-            goal_marker.color.g = g
-            goal_marker.color.b = b
+            goal_marker.color = ColorRGBA(a=a, r=r, g=g, b=b)
             return goal_marker
 
-    def set_goal_subscriber(self):
-        self._goal_subscriber = rospy.Subscriber(
-            '/planning_goal',
-            PoseStamped, self.interactive_marker_cb
-        )
-        # Note: Temporarily replaced goal subscriber with interactive marker subscriber
-        # self._goal_subscriber = rospy.Subscriber(
-        #     '/planning_goals',
-        #     FabricGoalArray, self.goal_callback
-        # )
+        self.goal_marker = init_marker(1, 0, 0, 1, type=0)
+        self.goal_marker.points = [Point(x=0, y=0, z=0), Point(x=0, y=0, z=0.35)]
+        self.goal_marker.id = 1
+        self.goal_marker.scale = Vector3(0.02, 0.04, 0.04)
 
-    def interactive_marker_cb(self, goal: PoseStamped):
-        self._goal_id = 0
-        self._goals_markers = MarkerArray()
+        self.obs_markers = MarkerArray()
+        self.obs_markers.markers = [init_marker(1, 1, 0, 0) for i in range(self.num_obstacles)]
+        for i, m in enumerate(self.obs_markers.markers): m.id = i
 
-        self._goal_position = np.array([goal.pose.position.x, goal.pose.position.y, goal.pose.position.z])
-        self._goal_orientation = [goal.pose.orientation.x, goal.pose.orientation.y, goal.pose.orientation.z, goal.pose.orientation.w]
+    def update_markers(self):
+        self.goal_marker.color.g = 1.0 if self.goal_reached else 0.0
+        self.goal_marker.color.b = 0.0 if self.goal_reached else 1.0
 
-        goal_marker = self.init_marker(1.0, 0.0, 1.0, 0.0, 0)
-        goal_marker.id = self._goal_id
-        goal_marker.pose.position.x = goal.pose.position.x
-        goal_marker.pose.position.y = goal.pose.position.y
-        goal_marker.pose.position.z = goal.pose.position.z
-        goal_marker.pose.orientation.x = goal.pose.orientation.x
-        goal_marker.pose.orientation.y = goal.pose.orientation.y
-        goal_marker.pose.orientation.z = goal.pose.orientation.z
-        goal_marker.pose.orientation.w = goal.pose.orientation.w
-        goal_marker.scale.x = 0.1
-        goal_marker.scale.y = 0.1
-        goal_marker.scale.z = 0.1
-        self._goals_markers.markers.append(goal_marker)
-        self._goals_markers_publisher.publish(self._goals_markers)
+        self.goal_marker.pose = self.goal.pose
+        self.goal_marker_publisher.publish(self.goal_marker)
 
-    def goal_callback(self, goals_data: FabricGoalArray):
-        # self._goal_dic = {}
-        self._goal_id = 0
-        self._goals_markers = MarkerArray()
-
-        for goal in goals_data.goals:
-            self._goal_id += 1
-            # self._goal_dic["goal"] = {
-            # "subgoal"+ str(self._goal_id):
-            # {"prime": goal.prime, "m": goal.m, "w": goal.w, "indices": list(goal.indices), "parent_link": goal.parent_link,
-            # "child_link": goal.child_link, "desired_position": [goal.position.x, goal.position.y, goal.position.z],
-            # "type": goal.type, "epsilon": goal.epsilon}
-            # }
-            self._goal_position = np.array([goal.pose.position.x, goal.pose.position.y, goal.pose.position.z])
-            self._goal_orientation = [goal.pose.orientation.x, goal.pose.orientation.y, goal.pose.orientation.z, goal.pose.orientation.w]
-
-            # section for filling in goal marker
-            # green markers for goals
-            # the parameter are color (a,r,g,b) and marker type (ARROW=0)
-            goal_marker = self.init_marker(1.0, 0.0, 1.0, 0.0, 0)
-            goal_marker.id = self._goal_id
-            goal_marker.pose.position.x = goal.pose.position.x
-            goal_marker.pose.position.y = goal.pose.position.y
-            goal_marker.pose.position.z = goal.pose.position.z
-            goal_marker.pose.orientation.x = goal.pose.orientation.x
-            goal_marker.pose.orientation.y = goal.pose.orientation.y
-            goal_marker.pose.orientation.z = goal.pose.orientation.z
-            goal_marker.pose.orientation.w = goal.pose.orientation.w
-            goal_marker.scale.x = goal.epsilon
-            goal_marker.scale.y = goal.epsilon
-            goal_marker.scale.z = goal.epsilon
-            self._goals_markers.markers.append(goal_marker)
-        # publish goal markers
-        self._goals_markers_publisher.publish(self._goals_markers)
-
-    def set_obs_subscriber(self):
-        self._obs_subscriber = rospy.Subscriber(
-            '/planning_obs',
-            CollisionObject, self.obs_callback
-        )
-
-    def obs_callback(self, obs: CollisionObject):
-        self._obs_markers = MarkerArray()
-        for i in range(len(obs.primitives)):
-            self._obs_radius_list[i] = (obs.primitives[i].dimensions[0])
-            self._obs_pose_list[i] = np.array([obs.primitive_poses[i].position.x, obs.primitive_poses[i].position.y, obs.primitive_poses[i].position.z])
-            # section for filling in obstacle marker
-            # pass red color and sphere type (SPHERE=2) to initiate marker for obstacle
-            obs_marker = self.init_marker(1.0, 1.0, 0.0, 0.0, 2)
-            obs_marker.id = i
-            obs_marker.pose.position.x = obs.primitive_poses[i].position.x
-            obs_marker.pose.position.y = obs.primitive_poses[i].position.y
-            obs_marker.pose.position.z = obs.primitive_poses[i].position.z
-            obs_marker.pose.orientation.w = 1.0
-            # primitives[i].dimensions[0] is radius of a sphere
-            # and Marker.scale of a sphere is diameter in x/y/z direction
-            # so multiply by 2
-            obs_marker.scale.x = 2*obs.primitives[i].dimensions[0]
-            obs_marker.scale.y = 2*obs.primitives[i].dimensions[0]
-            obs_marker.scale.z = 2*obs.primitives[i].dimensions[0]
-            self._obs_markers.markers.append(obs_marker)
-        # publish obs markers
-        self._obs_markers_publisher.publish(self._obs_markers)
-
-    def set_joint_state_subscriber(self):
-        self._joint_positions = np.zeros(5 + self.n)
-        self._joint_velocities = np.zeros(5 + self.n)
-        self._joint_state_subscriber = rospy.Subscriber(
-            '/joint_states_filtered',
-            JointState, self.joint_states_callback,
-            tcp_nodelay=True
-        )
-
-    def joint_states_callback(self, joint_states_data: JointState):
-        self._joint_positions = np.array(joint_states_data.position)
-        self._joint_velocities = np.array(joint_states_data.velocity)
-
-    def set_action_publisher(self):
-        self._action_publisher = rospy.Publisher(
-            '/joint_acc_des', 
-            Float64MultiArray, queue_size=10
-        )
-        self._action_message = Float64MultiArray(data=np.zeros(9))
-
+        for i, o in enumerate(self.obstacles):
+            if i >= self.num_obstacles: break
+            self.obs_markers.markers[i].pose.position = o.position 
+            self.obs_markers.markers[i].scale = Vector3(o.radius, o.radius, o.radius) 
+        self.obs_markers_publisher.publish(self.obs_markers)
 
     def compute_action(self):
-        sub_goal_0_position = np.array(self.goal.subGoals()[0].position())
-        sub_goal_0_weight= np.array(self.goal.subGoals()[0].weight())
-        sub_goal_1_position = np.array(self.goal.subGoals()[1].position())
-        sub_goal_1_weight= np.array(self.goal.subGoals()[1].weight())
-        obst1_position = np.array(self.obst1.position())
-        obst2_position = np.array(self.obst2.position())
-        
-        sub_goal_0_angles = np.identity(3)
+        # Orientation fix
+        euler_goal = list(tf.transformations.euler_from_quaternion(list(self.goal.pose.orientation), 'rxyz'))
+        rot_mat = tf.transformations.euler_matrix(-euler_goal[1], -euler_goal[0], 0, 'ryxz')[:3, :3]
 
-        # Get euler angles in intrinsic frame
-        sub_goal_1_euler = Rotation.from_quat(self._goal_orientation).as_euler('XYZ')
-        sub_goal_1_intrinsic = [-sub_goal_1_euler[1], -sub_goal_1_euler[0]]
-        # NOTE: Fabrics will only align the axis between panda_link7 and panda_link8 with the Z axis of our goal.
-        #       So the intrinsic Z angle doesn't matter, rotation about the this axis is allowed and therefore ommitted from the rotation matrix.
-        sub_goal_1_angles = Rotation.from_euler('YX',sub_goal_1_intrinsic).as_matrix()
-        
-        # test without orientation (no subgoal1)
-        return self._planner.compute_action(
-            q=self._joint_positions[5:12],
-            qdot=self._joint_velocities[5:12],
-            x_goal_0=self._goal_position,
-            weight_goal_0=sub_goal_0_weight,
-            radius_body=np.array([0.01]),
-            angle_goal_1=sub_goal_1_angles,
-            x_goal_1=self._goal_1_position,
-            weight_goal_1=sub_goal_1_weight,
-            # x_obst = self._obs_pose_list,
-            # radius_obst = self._obs_radius_list,
+        # Ensure right number of obstacles, if less are received fill with [100, 100, 100], if more received naively take the first ones.
+        x_obst = np.full((self.num_obstacles, 3), [100.0]*3)
+        radius_obst = np.full((self.num_obstacles, 1), 0.05)
+        for i, o in enumerate(self.obstacles):
+            if i >= self.num_obstacles: break
+            x_obst[i, :] = list(o.position)
+            radius_obst[i] = o.radius
+
+        return self.planner.compute_action(
+            q=list(self.joint_states.position),
+            qdot=list(self.joint_states.velocity),
+            x_goal_0=list(self.goal.pose.position),
+            weight_goal_0=np.array([0.60]),
+            radius_body=np.array([0.10]),
+            angle_goal_1=rot_mat,
+            x_goal_1=[0.0, 0.0],
+            weight_goal_1=np.array([30.6]),
+            x_obst = x_obst,
+            radius_obst = radius_obst,
+            weight_obst = np.array([0.0001])
         )
 
-
-
-        print("finished computing")
-    def publish_action(self, action: np.ndarray):
-        self._action_message.data[2:] = action
-        self._action_publisher.publish(self._action_message)
-
     def act(self):
-        action = self.compute_action()
-        self.publish_action(action)
-        return action
+        if not len(self.joint_states.name) > 0: return
+        self.action_message.data = [0, 0] + list(self.compute_action())
+        self.action_publisher.publish(self.action_message)
 
     def run(self):
         while not rospy.is_shutdown():
-            self.act()
-            self._rate.sleep()
+            if hasattr(self, 'goal'):
+                self.act()
+
+                # evaluate goal reached
+                (trans, _) = self.tf_listener.lookupTransform('/panda_link0', '/panda_link8', rospy.Time(0))
+                euclidean_error = np.linalg.norm(np.array(trans) - list(self.goal.pose.position))
+                self.goal_reached = euclidean_error < self.goal_tolerance
+
+                self.update_markers()
+
+            self.rate.sleep()
 
 if __name__ == "__main__":
-    my_fabric_node = FabricNode()
-    rospy.sleep(1)
+    my_fabric_node = FabricsNode()
     try:
         my_fabric_node.run()
     except rospy.ROSInterruptException:
