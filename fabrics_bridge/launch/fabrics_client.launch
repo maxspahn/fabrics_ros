@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
+    <arg name="use_it_marker" default="true"/>
     <!-- to make it easy to pass arguments using position_x:= value to this launch file -->
     <arg name="goal_position_x" default="0.8" />
     <arg name="goal_position_y" default="0.3" />
@@ -9,8 +10,10 @@
     <arg name="goal_orientation_y" default="0.0" />
     <arg name="goal_orientation_z" default="0.0" />
     <arg name="goal_orientation_w" default="1" />
-    <arg name="num_obs" default="0" />
+    <arg name="num_obs" default="10" />
 
+    <!-- set use_it_marker on the parameter server -->
+    <param name="use_it_marker" type="bool" value="$(arg use_it_marker)"/>
     <!-- set goal position on the parameter server -->
     <param name="goal_position_x" type="double" value="$(arg goal_position_x)" />
     <param name="goal_position_y" type="double" value="$(arg goal_position_y)" />
@@ -26,4 +29,11 @@
 
     <!-- start nodes -->
     <node pkg="fabrics_bridge" type="client_node" name="client_node" output="screen"/>
+
+    <group if="$(arg use_it_marker)">
+        <node name="interactive_marker" pkg="fabrics_bridge" type="interactive_marker.py">
+            <param name="link_name" value="panda_link0" />
+            <remap to="planning_goal" from="equilibrium_pose" />
+        </node>
+    </group>
 </launch>
