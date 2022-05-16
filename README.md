@@ -5,7 +5,7 @@ This is a ROS wrapper for implementing [fabrics](https://github.com/maxspahn/fab
 The list of packages:
 - fabrics_bridge: provides a one-way bridge to enable ROS to use fabrics planner for robot motion planning
 - fabrics_msgs: contains custom messages used in fabrics_ros
-- fabrics_processing: processes output from fabrics planner, and publish velocity commands to a robot
+- fabrics_processing: processes output from fabrics planner, and publishes velocity commands to a robot
 
 ## Requirements
 
