@@ -63,16 +63,10 @@ class ClientNode(object):
         print(self._randomized_radius_list)
         print(self._randomized_pose_list)
 
-    def init_sphere_size(self, radius):
-        s = FabricsObstacle()
-        s.radius = [radius]
-        s.type = SolidPrimitive.SPHERE
-        return s
-
-    def init_sphere(self, pos_x, pos_y, pos_z, radius):
+    def init_sphere(self, point, radius):
         sphere = FabricsObstacle()
-        sphere.radius = [radius]
-        sphere.position = Point(pos_x, pos_y, pos_z)
+        sphere.radius = radius
+        sphere.position = point
         return sphere
 
     def init_marker(self, a, r, g, b):
@@ -129,9 +123,9 @@ class ClientNode(object):
             sphere_marker = self.init_marker(1.0, 0.0, 0.0, 1.0)
             sphere_marker.id = i
             x, y, z = self.generate_ring_spheres(goal_data.pose, i)
-            sphere_marker.pose.position.x = x
-            sphere_marker.pose.position.y = y
-            sphere_marker.pose.position.z = z
+            sphere_marker.pose.position.x = float(x)
+            sphere_marker.pose.position.y = float(y)
+            sphere_marker.pose.position.z = float(z)
             sphere_marker.pose.orientation.w = 1.0
             sphere_marker.scale.x = self._sphere_resolution
             sphere_marker.scale.y = self._sphere_resolution
@@ -144,7 +138,6 @@ class ClientNode(object):
         obs = FabricsObstacleArray()
         obs.header.stamp = rospy.Time.now()
         obs.header.frame_id = "panda_link0"
-        obs.id = "sphere_obs"
         # if self._is_randomized_obs:
         #     for i in range(self._num_obs):
         #         obs.primitives.append(self.init_sphere_size(self._randomized_radius_list[i]))
@@ -152,20 +145,15 @@ class ClientNode(object):
         # # set obstacles depending on the ring of spheres or manually set obstacles
         # else:
         for i in range(self._num_sphere):
-            obs.obstacles.append(self.init_sphere(*self._sphere_markers.markers[i].pose.position, self._sphere_resolution/2))
+            obs.obstacles.append(self.init_sphere(self._sphere_markers.markers[i].pose.position, self._sphere_resolution/2))
 
-
-            # obs.primitives.append(self.init_sphere_size(0.15))
-            # obs.primitive_poses.append(self.init_sphere_pose(0.46422371, -0.1226168, 0.29426042))
-            # obs.primitives.append(self.init_sphere_size(0.2))
-            # obs.primitive_poses.append(self.init_sphere_pose(0.16422371, -0.3226168, 0.29426042))
         self._obs_publisher.publish(obs)
 
     def run(self):
         while not rospy.is_shutdown():     
-            self.publish_goals()
             use_it_marker = False if not rospy.has_param("use_it_marker") else rospy.get_param("use_it_marker")
             if not use_it_marker:
+                self.publish_goals()
                 self.publish_obs()
             self._rate.sleep()
 
