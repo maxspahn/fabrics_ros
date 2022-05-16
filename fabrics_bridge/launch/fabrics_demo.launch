@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-    <arg name="use_it_marker" default="true"/>
+    <arg name="use_it_marker" default="false"/>
     <!-- to make it easy to pass arguments using position_x:= value to this launch file -->
     <arg name="goal_position_x" default="0.8" />
-    <arg name="goal_position_y" default="0.3" />
+    <arg name="goal_position_y" default="0.4" />
     <arg name="goal_position_z" default="0.7" />
 
     <arg name="goal_orientation_x" default="0.0" />
