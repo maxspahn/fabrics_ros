@@ -144,9 +144,8 @@ class ClientNode(object):
         #         obs.primitive_poses.append(self.init_sphere_pose(*self._randomized_pose_list[i]))
         # # set obstacles depending on the ring of spheres or manually set obstacles
         # else:
-        for i in range(self._num_sphere):
-            obs.obstacles.append(self.init_sphere(self._sphere_markers.markers[i].pose.position, self._sphere_resolution/2))
-
+        for marker in self._sphere_markers.markers:
+                    obs.obstacles.append(self.init_sphere(marker.pose.position, self._sphere_resolution/2))
         self._obs_publisher.publish(obs)
 
     def run(self):
