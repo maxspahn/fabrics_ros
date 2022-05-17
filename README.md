@@ -24,10 +24,16 @@ Note: These requirements are tested by the authors at the time of writing, other
 ```bash
 mkdir -p ~/fabrics_ros_ws/src && cd ~/fabrics_ros_ws/src
 git clone git@github.com:maxspahn/fabrics_ros.git
+git clone -b 0.6.5 https://github.com/ros/geometry2 #tf for python3
 sudo rosdep init
 rosdep update
 cd ..
 rosdep install --from-paths src --ignore-src -y
+catkin build --cmake-args \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DPYTHON_EXECUTABLE=/usr/bin/python3 \
+            -DPYTHON_INCLUDE_DIR=/usr/include/python3.6m \
+            -DPYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.6m.so
 ```
 
 
