@@ -113,7 +113,7 @@ class FabricsNode(object):
     def init_subscribers(self):
         self.obs_subscriber = rospy.Subscriber(
             '/planning_obs',
-            FabricsObstacleArray, self.goal_callback
+            FabricsObstacleArray, self.obs_callback
         )
         self.obstacles = []
         self.goal_subscriber = rospy.Subscriber(
