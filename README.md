@@ -25,6 +25,7 @@ Note: These requirements are tested by the authors at the time of writing, other
 mkdir -p ~/fabrics_ros_ws/src && cd ~/fabrics_ros_ws/src
 git clone git@github.com:maxspahn/fabrics_ros.git
 git clone -b 0.6.5 https://github.com/ros/geometry2 #tf for python3
+sudo apt install python3-catkin-pkg-modules python3-rospkg-modules python3-empy #prerequisites to use python3 with ROS
 sudo rosdep init
 rosdep update
 cd ..
@@ -36,7 +37,7 @@ catkin build --cmake-args \
             -DPYTHON_LIBRARY=/usr/lib/x86_64-linux-gnu/libpython3.6m.so
 ```
 
-
+> Instructions above for building tf in python3 is taken from this [post](https://answers.ros.org/question/326226/importerror-dynamic-module-does-not-define-module-export-function-pyinit__tf2/). Alternatively, you can create a new tf workspace and use workspace overlaying.
 
 > **_NOTE:_**  If you encounter this error when running `sudo rosdep init`:  
 *`ERROR: default sources list file already exists`*, please ignore it and continue with the rest of the steps.
