@@ -9,7 +9,7 @@ The list of packages:
 
 ## Requirements
 
-- Python 3.6
+- Python <3.10
 - ROS Melodic
 
 Note: These requirements are tested by the authors at the time of writing, other versions have not been tested yet.
