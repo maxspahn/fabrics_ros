@@ -35,14 +35,15 @@ class FabricsNode(object):
         rospy.init_node('fabrics_node')
         self.rate = rospy.Rate(500)
         self.num_obstacles = 0 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
+        self.goal_tolerance = 0.05 if not rospy.has_param("goal_tolerance") else rospy.get_param("goal_tolerance")
         self.planner = self.init_planner()
 
         self.init_publishers()
         self.init_subscribers()
 
         self.state = FabricsState()
-        self.state.goal_tolerance = 0.05
         self.state.goal_reached = False
+        self.state.goal_tolerance = self.goal_tolerance #Not sure if this is required in state
 
         self.init_markers()
 
@@ -217,7 +218,7 @@ class FabricsNode(object):
                 # evaluate goal reached
                 (trans, _) = self.tf_listener.lookupTransform('/panda_link0', '/panda_link8', rospy.Time(0))
                 self.state.euclidean_error = np.linalg.norm(np.array(trans) - list(self.goal.pose.position))
-                self.state.goal_reached = self.state.euclidean_error < self.state.goal_tolerance
+                self.state.goal_reached = self.state.euclidean_error < self.goal_tolerance
                 self.state.header.stamp = rospy.Time.now()
 
                 self.state_publisher.publish(self.state)

@@ -13,28 +13,30 @@
     <arg name="num_obs" default="10" />
 
     <!-- set use_it_marker on the parameter server -->
-    <param name="use_it_marker" type="bool" value="$(arg use_it_marker)"/>
-    <!-- set goal position on the parameter server -->
-    <param name="goal_position_x" type="double" value="$(arg goal_position_x)" />
-    <param name="goal_position_y" type="double" value="$(arg goal_position_y)" />
-    <param name="goal_position_z" type="double" value="$(arg goal_position_z)" />
-    <param name="goal_orientation_x" type="double" value="$(arg goal_orientation_x)" />
-    <param name="goal_orientation_y" type="double" value="$(arg goal_orientation_y)" />
-    <param name="goal_orientation_z" type="double" value="$(arg goal_orientation_z)" />
-    <param name="goal_orientation_w" type="double" value="$(arg goal_orientation_w)" />
+    <group ns="fabrics">
+        <param name="use_it_marker" type="bool" value="$(arg use_it_marker)"/>
+        <!-- set goal position on the parameter server -->
+        <param name="goal_position_x" type="double" value="$(arg goal_position_x)" />
+        <param name="goal_position_y" type="double" value="$(arg goal_position_y)" />
+        <param name="goal_position_z" type="double" value="$(arg goal_position_z)" />
+        <param name="goal_orientation_x" type="double" value="$(arg goal_orientation_x)" />
+        <param name="goal_orientation_y" type="double" value="$(arg goal_orientation_y)" />
+        <param name="goal_orientation_z" type="double" value="$(arg goal_orientation_z)" />
+        <param name="goal_orientation_w" type="double" value="$(arg goal_orientation_w)" />
 
 
-    <!-- set number of obstacles on the parameter server -->
-    <param name="num_obs" type="int" value="$(arg num_obs)" />
+        <!-- set number of obstacles on the parameter server -->
+        <param name="num_obs" type="int" value="$(arg num_obs)" />
 
-    <!-- start nodes -->
-    <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen" ns="fabrics"/>
-    <node pkg="fabrics_bridge" type="client_node" name="client_node" output="screen"/>
+        <!-- start nodes -->
+        <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen"/>
+        <node pkg="fabrics_bridge" type="client_node" name="client_node" output="screen"/>
 
-    <group if="$(arg use_it_marker)">
-        <node name="interactive_marker" pkg="fabrics_bridge" type="interactive_marker.py">
-            <param name="link_name" value="panda_link0" />
-            <remap to="planning_goal" from="equilibrium_pose" />
-        </node>
+        <group if="$(arg use_it_marker)">
+            <node name="interactive_marker" pkg="fabrics_bridge" type="interactive_marker.py">
+                <param name="link_name" value="panda_link0" />
+                <remap to="planning_goal" from="equilibrium_pose" />
+            </node>
+        </group>
     </group>
 </launch>
