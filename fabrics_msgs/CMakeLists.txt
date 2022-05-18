@@ -13,6 +13,7 @@ add_message_files(
   FabricGoalArray.msg
   FabricsObstacle.msg
   FabricsObstacleArray.msg
+  FabricsState.msg
 )
 
 generate_messages(

@@ -10,7 +10,7 @@ from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point, PoseStamped, Pose, Quaternion, Vector3
 from visualization_msgs.msg import Marker, MarkerArray
 
-from fabrics_msgs.msg import FabricGoal, FabricGoalArray, FabricsObstacle, FabricsObstacleArray
+from fabrics_msgs.msg import FabricGoal, FabricGoalArray, FabricsObstacle, FabricsObstacleArray, FabricsState
 
 from MotionPlanningGoal.goalComposition import GoalComposition
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
@@ -40,8 +40,9 @@ class FabricsNode(object):
         self.init_publishers()
         self.init_subscribers()
 
-        self.goal_reached = False
-        self.goal_tolerance = 0.05
+        self.state = FabricsState()
+        self.state.goal_tolerance = 0.05
+        self.state.goal_reached = False
 
         self.init_markers()
 
@@ -97,11 +98,11 @@ class FabricsNode(object):
 
     def init_publishers(self):
         self.goal_marker_publisher = rospy.Publisher(
-            '/planning_goal/marker',
+            'planning_goal/marker',
             Marker, queue_size=10
         )
         self.obs_markers_publisher = rospy.Publisher(
-            '/planning_obs/markers',
+            'planning_obs/markers',
             MarkerArray, queue_size=10
         )
         self.action_message = Float64MultiArray(data=np.zeros(9))
@@ -109,15 +110,19 @@ class FabricsNode(object):
             '/joint_acc_des', 
             Float64MultiArray, queue_size=10
         )
+        self.state_publisher = rospy.Publisher(
+            'state', 
+            FabricsState, queue_size=10
+        )
 
     def init_subscribers(self):
         self.obs_subscriber = rospy.Subscriber(
-            '/planning_obs',
+            'planning_obs',
             FabricsObstacleArray, self.obs_callback
         )
         self.obstacles = []
         self.goal_subscriber = rospy.Subscriber(
-            '/planning_goal',
+            'planning_goal',
             PoseStamped, self.goal_callback
         )
         self.joint_states = JointState()
@@ -160,8 +165,8 @@ class FabricsNode(object):
         for i, m in enumerate(self.obs_markers.markers): m.id = i
 
     def update_markers(self):
-        self.goal_marker.color.g = 1.0 if self.goal_reached else 0.0
-        self.goal_marker.color.b = 0.0 if self.goal_reached else 1.0
+        self.goal_marker.color.g = 1.0 if self.state.goal_reached else 0.0
+        self.goal_marker.color.b = 0.0 if self.state.goal_reached else 1.0
 
         self.goal_marker.pose = self.goal.pose
         self.goal_marker_publisher.publish(self.goal_marker)
@@ -211,8 +216,11 @@ class FabricsNode(object):
 
                 # evaluate goal reached
                 (trans, _) = self.tf_listener.lookupTransform('/panda_link0', '/panda_link8', rospy.Time(0))
-                euclidean_error = np.linalg.norm(np.array(trans) - list(self.goal.pose.position))
-                self.goal_reached = euclidean_error < self.goal_tolerance
+                self.state.euclidean_error = np.linalg.norm(np.array(trans) - list(self.goal.pose.position))
+                self.state.goal_reached = self.state.euclidean_error < self.state.goal_tolerance
+                self.state.header.stamp = rospy.Time.now()
+
+                self.state_publisher.publish(self.state)
 
                 self.update_markers()
 

@@ -28,7 +28,7 @@
     <param name="num_obs" type="int" value="$(arg num_obs)" />
 
     <!-- start nodes -->
-    <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen" />
+    <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen" ns="fabrics"/>
     <node pkg="fabrics_bridge" type="client_node" name="client_node" output="screen"/>
 
     <group if="$(arg use_it_marker)">
