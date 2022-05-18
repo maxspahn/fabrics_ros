@@ -48,7 +48,7 @@ class ClientNode(object):
             FabricsObstacleArray, queue_size=10
         )
         self._sphere_markers_publisher = rospy.Publisher(
-            '/planning_sphere/markers',
+            'planning_sphere/markers',
             MarkerArray, queue_size=10
         )
 
