@@ -1,0 +1,226 @@
+#!/usr/bin/env python3
+import numpy as np
+import time
+import datetime
+import rospy
+import tf
+
+from std_msgs.msg import Float64MultiArray, ColorRGBA
+from sensor_msgs.msg import JointState
+from geometry_msgs.msg import Point, PoseStamped, Pose, Quaternion, Vector3
+from visualization_msgs.msg import Marker, MarkerArray
+
+from fabrics_msgs.msg import FabricGoal, FabricGoalArray, FabricsObstacle, FabricsObstacleArray
+
+from MotionPlanningGoal.goalComposition import GoalComposition
+from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
+from forwardkinematics.urdfFks.pandaFk import PandaFk
+
+# Helpers
+def _it(self):
+    yield self.x
+    yield self.y
+    yield self.z
+Point.__iter__ = _it
+
+def _it(self):
+    yield self.x
+    yield self.y
+    yield self.z
+    yield self.w
+Quaternion.__iter__ = _it
+
+class FabricsNode(object):
+    def __init__(self):
+        rospy.init_node('fabrics_node')
+        self.rate = rospy.Rate(500)
+        self.num_obstacles = 0 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
+        self.planner = self.init_planner()
+
+        self.init_publishers()
+        self.init_subscribers()
+
+        self.goal_reached = False
+        self.goal_tolerance = 0.05
+
+        self.init_markers()
+
+        self.tf_listener = tf.TransformListener()
+        rospy.sleep(1.0)
+
+    def init_planner(self):
+        # TODO: Replace PandaFK by generic FK that reads from robot_description
+        # TODO: Add full body control robot type as an option
+        robot_type = "panda"
+        degrees_of_freedom = 7
+        planner = ParameterizedFabricPlanner(degrees_of_freedom, robot_type)
+        fk = PandaFk()
+        q = planner.variables.position_variable()
+        forward_kinematics = [fk.fk(q, i, positionOnly=True) for i in range(1, degrees_of_freedom+1)]
+
+        goal_dict = {
+            "position": {
+                "m": 3,
+                "w": 0.6, # attractor weight
+                "prime": True,
+                "indices": [0, 1, 2],
+                "parent_link": 0,
+                "child_link": 7,
+                "desired_position": [0.5, 0.0, 0.5],
+                "epsilon": 0.01,
+                "type": "staticSubGoal",
+            },
+            "orientation": {
+                "m": 2,
+                "w": 20, # attractor weight
+                "prime": False,
+                "indices": [0, 1],
+                "parent_link": 6,
+                "child_link": 7,
+                "angle": [0.707, 0.0, 0.0, 0.707],
+                "desired_position": [0.0, 0.0],
+                "epsilon": 0.01,
+                "type": "staticSubGoal",
+            },
+        }
+        self.planning_goal = GoalComposition(name="goal", contentDict=goal_dict)
+
+        # The planner hides all the logic behind the function set_components.
+        planner.set_components(
+            forward_kinematics,
+            self.planning_goal,
+            number_obstacles=self.num_obstacles,
+        )
+        planner.concretize()
+    
+        return planner
+
+    def init_publishers(self):
+        self.goal_marker_publisher = rospy.Publisher(
+            '/planning_goal/marker',
+            Marker, queue_size=10
+        )
+        self.obs_markers_publisher = rospy.Publisher(
+            '/planning_obs/markers',
+            MarkerArray, queue_size=10
+        )
+        self.action_message = Float64MultiArray(data=np.zeros(9))
+        self.action_publisher = rospy.Publisher(
+            '/joint_acc_des', 
+            Float64MultiArray, queue_size=10
+        )
+
+    def init_subscribers(self):
+        self.obs_subscriber = rospy.Subscriber(
+            '/planning_obs',
+            FabricsObstacleArray, self.obs_callback
+        )
+        self.obstacles = []
+        self.goal_subscriber = rospy.Subscriber(
+            '/planning_goal',
+            PoseStamped, self.goal_callback
+        )
+        self.joint_states = JointState()
+        self.joint_state_subscriber = rospy.Subscriber(
+            '/joint_states_filtered',
+            JointState, 
+            self.joint_states_callback,
+            # lambda msg: self._joint_states=msg,
+            tcp_nodelay=True
+        )
+
+    def obs_callback(self, msg: FabricsObstacleArray):
+        self.obstacles = msg.obstacles
+
+    def goal_callback(self, msg: PoseStamped):
+        self.goal = msg
+
+    def joint_states_callback(self, msg: JointState):
+        # TODO: better way of extracting just the panda joint states
+        self.joint_states.name = msg.name[5:]
+        self.joint_states.position = msg.position[5:]
+        self.joint_states.velocity = msg.velocity[5:]
+
+    def init_markers(self):
+        def init_marker(a, r, g, b, type=2):
+            goal_marker = Marker()
+            goal_marker.header.frame_id = "panda_link0"
+            goal_marker.type = type
+            goal_marker.action = goal_marker.ADD
+            goal_marker.color = ColorRGBA(a=a, r=r, g=g, b=b)
+            return goal_marker
+
+        self.goal_marker = init_marker(1, 0, 0, 1, type=0)
+        self.goal_marker.points = [Point(x=0, y=0, z=0), Point(x=0, y=0, z=0.35)]
+        self.goal_marker.id = 1
+        self.goal_marker.scale = Vector3(0.02, 0.04, 0.04)
+
+        self.obs_markers = MarkerArray()
+        self.obs_markers.markers = [init_marker(1, 1, 0, 0) for i in range(self.num_obstacles)]
+        for i, m in enumerate(self.obs_markers.markers): m.id = i
+
+    def update_markers(self):
+        self.goal_marker.color.g = 1.0 if self.goal_reached else 0.0
+        self.goal_marker.color.b = 0.0 if self.goal_reached else 1.0
+
+        self.goal_marker.pose = self.goal.pose
+        self.goal_marker_publisher.publish(self.goal_marker)
+
+        for i, o in enumerate(self.obstacles):
+            if i >= self.num_obstacles: break
+            self.obs_markers.markers[i].pose.position = o.position 
+            self.obs_markers.markers[i].scale = Vector3(o.radius, o.radius, o.radius) 
+        self.obs_markers_publisher.publish(self.obs_markers)
+
+    def compute_action(self):
+        # Orientation fix
+        euler_goal = list(tf.transformations.euler_from_quaternion(list(self.goal.pose.orientation), 'rxyz'))
+        rot_mat = tf.transformations.euler_matrix(-euler_goal[1], -euler_goal[0], 0, 'ryxz')[:3, :3]
+
+        # Ensure right number of obstacles, if less are received fill with [100, 100, 100], if more received naively take the first ones.
+        x_obst = np.full((self.num_obstacles, 3), [100.0]*3)
+        radius_obst = np.full((self.num_obstacles, 1), 0.05)
+        for i, o in enumerate(self.obstacles):
+            if i >= self.num_obstacles: break
+            x_obst[i, :] = list(o.position)
+            radius_obst[i] = o.radius
+
+        return self.planner.compute_action(
+            q=list(self.joint_states.position),
+            qdot=list(self.joint_states.velocity),
+            x_goal_0=list(self.goal.pose.position),
+            weight_goal_0=np.array([0.60]),
+            radius_body=np.array([0.10]),
+            angle_goal_1=rot_mat,
+            x_goal_1=[0.0, 0.0],
+            weight_goal_1=np.array([30.6]),
+            x_obst = x_obst,
+            radius_obst = radius_obst,
+            weight_obst = np.array([0.0001])
+        )
+
+    def act(self):
+        if not len(self.joint_states.name) > 0: return
+        self.action_message.data = [0, 0] + list(self.compute_action())
+        self.action_publisher.publish(self.action_message)
+
+    def run(self):
+        while not rospy.is_shutdown():
+            if hasattr(self, 'goal'):
+                self.act()
+
+                # evaluate goal reached
+                (trans, _) = self.tf_listener.lookupTransform('/panda_link0', '/panda_link8', rospy.Time(0))
+                euclidean_error = np.linalg.norm(np.array(trans) - list(self.goal.pose.position))
+                self.goal_reached = euclidean_error < self.goal_tolerance
+
+                self.update_markers()
+
+            self.rate.sleep()
+
+if __name__ == "__main__":
+    my_fabric_node = FabricsNode()
+    try:
+        my_fabric_node.run()
+    except rospy.ROSInterruptException:
+        pass

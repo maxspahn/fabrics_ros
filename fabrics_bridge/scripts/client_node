@@ -6,14 +6,11 @@ from scipy.spatial.transform import Rotation
 
 # ros imports
 import rospy
-from fabrics_msgs.msg import FabricGoal
-from fabrics_msgs.msg import FabricGoalArray
+from geometry_msgs.msg import PoseStamped
+from fabrics_msgs.msg import FabricGoal, FabricGoalArray, FabricsObstacle, FabricsObstacleArray
+
 from visualization_msgs.msg import Marker, MarkerArray
 
-# message types for storing obstacle info
-from moveit_msgs.msg import CollisionObject
-from shape_msgs.msg import SolidPrimitive
-from geometry_msgs.msg import Pose
 
 class ClientNode(object):
     def __init__(self):
@@ -21,17 +18,15 @@ class ClientNode(object):
         self._rate = rospy.Rate(10)
         # if param num_obs is not set, default number of obstacles is 2
         self._num_obs = 2 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
-        print(self._num_obs)
-        self.set_goals_publisher()
-        self.set_obs_publisher()
-        self.set_sphere_markers_publisher()
+        self.init_publishers()
+        # ring of spheres setting
         # radius of shelf (suppose it's a circular shelf)
-        self._radius_shelf = 10
+        self._radius_shelf = 0.3
         # number of spheres to compose a ring (depending on the param num_obs)
         self._num_sphere = self._num_obs
         self._sphere_resolution = 0.1
 
-        # obstacle randomization parts
+        # obstacle randomization setting
         self._is_randomized_obs = False
         self._sphere_r_low = 0.1
         self._sphere_r_high = 0.5
@@ -43,22 +38,19 @@ class ClientNode(object):
             self._randomized_pose_list = np.zeros([self._num_obs, 3], dtype = float)
             self.generate_random_obs()
 
-    def set_goals_publisher(self):
+    def init_publishers(self):
         self._goals_publisher = rospy.Publisher(
-            '/planning_goals',
-            FabricGoalArray, queue_size=10
+            '/planning_goal',
+            PoseStamped, queue_size=10
         )
-
-    def set_obs_publisher(self):
         self._obs_publisher = rospy.Publisher(
             '/planning_obs',
-            CollisionObject, queue_size=10
+            FabricsObstacleArray, queue_size=10
         )
-    def set_sphere_markers_publisher(self):
         self._sphere_markers_publisher = rospy.Publisher(
             '/planning_sphere/markers',
             MarkerArray, queue_size=10
-    )
+        )
 
     # a function generates random obstacle with random radius and position (given a range
     # this function is only called once if self._is_randomized_obs is set True
@@ -71,24 +63,11 @@ class ClientNode(object):
         print(self._randomized_radius_list)
         print(self._randomized_pose_list)
 
-    def init_sphere_size(self, radius):
-        s = SolidPrimitive()
-        s.dimensions = [radius]
-        s.type = SolidPrimitive.SPHERE
-        return s
-
-    def init_sphere_pose(self, pos_x, pos_y, pos_z):
-        pose = Pose()
-        pose.position.x = pos_x
-        pose.position.y = pos_y
-        pose.position.z = pos_z
-        # since current obs is always a sphere, orientatation does not matter
-        # by default, we set values for no rotation
-        pose.orientation.x = 0
-        pose.orientation.y = 0
-        pose.orientation.z = 0
-        pose.orientation.w = 1
-        return pose
+    def init_sphere(self, point, radius):
+        sphere = FabricsObstacle()
+        sphere.radius = radius
+        sphere.position = point
+        return sphere
 
     def init_marker(self, a, r, g, b):
             goal_marker = Marker()
@@ -122,13 +101,12 @@ class ClientNode(object):
         All points on a rotated circle can be obtained by using the rotation matrix
         rotated_circle = [center_x, center_y, center_z] + rot_matrix*initial_circle
         '''
-        initial_circle = np.array([[0], [self._radius_shelf * math.cos(n*2*math.pi/self._num_sphere)], [self._radius_shelf * math.sin(n*2*math.pi/self._num_sphere)]]) 
+        initial_circle = np.array([[self._radius_shelf * math.cos(n*2*math.pi/self._num_sphere)], [self._radius_shelf * math.sin(n*2*math.pi/self._num_sphere)],[0]]) 
         rotated_circle = np.array([[pos_x], [pos_y], [pos_z]]) + np.matmul(rot_matrix, initial_circle)
         return rotated_circle
 
     def publish_goals(self):
-        goals_data = FabricGoalArray()
-        goal_data = FabricGoal()
+        goal_data = PoseStamped()
         goal_data.pose.position.x = rospy.get_param("goal_position_x")
         goal_data.pose.position.y = rospy.get_param("goal_position_y")
         goal_data.pose.position.z = rospy.get_param("goal_position_z")
@@ -136,36 +114,18 @@ class ClientNode(object):
         goal_data.pose.orientation.y = rospy.get_param("goal_orientation_y")
         goal_data.pose.orientation.z = rospy.get_param("goal_orientation_z")
         goal_data.pose.orientation.w = rospy.get_param("goal_orientation_w")
-        # initialize rotation from euler angles (more intuitive)
-        # r = Rotation.from_euler('yz', [0,-90], degrees=True)
-        # # get quaternions
-        # r_quat = r.as_quat()
-        # goal_data.pose.orientation.x = r_quat[0]
-        # goal_data.pose.orientation.y = r_quat[1]
-        # goal_data.pose.orientation.z = r_quat[2]
-        # goal_data.pose.orientation.w = r_quat[3]
+        goal_data.header.frame_id = "panda_link0"
 
-        goal_data.parent_link = 0
-        goal_data.child_link = 7
-        goal_data.prime = True
-        goal_data.m = 3
-        goal_data.w = 1
-        goal_data.indices = [0, 1, 2]
-        goal_data.type = "staticSubGoal"
-        goal_data.epsilon = 0.05
-        goals_list = []
-        goals_list.append(goal_data)
-        goals_data.goals = goals_list
-        self._goals_publisher.publish(goals_data)
+        self._goals_publisher.publish(goal_data)
         self._sphere_markers = MarkerArray()
         for i in range(self._num_sphere):
             # red sphere
             sphere_marker = self.init_marker(1.0, 0.0, 0.0, 1.0)
             sphere_marker.id = i
             x, y, z = self.generate_ring_spheres(goal_data.pose, i)
-            sphere_marker.pose.position.x = x
-            sphere_marker.pose.position.y = y
-            sphere_marker.pose.position.z = z
+            sphere_marker.pose.position.x = float(x)
+            sphere_marker.pose.position.y = float(y)
+            sphere_marker.pose.position.z = float(z)
             sphere_marker.pose.orientation.w = 1.0
             sphere_marker.scale.x = self._sphere_resolution
             sphere_marker.scale.y = self._sphere_resolution
@@ -175,29 +135,25 @@ class ClientNode(object):
         self._sphere_markers_publisher.publish(self._sphere_markers)
 
     def publish_obs(self):
-        obs = CollisionObject()
+        obs = FabricsObstacleArray()
         obs.header.stamp = rospy.Time.now()
         obs.header.frame_id = "panda_link0"
-        obs.id = "sphere_obs"
-        if self._is_randomized_obs:
-            for i in range(self._num_obs):
-                obs.primitives.append(self.init_sphere_size(self._randomized_radius_list[i]))
-                obs.primitive_poses.append(self.init_sphere_pose(*self._randomized_pose_list[i]))
-        # set obstacles depending on the ring of spheres or manually set obstacles
-        else:
-            for i in range(self._num_sphere):
-                obs.primitives.append(self.init_sphere_size(self._sphere_resolution/2))
-                obs.primitive_poses.append(self._sphere_markers.markers[i].pose)
-            # obs.primitives.append(self.init_sphere_size(0.15))
-            # obs.primitive_poses.append(self.init_sphere_pose(0.46422371, -0.1226168, 0.29426042))
-            # obs.primitives.append(self.init_sphere_size(0.2))
-            # obs.primitive_poses.append(self.init_sphere_pose(0.16422371, -0.3226168, 0.29426042))
+        # if self._is_randomized_obs:
+        #     for i in range(self._num_obs):
+        #         obs.primitives.append(self.init_sphere_size(self._randomized_radius_list[i]))
+        #         obs.primitive_poses.append(self.init_sphere_pose(*self._randomized_pose_list[i]))
+        # # set obstacles depending on the ring of spheres or manually set obstacles
+        # else:
+        for marker in self._sphere_markers.markers:
+                    obs.obstacles.append(self.init_sphere(marker.pose.position, self._sphere_resolution/2))
         self._obs_publisher.publish(obs)
 
     def run(self):
-        while not rospy.is_shutdown():
-            self.publish_goals()
-            self.publish_obs()
+        while not rospy.is_shutdown():     
+            use_it_marker = False if not rospy.has_param("use_it_marker") else rospy.get_param("use_it_marker")
+            if not use_it_marker:
+                self.publish_goals()
+                self.publish_obs()
             self._rate.sleep()
 
 if __name__ == "__main__":
