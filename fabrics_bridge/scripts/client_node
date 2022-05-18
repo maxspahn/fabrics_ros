@@ -40,15 +40,15 @@ class ClientNode(object):
 
     def init_publishers(self):
         self._goals_publisher = rospy.Publisher(
-            '/planning_goal',
+            'planning_goal',
             PoseStamped, queue_size=10
         )
         self._obs_publisher = rospy.Publisher(
-            '/planning_obs',
+            'planning_obs',
             FabricsObstacleArray, queue_size=10
         )
         self._sphere_markers_publisher = rospy.Publisher(
-            '/planning_sphere/markers',
+            'planning_sphere/markers',
             MarkerArray, queue_size=10
         )
 

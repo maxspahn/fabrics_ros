@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
   <!-- start nodes -->
-  <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen" />
+  <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen" ns="fabrics"/>
 </launch>
