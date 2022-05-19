@@ -239,7 +239,7 @@ class FabricsNode(object):
             p2 = self.tf_listener.transformPose('/fabrics_goal', p1)
             self.state.angular_error = np.linalg.norm(np.array(list(p1.pose.position))-list(p2.pose.position))
             print(self.state.angular_error)
-        except:
+        except Exception as e:
             rospy.logerr(e)
 
         # update state
