@@ -35,7 +35,8 @@ class FabricsNode(object):
         rospy.init_node('fabrics_node')
         self.rate = rospy.Rate(500)
         self.num_obstacles = 0 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
-        self.goal_tolerance = 0.05 if not rospy.has_param("goal_tolerance") else rospy.get_param("goal_tolerance")
+        self.positional_goal_tolerance = 0.05 if not rospy.has_param("positional_goal_tolerance") else rospy.get_param("positional_goal_tolerance")
+        self.angular_goal_tolerance = 0.10 if not rospy.has_param("angular_goal_tolerance") else rospy.get_param("angular_goal_tolerance")
         self.planner = self.init_planner()
 
         self.init_publishers()
@@ -43,11 +44,12 @@ class FabricsNode(object):
 
         self.state = FabricsState()
         self.state.goal_reached = False
-        self.state.goal_tolerance = self.goal_tolerance #Not sure if this is required in state
+        self.state.angular_error = 1
 
         self.init_markers()
 
         self.tf_listener = tf.TransformListener()
+        self.tf_broadcaster = tf.TransformBroadcaster()
         rospy.sleep(1.0)
 
     def init_planner(self):
@@ -210,20 +212,49 @@ class FabricsNode(object):
         self.action_message.data = [0, 0] + list(self.compute_action())
         self.action_publisher.publish(self.action_message)
 
+    def evaluate(self):
+        # broadcast goal frame
+        # Note: at 10x lower frequency than act loop, because tf
+        if not hasattr(self, "eval_i"): self.eval_i = 0
+        self.eval_i+=1
+        if self.eval_i%10 == 0:
+            self.eval_i = 0
+            self.tf_broadcaster.sendTransform(
+                list(self.goal.pose.position),
+                list(self.goal.pose.orientation),
+                rospy.Time.now(),
+                "/fabrics_goal",
+                "/panda_link0")
+
+        # evaluate positional_error
+        (trans, rot) = self.tf_listener.lookupTransform('/panda_link0', '/panda_link8', rospy.Time(0))
+        self.state.positional_error = np.linalg.norm(np.array(trans) - list(self.goal.pose.position))
+
+        # evaluate angular_error
+        # Note: this is done by taking the L2 norm between a point at z=0.5 along the '/panda_link8' frame and transforming it to the goal frame
+        p1 = PoseStamped()
+        p1.header.frame_id = '/panda_link8'
+        p1.pose.position = Point(x=0, y=0, z=0.5)
+        try:
+            p2 = self.tf_listener.transformPose('/fabrics_goal', p1)
+            self.state.angular_error = np.linalg.norm(np.array(list(p1.pose.position))-list(p2.pose.position))
+            print(self.state.angular_error)
+        except:
+            print("no goal frame yet")
+
+        # update state
+        self.state.goal_reached = self.state.positional_error < self.positional_goal_tolerance and self.state.angular_error < self.angular_goal_tolerance
+        self.state.header.stamp = rospy.Time.now()
+        self.state_publisher.publish(self.state)
+
     def run(self):
         while not rospy.is_shutdown():
             if hasattr(self, 'goal'):
                 self.act()
-
-                # evaluate goal reached
-                (trans, _) = self.tf_listener.lookupTransform('/panda_link0', '/panda_link8', rospy.Time(0))
-                self.state.euclidean_error = np.linalg.norm(np.array(trans) - list(self.goal.pose.position))
-                self.state.goal_reached = self.state.euclidean_error < self.goal_tolerance
-                self.state.header.stamp = rospy.Time.now()
-
-                self.state_publisher.publish(self.state)
-
+                self.evaluate()
                 self.update_markers()
+            else:
+                self.state_publisher.publish(self.state)
 
             self.rate.sleep()
 
