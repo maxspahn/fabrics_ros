@@ -240,7 +240,7 @@ class FabricsNode(object):
             self.state.angular_error = np.linalg.norm(np.array(list(p1.pose.position))-list(p2.pose.position))
             print(self.state.angular_error)
         except:
-            print("no goal frame yet")
+            rospy.logerr(e)
 
         # update state
         self.state.goal_reached = self.state.positional_error < self.positional_goal_tolerance and self.state.angular_error < self.angular_goal_tolerance
