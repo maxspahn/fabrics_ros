@@ -11,7 +11,7 @@
     <arg name="goal_orientation_z" default="0.9" />
     <arg name="goal_orientation_w" default="1" />
     <arg name="num_obs" default="10" />
-    <arg name="serialize_file_name" default="None" doc="Set it to None, if you don't want to serialize a planner, otherwise give a name, e.g. serialize_10.pkl " />
+    <arg name="serialize_file_name" default="" doc="Default value is an empty string. Give a name, e.g. serialize_10.pkl, you want to serialize a planner " />
 
     <!-- set use_it_marker on the parameter server -->
     <group ns="fabrics">
