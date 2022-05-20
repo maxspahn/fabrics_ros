@@ -112,7 +112,7 @@ class FabricsNode(object):
             planner.concretize()
             # serializing is optional, so only serialize when there is serialize_file_name set
             if self.serialize_file_name != "None":
-                rospy.loginfo("The serialize file doesn't exist. Serializing the planner to %s, it will take a while!", self.serialize_file)
+                rospy.loginfo("The serialize file doesn't exist. Serializing the planner to %s! \nComposition will take a while, please hold tight!", self.serialize_file)
                 planner.serialize(self.serialize_file)
                 rospy.loginfo("Finished serializing, %s has been created", self.serialize_file)
 
