@@ -3,8 +3,10 @@ import numpy as np
 import time
 import datetime
 import rospy
-import tf
+import rospkg
+import os
 
+import tf
 from std_msgs.msg import Float64MultiArray, ColorRGBA
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point, PoseStamped, Pose, Quaternion, Vector3
@@ -14,6 +16,7 @@ from fabrics_msgs.msg import FabricGoal, FabricGoalArray, FabricsObstacle, Fabri
 
 from MotionPlanningGoal.goalComposition import GoalComposition
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
+from fabrics.planner.serialized_planner import SerializedFabricPlanner
 from forwardkinematics.urdfFks.pandaFk import PandaFk
 
 # Helpers
@@ -37,6 +40,11 @@ class FabricsNode(object):
         self.num_obstacles = 0 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
         self.positional_goal_tolerance = 0.05 if not rospy.has_param("positional_goal_tolerance") else rospy.get_param("positional_goal_tolerance")
         self.angular_goal_tolerance = 0.10 if not rospy.has_param("angular_goal_tolerance") else rospy.get_param("angular_goal_tolerance")
+        self.serialize_file_name = "" if not rospy.has_param("serialize_file_name") else rospy.get_param("serialize_file_name")
+        # get an instance of RosPack with the default search paths
+        rospack = rospkg.RosPack()
+        # path of serialize_file should be stored to
+        self.serialize_file = rospack.get_path('fabrics_bridge') + "/scripts/" + self.serialize_file_name
         self.planner = self.init_planner()
 
         self.init_publishers()
@@ -57,46 +65,57 @@ class FabricsNode(object):
         # TODO: Add full body control robot type as an option
         robot_type = "panda"
         degrees_of_freedom = 7
-        planner = ParameterizedFabricPlanner(degrees_of_freedom, robot_type)
-        fk = PandaFk()
-        q = planner.variables.position_variable()
-        forward_kinematics = [fk.fk(q, i, positionOnly=True) for i in range(1, degrees_of_freedom+1)]
 
-        goal_dict = {
-            "position": {
-                "m": 3,
-                "w": 0.6, # attractor weight
-                "prime": True,
-                "indices": [0, 1, 2],
-                "parent_link": 0,
-                "child_link": 7,
-                "desired_position": [0.5, 0.0, 0.5],
-                "epsilon": 0.01,
-                "type": "staticSubGoal",
-            },
-            "orientation": {
-                "m": 2,
-                "w": 20, # attractor weight
-                "prime": False,
-                "indices": [0, 1],
-                "parent_link": 6,
-                "child_link": 7,
-                "angle": [0.707, 0.0, 0.0, 0.707],
-                "desired_position": [0.0, 0.0],
-                "epsilon": 0.01,
-                "type": "staticSubGoal",
-            },
-        }
-        self.planning_goal = GoalComposition(name="goal", contentDict=goal_dict)
+        # if the serialize_file exists, deserialize it
+        if os.path.isfile(self.serialize_file):
+            planner = SerializedFabricPlanner(self.serialize_file)
 
-        # The planner hides all the logic behind the function set_components.
-        planner.set_components(
-            forward_kinematics,
-            self.planning_goal,
-            number_obstacles=self.num_obstacles,
-        )
-        planner.concretize()
-    
+        else:
+            planner = ParameterizedFabricPlanner(degrees_of_freedom, robot_type)
+            fk = PandaFk()
+            q = planner.variables.position_variable()
+            forward_kinematics = [fk.fk(q, i, positionOnly=True) for i in range(1, degrees_of_freedom+1)]
+
+            goal_dict = {
+                "position": {
+                    "m": 3,
+                    "w": 0.6, # attractor weight
+                    "prime": True,
+                    "indices": [0, 1, 2],
+                    "parent_link": "panda_link0",
+                    "child_link": "panda_hand",
+                    "desired_position": [0.5, 0.0, 0.5],
+                    "epsilon": 0.01,
+                    "type": "staticSubGoal",
+                },
+                "orientation": {
+                    "m": 2,
+                    "w": 20, # attractor weight
+                    "prime": False,
+                    "indices": [0, 1],
+                    "parent_link": "panda_link7",
+                    "child_link": "panda_hand",
+                    "angle": [0.707, 0.0, 0.0, 0.707],
+                    "desired_position": [0.0, 0.0],
+                    "epsilon": 0.01,
+                    "type": "staticSubGoal",
+                },
+            }
+            self.planning_goal = GoalComposition(name="goal", contentDict=goal_dict)
+
+            # The planner hides all the logic behind the function set_components.
+            planner.set_components(
+                forward_kinematics,
+                self.planning_goal,
+                number_obstacles=self.num_obstacles,
+            )
+            planner.concretize()
+            # serializing is optional, so only serialize when there is serialize_file_name set
+            if self.serialize_file_name:
+                rospy.loginfo("The serialize file doesn't exist. Serializing the planner to %s \nComposition will take a while, please hold tight!", self.serialize_file)
+                planner.serialize(self.serialize_file)
+                rospy.loginfo("Finished serializing, %s has been created", self.serialize_file)
+
         return planner
 
     def init_publishers(self):
@@ -238,7 +257,6 @@ class FabricsNode(object):
         try:
             p2 = self.tf_listener.transformPose('/fabrics_goal', p1)
             self.state.angular_error = np.linalg.norm(np.array(list(p1.pose.position))-list(p2.pose.position))
-            print(self.state.angular_error)
         except Exception as e:
             rospy.logerr(e)
 
