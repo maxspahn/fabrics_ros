@@ -11,7 +11,7 @@ from std_msgs.msg import Float64MultiArray, ColorRGBA
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point, PoseStamped, Pose, Quaternion, Vector3
 from visualization_msgs.msg import Marker, MarkerArray
-
+from urdf_parser_py.urdf import URDF
 from fabrics_msgs.msg import FabricGoal, FabricGoalArray, FabricsObstacle, FabricsObstacleArray, FabricsState
 
 from MotionPlanningGoal.goalComposition import GoalComposition
@@ -37,6 +37,10 @@ class FabricsNode(object):
     def __init__(self):
         rospy.init_node('fabrics_node')
         self.rate = rospy.Rate(500)
+        # robot_description should be global because it's not part of fabrics ns
+        self.robot = URDF.from_parameter_server('/robot_description_no_gazebo')
+        # TODO get the joints list from ListControllers srv
+        self.list_joints =  ["panda_joint1", "panda_joint2", "panda_joint3", "panda_joint4", "panda_joint5", "panda_joint6", "panda_joint7"]
         self.num_obstacles = 0 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
         self.positional_goal_tolerance = 0.05 if not rospy.has_param("positional_goal_tolerance") else rospy.get_param("positional_goal_tolerance")
         self.angular_goal_tolerance = 0.10 if not rospy.has_param("angular_goal_tolerance") else rospy.get_param("angular_goal_tolerance")
@@ -102,11 +106,16 @@ class FabricsNode(object):
                 },
             }
             self.planning_goal = GoalComposition(name="goal", contentDict=goal_dict)
+            # get the joint limits for each joint
+            joint_limits = []
+            for i in self.list_joints:
+                joint_limits.append([self.robot.joint_map[i].limit.lower, self.robot.joint_map[i].limit.upper])
 
             # The planner hides all the logic behind the function set_components.
             planner.set_components(
                 forward_kinematics,
                 self.planning_goal,
+                limits=joint_limits,
                 number_obstacles=self.num_obstacles,
             )
             planner.concretize()
