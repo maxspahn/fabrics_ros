@@ -91,7 +91,7 @@ class FabricsNode(object):
             goal_dict = {
                 "position": {
                     "m": 3,
-                    "w": 0.6, # attractor weight
+                    "w": 0.2, # attractor weight
                     "prime": True,
                     "indices": [0, 1, 2],
                     "parent_link": "panda_link0",
@@ -102,7 +102,7 @@ class FabricsNode(object):
                 },
                 "orientation": {
                     "m": 2,
-                    "w": 20, # attractor weight
+                    "w": 1.0, # attractor weight
                     "prime": False,
                     "indices": [0, 1],
                     "parent_link": "panda_hand",
@@ -229,18 +229,18 @@ class FabricsNode(object):
             x_obst[i, :] = list(o.position)
             radius_obst[i] = o.radius
 
+
         return self.planner.compute_action(
             q=list(self.joint_states.position),
             qdot=list(self.joint_states.velocity),
             x_goal_0=list(self.goal.pose.position),
-            weight_goal_0=np.array([0.60]),
+            weight_goal_0=np.array([self.planning_goal.subGoals()[0].weight()]),
             radius_body=np.array([0.10]),
             angle_goal_1=rot_mat,
-            x_goal_1=[0.0, 0.0],
-            weight_goal_1=np.array([30.6]),
+            x_goal_1=np.array([0.0, 0.0]),
+            weight_goal_1=np.array(self.planning_goal.subGoals()[1].weight()),
             x_obst = x_obst,
             radius_obst = radius_obst,
-            weight_obst = np.array([0.0001])
         )
 
     def act(self):
