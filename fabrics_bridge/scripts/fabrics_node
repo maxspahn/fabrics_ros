@@ -11,7 +11,7 @@ from std_msgs.msg import Float64MultiArray, ColorRGBA
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point, PoseStamped, Pose, Quaternion, Vector3
 from visualization_msgs.msg import Marker, MarkerArray
-
+from urdf_parser_py.urdf import URDF
 from fabrics_msgs.msg import FabricGoal, FabricGoalArray, FabricsObstacle, FabricsObstacleArray, FabricsState
 
 from MotionPlanningGoal.goalComposition import GoalComposition
@@ -37,6 +37,12 @@ class FabricsNode(object):
     def __init__(self):
         rospy.init_node('fabrics_node')
         self.rate = rospy.Rate(500)
+        # retrieve the robot model on the parameter server and parse it to create a URDF robot structure, not the same as robot_description
+        self.robot = URDF.from_parameter_server("/robot_description")
+        # robot_description should be global because it's not part of fabrics ns
+        self.urdf = rospy.get_param("/robot_description")
+        # TODO get the joints list from ListControllers srv
+        self.list_joints =  ["panda_joint1", "panda_joint2", "panda_joint3", "panda_joint4", "panda_joint5", "panda_joint6", "panda_joint7"]
         self.num_obstacles = 0 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
         self.positional_goal_tolerance = 0.05 if not rospy.has_param("positional_goal_tolerance") else rospy.get_param("positional_goal_tolerance")
         self.angular_goal_tolerance = 0.10 if not rospy.has_param("angular_goal_tolerance") else rospy.get_param("angular_goal_tolerance")
@@ -71,7 +77,13 @@ class FabricsNode(object):
             planner = SerializedFabricPlanner(self.serialize_file)
 
         else:
-            planner = ParameterizedFabricPlanner(degrees_of_freedom, robot_type)
+            planner = ParameterizedFabricPlanner(
+            degrees_of_freedom,
+            robot_type,
+            urdf=self.urdf,
+            root_link='panda_link0',
+            end_link='panda_vacuum',
+            )
             fk = PandaFk()
             q = planner.variables.position_variable()
             forward_kinematics = [fk.fk(q, i, positionOnly=True) for i in range(1, degrees_of_freedom+1)]
@@ -79,22 +91,22 @@ class FabricsNode(object):
             goal_dict = {
                 "position": {
                     "m": 3,
-                    "w": 0.6, # attractor weight
+                    "w": 0.2, # attractor weight
                     "prime": True,
                     "indices": [0, 1, 2],
                     "parent_link": "panda_link0",
-                    "child_link": "panda_hand",
+                    "child_link": "panda_vacuum",
                     "desired_position": [0.5, 0.0, 0.5],
                     "epsilon": 0.01,
                     "type": "staticSubGoal",
                 },
                 "orientation": {
                     "m": 2,
-                    "w": 20, # attractor weight
+                    "w": 1.0, # attractor weight
                     "prime": False,
                     "indices": [0, 1],
-                    "parent_link": "panda_link7",
-                    "child_link": "panda_hand",
+                    "parent_link": "panda_hand",
+                    "child_link": "panda_vacuum",
                     "angle": [0.707, 0.0, 0.0, 0.707],
                     "desired_position": [0.0, 0.0],
                     "epsilon": 0.01,
@@ -102,11 +114,16 @@ class FabricsNode(object):
                 },
             }
             self.planning_goal = GoalComposition(name="goal", contentDict=goal_dict)
+            # get the joint limits for each joint
+            joint_limits = []
+            for i in self.list_joints:
+                joint_limits.append([self.robot.joint_map[i].limit.lower, self.robot.joint_map[i].limit.upper])
 
             # The planner hides all the logic behind the function set_components.
             planner.set_components(
                 forward_kinematics,
                 self.planning_goal,
+                limits=joint_limits,
                 number_obstacles=self.num_obstacles,
             )
             planner.concretize()
@@ -212,18 +229,18 @@ class FabricsNode(object):
             x_obst[i, :] = list(o.position)
             radius_obst[i] = o.radius
 
+
         return self.planner.compute_action(
             q=list(self.joint_states.position),
             qdot=list(self.joint_states.velocity),
             x_goal_0=list(self.goal.pose.position),
-            weight_goal_0=np.array([0.60]),
+            weight_goal_0=np.array([self.planning_goal.subGoals()[0].weight()]),
             radius_body=np.array([0.10]),
             angle_goal_1=rot_mat,
-            x_goal_1=[0.0, 0.0],
-            weight_goal_1=np.array([30.6]),
+            x_goal_1=np.array([0.0, 0.0]),
+            weight_goal_1=np.array(self.planning_goal.subGoals()[1].weight()),
             x_obst = x_obst,
             radius_obst = radius_obst,
-            weight_obst = np.array([0.0001])
         )
 
     def act(self):
@@ -246,13 +263,13 @@ class FabricsNode(object):
                 "/panda_link0")
 
         # evaluate positional_error
-        (trans, rot) = self.tf_listener.lookupTransform('/panda_link0', '/panda_link8', rospy.Time(0))
+        (trans, rot) = self.tf_listener.lookupTransform('/panda_link0', '/panda_vacuum', rospy.Time(0))
         self.state.positional_error = np.linalg.norm(np.array(trans) - list(self.goal.pose.position))
 
         # evaluate angular_error
         # Note: this is done by taking the L2 norm between a point at z=0.5 along the '/panda_link8' frame and transforming it to the goal frame
         p1 = PoseStamped()
-        p1.header.frame_id = '/panda_link8'
+        p1.header.frame_id = '/panda_vacuum'
         p1.pose.position = Point(x=0, y=0, z=0.5)
         try:
             p2 = self.tf_listener.transformPose('/fabrics_goal', p1)
