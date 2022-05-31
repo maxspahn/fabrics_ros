@@ -53,11 +53,12 @@ class IntegratorNode(object):
         self._vel_msg_boxer = Twist()
         self._boxer_indices = [0, 1]
         self._latest_action_time_stamp = rospy.get_time()
-
-        
+        self.stop_motion_bool = False
 
     def motion_stop_cb(self, data):
         self.stop_motion("user_call")
+        self.stop_motion_bool = True
+
 
     def stop_motion(self, cause):
         rospy.logwarn("Stoping motion due to %s", cause)
@@ -94,6 +95,8 @@ class IntegratorNode(object):
         while not rospy.is_shutdown():
             if rospy.get_time() > self._latest_action_time_stamp + 0.1:
                 self.stop_motion("timeout")
+            elif self.stop_motion_bool:
+                self.stop_motion("client calls stop")
             else:
                 self.integrateAction(self._panda_indices, full_integration=True)
             #self.integrateAction(self._boxer_indices, full_integration=False)
