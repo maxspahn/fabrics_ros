@@ -216,6 +216,7 @@ class FabricsNode(object):
 
         for i, o in enumerate(self.obstacles):
             if i >= self.num_obstacles: break
+            self.obs_markers.markers[i].pose.orientation = Quaternion(x=0, y=0, z=0, w=1)
             self.obs_markers.markers[i].pose.position = o.position 
             self.obs_markers.markers[i].scale = Vector3(o.radius, o.radius, o.radius) 
         self.obs_markers_publisher.publish(self.obs_markers)
