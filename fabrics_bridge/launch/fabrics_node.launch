@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-  <!-- start nodes -->
-  <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen" ns="fabrics"/>
+    <arg name="num_obs" default="10" />
+    <arg name="serialize_file_name" default="pick_demo_10" doc="Default value is an empty string. Give a name, e.g. serialize_10.pkl, you want to serialize a planner " />
+
+    <group ns="fabrics">
+        <param name="serialize_file_name" type="string" value="$(arg serialize_file_name)" />
+        <!-- set number of obstacles on the parameter server -->
+        <param name="num_obs" type="int" value="$(arg num_obs)" />
+        <!-- start fabric node -->
+        <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen"/>
+    </group>
+
 </launch>
