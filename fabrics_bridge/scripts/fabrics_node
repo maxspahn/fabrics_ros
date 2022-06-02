@@ -59,6 +59,7 @@ class FabricsNode(object):
         self.state.goal_reached = False
         self.state.angular_error = 1
 
+        self.publish_self_collision = True
         self.init_markers()
 
         self.tf_listener = tf.TransformListener()
@@ -245,6 +246,26 @@ class FabricsNode(object):
         self.obs_markers = MarkerArray()
         self.obs_markers.markers = [init_marker(1, 1, 0, 0) for i in range(self.num_obstacles)]
         for i, m in enumerate(self.obs_markers.markers): m.id = i
+
+        if self.publish_self_collision:
+            # TODO: Individual Markers of a MarkerArray aren't fixed in their respective header frame_id's in rviz as the frames move.
+            #       This means the markers don't move with the robot arm as it moves.
+
+            # Latch publish self collision markers
+            for joint, collision_pairs  in self.self_collision_pairs.items():
+                p = rospy.Publisher(
+                    'self_collision/{}'.format(joint),
+                    MarkerArray, queue_size=10, latch=True
+                )
+                m_array = MarkerArray()
+                for i, c in enumerate(collision_pairs):
+                    print(c)
+                    m = init_marker(1, 1, 0, 0)
+                    m.header.frame_id = c
+                    m.scale = Vector3(0.1, 0.1, 0.1)
+                    m.id = i
+                    m_array.markers.append(m)
+                p.publish(m_array)
 
     def update_markers(self):
         if isinstance(self.goal, PoseStamped):
