@@ -114,7 +114,7 @@ class FabricsNode(object):
         goal_dict = {
             "position": {
                 "m": 3,
-                "w": 0.2, # attractor weight
+                "w": 1.5, # attractor weight
                 "prime": True,
                 "indices": [0, 1, 2],
                 "parent_link": "panda_link0",
@@ -218,7 +218,7 @@ class FabricsNode(object):
             if i >= self.num_obstacles: break
             self.obs_markers.markers[i].pose.orientation = Quaternion(x=0, y=0, z=0, w=1)
             self.obs_markers.markers[i].pose.position = o.position 
-            self.obs_markers.markers[i].scale = Vector3(o.radius, o.radius, o.radius) 
+            self.obs_markers.markers[i].scale = Vector3(o.radius*2, o.radius*2, o.radius*2)
         self.obs_markers_publisher.publish(self.obs_markers)
 
     def compute_action(self):
