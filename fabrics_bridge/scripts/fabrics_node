@@ -128,7 +128,7 @@ class FabricsNode(object):
             },
             "orientation": {
                 "m": 2,
-                "w": 1.0, # attractor weight
+                "w": 3.0, # attractor weight
                 "prime": False,
                 "indices": [0, 1],
                 "parent_link": "panda_hand",
