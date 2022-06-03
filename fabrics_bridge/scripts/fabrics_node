@@ -93,7 +93,7 @@ class FabricsNode(object):
             joint_limits = []
             for i in self.list_joints:
                 joint_limits.append([self.robot.joint_map[i].limit.lower, self.robot.joint_map[i].limit.upper])
-            collision_links = ["panda_link_4", "panda_link_6", "panda_vacuum", "panda_vacuum_2"]
+            collision_links = ["panda_link4", "panda_link6", "panda_vacuum", "panda_vacuum_2"]
             self_collision_pairs = {"panda_hand": ["panda_link2"]}
 
             # The planner hides all the logic behind the function set_components.
