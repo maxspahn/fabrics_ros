@@ -82,7 +82,7 @@ class FabricsNode(object):
             robot_type,
             urdf=self.urdf,
             root_link='panda_link0',
-            end_link='panda_vacuum',
+            end_link=["panda_vacuum_2", "panda_vacuum"],
             )
             fk = PandaFk()
             q = planner.variables.position_variable()
@@ -93,7 +93,7 @@ class FabricsNode(object):
             joint_limits = []
             for i in self.list_joints:
                 joint_limits.append([self.robot.joint_map[i].limit.lower, self.robot.joint_map[i].limit.upper])
-            collision_links = [f"panda_link{i}" for i in range(0,8)]
+            collision_links = [f"panda_link{i}" for i in range(2,8)]
             self_collision_pairs = {"panda_hand": ["panda_link2"]}
 
             # The planner hides all the logic behind the function set_components.
@@ -243,14 +243,14 @@ class FabricsNode(object):
             qdot=list(self.joint_states.velocity),
             x_goal_0=list(self.goal.pose.position),
             weight_goal_0=np.array([self.planning_goal.subGoals()[0].weight()]),
-            radius_body_panda_link3=np.array([0.02]),
-            radius_body_panda_link4=np.array([0.02]),
-            radius_body_panda_link5=np.array([0.02]),
-            radius_body_panda_link6=np.array([0.02]),
-            radius_body_panda_link7=np.array([0.02]),
-            radius_body_panda_link8=np.array([0.02]),
-            radius_body_panda_vacuum=np.array([0.02]),
-            radius_body_panda_vacuum_2=np.array([0.02]),
+            radius_body_panda_link3=np.array([0.1]),
+            radius_body_panda_link4=np.array([0.1]),
+            radius_body_panda_link5=np.array([0.1]),
+            radius_body_panda_link6=np.array([0.1]),
+            radius_body_panda_link7=np.array([0.1]),
+            radius_body_panda_link8=np.array([0.1]),
+            radius_body_panda_vacuum=np.array([0.03]),
+            radius_body_panda_vacuum_2=np.array([0.03]),
             angle_goal_1=rot_mat,
             x_goal_1=np.array([0.0, 0.0]),
             weight_goal_1=np.array(self.planning_goal.subGoals()[1].weight()),
