@@ -119,7 +119,7 @@ class FabricsNode(object):
         goal_dict = {
             "position": {
                 "m": 3,
-                "w": 1.5, # attractor weight
+                "w": 0.3, # attractor weight
                 "prime": True,
                 "indices": [0, 1, 2],
                 "parent_link": "panda_link0",
@@ -130,7 +130,7 @@ class FabricsNode(object):
             },
             "orientation": {
                 "m": 2,
-                "w": 3.0, # attractor weight
+                "w": 0.6, # attractor weight
                 "prime": False,
                 "indices": [0, 1],
                 "parent_link": "panda_hand",
