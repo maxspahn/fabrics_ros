@@ -96,8 +96,7 @@ class FabricsNode(object):
             for i in self.list_joints:
                 joint_limits.append([self.robot.joint_map[i].limit.lower, self.robot.joint_map[i].limit.upper])
             collision_links = ["panda_link4", "panda_link6", "panda_vacuum", "panda_vacuum_2"]
-            self_collision_pairs = {"panda_hand": ["panda_link2"]}
-
+            self_collision_pairs = {"panda_hand": ["panda_link2"], "panda_vacuum": ["panda_link1", "panda_link2", "panda_link3"]}
             # The planner hides all the logic behind the function set_components.
             planner.set_components(
                 collision_links,
@@ -119,7 +118,7 @@ class FabricsNode(object):
         goal_dict = {
             "position": {
                 "m": 3,
-                "w": 0.3, # attractor weight
+                "w": 0.15, # attractor weight
                 "prime": True,
                 "indices": [0, 1, 2],
                 "parent_link": "panda_link0",
@@ -130,7 +129,7 @@ class FabricsNode(object):
             },
             "orientation": {
                 "m": 2,
-                "w": 0.6, # attractor weight
+                "w": 0.3, # attractor weight
                 "prime": False,
                 "indices": [0, 1],
                 "parent_link": "panda_hand",
