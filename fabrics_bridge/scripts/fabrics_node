@@ -7,7 +7,7 @@ import rospkg
 import os
 
 import tf
-from std_msgs.msg import Float64MultiArray, ColorRGBA
+from std_msgs.msg import Float64MultiArray, ColorRGBA, Bool
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point, PoseStamped, Pose, Quaternion, Vector3
 from visualization_msgs.msg import Marker, MarkerArray
@@ -52,6 +52,8 @@ class FabricsNode(object):
         # path of serialize_file should be stored to
         self.serialize_file = rospack.get_path('fabrics_bridge') + "/scripts/" + self.serialize_file_name
         self.planner = self.init_planner()
+        # stop motion bool
+        self.stop_acc_bool = False
 
         self.init_publishers()
         self.init_subscribers()
@@ -179,6 +181,11 @@ class FabricsNode(object):
             # lambda msg: self._joint_states=msg,
             tcp_nodelay=True
         )
+        # stop publishing joint_acc_des once the cb is triggered
+        self.acc_stop_subscriber = rospy.Subscriber(
+            "acc_stop_request",
+            Bool, self.acc_stop_callback
+        )
 
     def obs_callback(self, msg: FabricsObstacleArray):
         self.obstacles = msg.obstacles
@@ -191,6 +198,9 @@ class FabricsNode(object):
         self.joint_states.name = msg.name[5:]
         self.joint_states.position = msg.position[5:]
         self.joint_states.velocity = msg.velocity[5:]
+
+    def acc_stop_callback(self, msg: Bool):
+        self.stop_acc_bool = msg.data
 
     def init_markers(self):
         def init_marker(a, r, g, b, type=2):
@@ -259,7 +269,7 @@ class FabricsNode(object):
         )
 
     def act(self):
-        if not len(self.joint_states.name) > 0: return
+        if not len(self.joint_states.name) > 0 or self.stop_acc_bool: return
         self.action_message.data = [0, 0] + list(self.compute_action())
         self.action_publisher.publish(self.action_message)
 
