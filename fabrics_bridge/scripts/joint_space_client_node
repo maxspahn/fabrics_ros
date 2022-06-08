@@ -2,8 +2,7 @@
 
 # ros imports
 import rospy
-from sensor_msgs.msg import JointState
-
+from fabrics_msgs.msg import FabricsGoal
 
 
 class JointSpaceExampleClient(object):
@@ -15,15 +14,17 @@ class JointSpaceExampleClient(object):
 
     def init_publishers(self):
         self._goal_publisher = rospy.Publisher(
-            'fabrics/joint_space_goal',
-            JointState, queue_size=10
+            'fabrics/planning_goal',
+            FabricsGoal, queue_size=10
         )
 
     def publish_goal(self):
-        goal = JointState()
-        goal.header.stamp = rospy.Time.now()
-        goal.name = [f"panda_joint{i}" for i in range(7)]
-        goal.position = [1.0, 0.3, 0.0, -1.501, 0.0, 1.8675, 0.0]
+        goal = FabricsGoal()
+        goal.goal_joint_state.header.stamp = rospy.Time.now()
+        goal.goal_joint_state.name = [f"panda_joint{i}" for i in range(7)]
+        goal.goal_joint_state.position = [1.0, 0.3, 0.0, -1.501, 0.0, 1.8675, 0.0]
+        goal.goal_type = "joint_space"
+        goal.weight_goal_0 = 0.2
         self._goal_publisher.publish(goal)
 
     def run(self):
