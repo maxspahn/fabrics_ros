@@ -66,18 +66,24 @@ roslaunch albert_gazebo albert_gazebo_navigation.launch panda_control_mode:=velo
 ```
 
 If you don't have a real goal and obstacles published/detected, run:
-> Pass `use_it_marker:=true`, if you want to use an interactive marker as a goal
 
 ```bash
-roslaunch fabrics_bridge fabrics_demo.launch
+roslaunch fabrics_bridge fabrics_interactive_marker.launch
 ```
 
 
-If you have a perception module which can publish data to `/planning_goal` and `/planning_obs`, run:
+If you have a module which can publish data to `/planning_goal` and `/planning_obs`, run:
 
 ```bash
 roslaunch fabrics_bridge fabrics_node.launch
 ```
+An example client node that can publish `/planning_goal` and `/planning_obs`:
+
+
+```bash
+rosrun fabrics_bridge client_node
+```
+
 
 
 Then, to process output from fabrics, and publish velocity commands to `/panda_joint_velocity_controller/command`, run:

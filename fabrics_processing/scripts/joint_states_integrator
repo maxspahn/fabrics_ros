@@ -54,8 +54,6 @@ class IntegratorNode(object):
         self._boxer_indices = [0, 1]
         self._latest_action_time_stamp = rospy.get_time()
 
-        
-
     def motion_stop_cb(self, data):
         self.stop_motion("user_call")
 
