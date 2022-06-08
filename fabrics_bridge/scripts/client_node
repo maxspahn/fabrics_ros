@@ -104,20 +104,10 @@ class ClientNode(object):
         self._obs_publisher.publish(self.obs)
 
     def run(self):
-        # publish obs in only first loop
-        time1 = time.time()
-        while time.time() - time1 < 90:
+        while not rospy.is_shutdown():
             self.publish_goal(0.8, 0, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475)
             self.publish_obs()
-        time2 = time.time()
-        print("publish second goal now")
-        while time.time() - time2 < 60:
-            self.publish_goal(0.4, 0, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475)
-
-        # while not rospy.is_shutdown():
-        #     self.publish_goal()
-        #     self.publish_obs()
-        #     self._rate.sleep()
+            self._rate.sleep()
 
 if __name__ == "__main__":
     ClientNode = ClientNode()

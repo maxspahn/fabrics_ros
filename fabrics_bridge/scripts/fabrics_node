@@ -36,6 +36,7 @@ Quaternion.__iter__ = _it
 class FabricsNode(object):
     def __init__(self):
         rospy.init_node('fabrics_node')
+        self._goal_type = ""
         self.rate = rospy.Rate(500)
         # retrieve the robot model on the parameter server and parse it to create a URDF robot structure, not the same as robot_description
         self.robot = URDF.from_parameter_server("/robot_description")
@@ -43,16 +44,12 @@ class FabricsNode(object):
         self.urdf = rospy.get_param("/robot_description")
         # TODO get the joints list from ListControllers srv
         self.list_joints =  ["panda_joint1", "panda_joint2", "panda_joint3", "panda_joint4", "panda_joint5", "panda_joint6", "panda_joint7"]
-        self.num_obstacles = 0 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
+        self.num_obstacles = 10 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
         self.positional_goal_tolerance = 0.05 if not rospy.has_param("positional_goal_tolerance") else rospy.get_param("positional_goal_tolerance")
         self.angular_goal_tolerance = 0.10 if not rospy.has_param("angular_goal_tolerance") else rospy.get_param("angular_goal_tolerance")
-        self.serialize_file_name = "" if not rospy.has_param("serialize_file_name") else rospy.get_param("serialize_file_name")
-        # get an instance of RosPack with the default search paths
-        rospack = rospkg.RosPack()
-        # path of serialize_file should be stored to
-        self.serialize_file = rospack.get_path('fabrics_bridge') + "/scripts/" + self.serialize_file_name
-        self.planner = self.init_planner()
-        # stop motion bool
+        self.init_planner('joint_space')
+        self.init_planner('ee_pose')
+	# stop motion bool
         self.stop_acc_bool = False
 
         self.init_publishers()
@@ -68,54 +65,72 @@ class FabricsNode(object):
         self.tf_broadcaster = tf.TransformBroadcaster()
         rospy.sleep(1.0)
 
-    def init_planner(self):
-        # TODO: Replace PandaFK by generic FK that reads from robot_description
+    def load_planner(self, goal_type: str):
+        if goal_type == self._goal_type:
+            return
+        rospack = rospkg.RosPack()
+        serialize_file = rospack.get_path('fabrics_bridge') + "/planner/" + f"fabric_planner_{goal_type}_obstacles_{self.num_obstacles}"
+        self._planner = SerializedFabricPlanner(serialize_file)
+        self._goal_type = goal_type
+        self.planning_goal = self.goal_compose(goal_type)
+
+
+    def init_planner(self, goal_type: str):
         # TODO: Add full body control robot type as an option
         robot_type = "panda"
         degrees_of_freedom = 7
 
-        # if the serialize_file exists, deserialize it
-        if os.path.isfile(self.serialize_file):
-            planner = SerializedFabricPlanner(self.serialize_file)
-            self.planning_goal = self.goal_compose()
-        else:
-            planner = ParameterizedFabricPlanner(
+        planner = ParameterizedFabricPlanner(
             degrees_of_freedom,
             robot_type,
             urdf=self.urdf,
             root_link='panda_link0',
             end_link=["panda_vacuum_2", "panda_vacuum"],
             )
-            fk = PandaFk()
-            q = planner.variables.position_variable()
-            forward_kinematics = [fk.fk(q, i, positionOnly=True) for i in range(1, degrees_of_freedom+1)]
-
-            self.planning_goal = self.goal_compose()
+            
+        self.planning_goal = self.goal_compose(goal_type)
+        rospack = rospkg.RosPack()
+        serialize_file = rospack.get_path('fabrics_bridge') + "/planner/" + f"fabric_planner_{goal_type}_obstacles_{self.num_obstacles}"
+        if os.path.exists(serialize_file):
+            rospy.loginfo(f"Planner is already serialized in {serialize_file}")
+            return
             # get the joint limits for each joint
-            joint_limits = []
-            for i in self.list_joints:
-                joint_limits.append([self.robot.joint_map[i].limit.lower, self.robot.joint_map[i].limit.upper])
-            collision_links = ["panda_link4", "panda_link6", "panda_vacuum", "panda_vacuum_2"]
-            self_collision_pairs = {"panda_hand": ["panda_link2"], "panda_vacuum": ["panda_link1", "panda_link2", "panda_link3"]}
-            # The planner hides all the logic behind the function set_components.
-            planner.set_components(
-                collision_links,
-                self_collision_pairs,
-                self.planning_goal,
-                limits=joint_limits,
-                number_obstacles=self.num_obstacles,
-            )
-            planner.concretize()
-            # serializing is optional, so only serialize when there is serialize_file_name set
-            if self.serialize_file_name:
-                rospy.loginfo("The serialize file doesn't exist. Serializing the planner to %s \nComposition will take a while, please hold tight!", self.serialize_file)
-                planner.serialize(self.serialize_file)
-                rospy.loginfo("Finished serializing, %s has been created", self.serialize_file)
+        joint_limits = []
+        for i in self.list_joints:
+            joint_limits.append([self.robot.joint_map[i].limit.lower, self.robot.joint_map[i].limit.upper])
+        collision_links = ["panda_link4", "panda_link6", "panda_vacuum", "panda_vacuum_2"]
+        self_collision_pairs = {
+	    "panda_hand": ["panda_link2"],
+	    "panda_vacuum": ["panda_link1", "panda_link2", "panda_link3"]
+	}
+        # The planner hides all the logic behind the function set_components.
+        planner.set_components(
+            collision_links,
+            self_collision_pairs,
+            self.planning_goal,
+            limits=joint_limits,
+            number_obstacles=self.num_obstacles,
+        )
+        planner.concretize()
+        # serializing the planner
+        rospy.loginfo(f"Serializing the planner for goal_type:  {goal_type}")
+        planner.serialize(serialize_file)
+        rospy.loginfo(f"Finished serializing, {serialize_file} has been created")
 
-        return planner
 
-    def goal_compose(self):
-        goal_dict = {
+    def goal_compose(self, goal_type: str):
+        joint_space_goal_dict = {
+            "joint_position": {
+                "m": 7,
+                "w": 0.2, # attractor weight
+                "prime": True,
+                "indices": list(range(7)),
+                "desired_position": [0.0, 0.0, 0.0, -1.501, 0.0, 0.8675, 0.0],
+                "epsilon": 0.01,
+                "type": "staticJointSpaceSubGoal",
+            }
+        }
+        ee_pose_goal_dict = {
             "position": {
                 "m": 3,
                 "w": 0.15, # attractor weight
@@ -140,6 +155,10 @@ class FabricsNode(object):
                 "type": "staticSubGoal",
             },
         }
+        if goal_type == 'ee_pose':
+            goal_dict = ee_pose_goal_dict
+        elif goal_type == 'joint_space':
+            goal_dict = joint_space_goal_dict
         planning_goal = GoalComposition(name="goal", contentDict=goal_dict)
         return planning_goal
 
@@ -172,6 +191,10 @@ class FabricsNode(object):
             'planning_goal',
             PoseStamped, self.goal_callback
         )
+        self.joint_space_goal_subscriber = rospy.Subscriber(
+            'joint_space_goal',
+            JointState, self.joint_space_goal_callback
+        )
         self.joint_states = JointState()
         self.joint_state_subscriber = rospy.Subscriber(
             '/joint_states_filtered',
@@ -180,16 +203,16 @@ class FabricsNode(object):
             # lambda msg: self._joint_states=msg,
             tcp_nodelay=True
         )
-        # stop publishing joint_acc_des once the cb is triggered
-        self.acc_stop_subscriber = rospy.Subscriber(
-            "acc_stop_request",
-            Bool, self.acc_stop_callback
-        )
 
     def obs_callback(self, msg: FabricsObstacleArray):
         self.obstacles = msg.obstacles
 
     def goal_callback(self, msg: PoseStamped):
+        self.load_planner('ee_pose')
+        self.goal = msg
+
+    def joint_space_goal_callback(self, msg: JointState):
+        self.load_planner('joint_space')
         self.goal = msg
 
     def joint_states_callback(self, msg: JointState):
@@ -197,9 +220,6 @@ class FabricsNode(object):
         self.joint_states.name = msg.name[5:]
         self.joint_states.position = msg.position[5:]
         self.joint_states.velocity = msg.velocity[5:]
-
-    def acc_stop_callback(self, msg: Bool):
-        self.stop_acc_bool = msg.data
 
     def init_markers(self):
         def init_marker(a, r, g, b, type=2):
@@ -220,24 +240,44 @@ class FabricsNode(object):
         for i, m in enumerate(self.obs_markers.markers): m.id = i
 
     def update_markers(self):
-        self.goal_marker.color.g = 1.0 if self.state.goal_reached else 0.0
-        self.goal_marker.color.b = 0.0 if self.state.goal_reached else 1.0
+        if isinstance(self.goal, PoseStamped):
+            self.goal_marker.color.g = 1.0 if self.state.goal_reached else 0.0
+            self.goal_marker.color.b = 0.0 if self.state.goal_reached else 1.0
 
-        self.goal_marker.pose = self.goal.pose
-        self.goal_marker_publisher.publish(self.goal_marker)
+            self.goal_marker.pose = self.goal.pose
+            self.goal_marker_publisher.publish(self.goal_marker)
 
-        for i, o in enumerate(self.obstacles):
-            if i >= self.num_obstacles: break
-            self.obs_markers.markers[i].pose.orientation = Quaternion(x=0, y=0, z=0, w=1)
-            self.obs_markers.markers[i].pose.position = o.position 
-            self.obs_markers.markers[i].scale = Vector3(o.radius*2, o.radius*2, o.radius*2)
-        self.obs_markers_publisher.publish(self.obs_markers)
+            for i, o in enumerate(self.obstacles):
+                if i >= self.num_obstacles: break
+                self.obs_markers.markers[i].pose.orientation = Quaternion(x=0, y=0, z=0, w=1)
+                self.obs_markers.markers[i].pose.position = o.position 
+                self.obs_markers.markers[i].scale = Vector3(o.radius*2, o.radius*2, o.radius*2)
+            self.obs_markers_publisher.publish(self.obs_markers)
 
-    def compute_action(self):
+    def parse_ee_pose_goal(self):
         # Orientation fix
         euler_goal = list(tf.transformations.euler_from_quaternion(list(self.goal.pose.orientation), 'rxyz'))
         rot_mat = tf.transformations.euler_matrix(-euler_goal[1], -euler_goal[0], 0, 'ryxz')[:3, :3]
+        goal_args = {
+            'x_goal_0': list(self.goal.pose.position),
+            'x_goal_1': np.array([0.0, 0.0]),
+            'angle_goal_1':rot_mat,
+            'weight_goal_1': np.array(self.planning_goal.subGoals()[1].weight()),
+            'weight_goal_0': np.array([self.planning_goal.subGoals()[0].weight()]),
+        }
+        return goal_args
 
+    def parse_joint_space_goal(self):
+        return {
+            'x_goal_0': np.array(self.goal.position),
+            'weight_goal_0': np.array([self.planning_goal.subGoals()[0].weight()]),
+        }
+
+
+
+
+
+    def compute_action(self):
         # Ensure right number of obstacles, if less are received fill with [100, 100, 100], if more received naively take the first ones.
         x_obst = np.full((self.num_obstacles, 3), [100.0]*3)
         radius_obst = np.full((self.num_obstacles, 1), 0.05)
@@ -245,13 +285,13 @@ class FabricsNode(object):
             if i >= self.num_obstacles: break
             x_obst[i, :] = list(o.position)
             radius_obst[i] = o.radius
-
-
-        return self.planner.compute_action(
+        if isinstance(self.goal, PoseStamped):
+            goal_args = self.parse_ee_pose_goal()
+        elif isinstance(self.goal, JointState):
+            goal_args = self.parse_joint_space_goal()
+        return self._planner.compute_action(
             q=list(self.joint_states.position),
             qdot=list(self.joint_states.velocity),
-            x_goal_0=list(self.goal.pose.position),
-            weight_goal_0=np.array([self.planning_goal.subGoals()[0].weight()]),
             radius_body_panda_link3=np.array([0.1]),
             radius_body_panda_link4=np.array([0.1]),
             radius_body_panda_link5=np.array([0.1]),
@@ -260,11 +300,9 @@ class FabricsNode(object):
             radius_body_panda_link8=np.array([0.1]),
             radius_body_panda_vacuum=np.array([0.03]),
             radius_body_panda_vacuum_2=np.array([0.03]),
-            angle_goal_1=rot_mat,
-            x_goal_1=np.array([0.0, 0.0]),
-            weight_goal_1=np.array(self.planning_goal.subGoals()[1].weight()),
             x_obst = x_obst,
             radius_obst = radius_obst,
+            **goal_args
         )
 
     def act(self):
@@ -273,36 +311,43 @@ class FabricsNode(object):
         self.action_publisher.publish(self.action_message)
 
     def evaluate(self):
-        # broadcast goal frame
-        # Note: at 10x lower frequency than act loop, because tf
-        if not hasattr(self, "eval_i"): self.eval_i = 0
-        self.eval_i+=1
-        if self.eval_i%10 == 0:
-            self.eval_i = 0
-            self.tf_broadcaster.sendTransform(
-                list(self.goal.pose.position),
-                list(self.goal.pose.orientation),
-                rospy.Time.now(),
-                "/fabrics_goal",
-                "/panda_link0")
+        if isinstance(self.goal, JointState):
+            self.state.positional_error = np.linalg.norm(
+                np.array(self.joint_states.position) - np.array(self.goal.position)
+            )
+            self.state.angular_error = 0.0
+            self.state.goal_reached = self.state.positional_error < self.positional_goal_tolerance
+        elif isinstance(self.goal, PoseStamped):
+            # broadcast goal frame
+            # Note: at 10x lower frequency than act loop, because tf
+            if not hasattr(self, "eval_i"): self.eval_i = 0
+            self.eval_i+=1
+            if self.eval_i%10 == 0:
+                self.eval_i = 0
+                self.tf_broadcaster.sendTransform(
+                    list(self.goal.pose.position),
+                    list(self.goal.pose.orientation),
+                    rospy.Time.now(),
+                    "/fabrics_goal",
+                    "/panda_link0")
 
-        # evaluate positional_error
-        (trans, rot) = self.tf_listener.lookupTransform('/panda_link0', '/panda_vacuum', rospy.Time(0))
-        self.state.positional_error = np.linalg.norm(np.array(trans) - list(self.goal.pose.position))
+            # evaluate positional_error
+            (trans, rot) = self.tf_listener.lookupTransform('/panda_link0', '/panda_vacuum', rospy.Time(0))
+            self.state.positional_error = np.linalg.norm(np.array(trans) - list(self.goal.pose.position))
 
-        # evaluate angular_error
-        # Note: this is done by taking the L2 norm between a point at z=0.5 along the '/panda_link8' frame and transforming it to the goal frame
-        p1 = PoseStamped()
-        p1.header.frame_id = '/panda_vacuum'
-        p1.pose.position = Point(x=0, y=0, z=0.5)
-        try:
-            p2 = self.tf_listener.transformPose('/fabrics_goal', p1)
-            self.state.angular_error = np.linalg.norm(np.array(list(p1.pose.position))-list(p2.pose.position))
-        except Exception as e:
-            rospy.logerr(e)
+            # evaluate angular_error
+            # Note: this is done by taking the L2 norm between a point at z=0.5 along the '/panda_link8' frame and transforming it to the goal frame
+            p1 = PoseStamped()
+            p1.header.frame_id = '/panda_vacuum'
+            p1.pose.position = Point(x=0, y=0, z=0.5)
+            try:
+                p2 = self.tf_listener.transformPose('/fabrics_goal', p1)
+                self.state.angular_error = np.linalg.norm(np.array(list(p1.pose.position))-list(p2.pose.position))
+            except Exception as e:
+                rospy.loginfo("Waiting for tf to be on time.")
 
-        # update state
-        self.state.goal_reached = self.state.positional_error < self.positional_goal_tolerance and self.state.angular_error < self.angular_goal_tolerance
+            # update state
+            self.state.goal_reached = self.state.positional_error < self.positional_goal_tolerance and self.state.angular_error < self.angular_goal_tolerance
         self.state.header.stamp = rospy.Time.now()
         self.state_publisher.publish(self.state)
 
