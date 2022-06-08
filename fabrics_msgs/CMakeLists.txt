@@ -9,8 +9,8 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_message_files(
   FILES
-  FabricGoal.msg
-  FabricGoalArray.msg
+  FabricsGoal.msg
+  FabricsGoalArray.msg
   FabricsObstacle.msg
   FabricsObstacleArray.msg
   FabricsState.msg
