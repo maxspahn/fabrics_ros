@@ -39,46 +39,11 @@ class ClientNode(object):
             self.generate_random_obs()
 
     def init_publishers(self):
-        self._goals_publisher = rospy.Publisher(
-            'planning_goal',
-            PoseStamped, queue_size=10
-        )
         self._obs_publisher = rospy.Publisher(
             'planning_obs',
             FabricsObstacleArray, queue_size=10
         )
-        self._sphere_markers_publisher = rospy.Publisher(
-            'planning_sphere/markers',
-            MarkerArray, queue_size=10
-        )
 
-    # a function generates random obstacle with random radius and position (given a range
-    # this function is only called once if self._is_randomized_obs is set True
-    def generate_random_obs(self):
-        for i in range(rospy.get_param("num_obs")):
-            # assign a random value from [self._sphere_r_low, self._sphere_r_high), includes low but excludes high
-            self._randomized_radius_list[i] = np.random.uniform(self._sphere_r_low, self._sphere_r_high)
-            # assign a random value from [self._obs_pos_low, self._obs_pos_high) to obs pos_x/y/z
-            self._randomized_pose_list[i] = np.random.uniform(self._obs_pos_low, self._obs_pos_high, 3)
-        print(self._randomized_radius_list)
-        print(self._randomized_pose_list)
-
-    def init_sphere(self, point, radius):
-        sphere = FabricsObstacle()
-        sphere.radius = radius
-        sphere.position = point
-        return sphere
-
-    def init_marker(self, a, r, g, b):
-            goal_marker = Marker()
-            goal_marker.header.frame_id = "panda_link0"
-            goal_marker.type = goal_marker.SPHERE
-            goal_marker.action = goal_marker.ADD
-            goal_marker.color.a = a
-            goal_marker.color.r = r
-            goal_marker.color.g = g
-            goal_marker.color.b = b
-            return goal_marker
 
     # given a goal pose and n-th iteration
     # returns point on circumference of a circle, i.e. center of each sphere
@@ -105,21 +70,7 @@ class ClientNode(object):
         rotated_circle = np.array([[pos_x], [pos_y], [pos_z]]) + np.matmul(rot_matrix, initial_circle)
         return rotated_circle
 
-    def publish_goals(self):
-        goal_data = PoseStamped()
-        # goal_data.pose.position.x = rospy.get_param("goal_position_x")
-        # goal_data.pose.position.y = rospy.get_param("goal_position_y")
-        # goal_data.pose.position.z = rospy.get_param("goal_position_z")
-        goal_data.pose.position.x = 0.4
-        goal_data.pose.position.y = 0.0
-        goal_data.pose.position.z = 0.4
-        goal_data.pose.orientation.x = 0.0
-        goal_data.pose.orientation.y = -0.7071067811865475
-        goal_data.pose.orientation.z = 0.0
-        goal_data.pose.orientation.w = -0.7071067811865475
-        goal_data.header.frame_id = "panda_link0"
-
-        self._goals_publisher.publish(goal_data)
+    def publish_obstacles(self):
         self._sphere_markers = MarkerArray()
         for i in range(self._num_sphere):
             # red sphere

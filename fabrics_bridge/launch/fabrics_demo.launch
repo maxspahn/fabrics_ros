@@ -2,14 +2,14 @@
 <launch>
     <arg name="use_it_marker" default="false"/>
     <!-- to make it easy to pass arguments using position_x:= value to this launch file -->
-    <arg name="goal_position_x" default="0.8" />
-    <arg name="goal_position_y" default="0.4" />
-    <arg name="goal_position_z" default="0.3" />
+    <arg name="goal_position_x" default="10.7" />
+    <arg name="goal_position_y" default="0.2" />
+    <arg name="goal_position_z" default="0.9" />
 
     <arg name="goal_orientation_x" default="0" />
-    <arg name="goal_orientation_y" default="0" />
+    <arg name="goal_orientation_y" default="0.7071067811865475" />
     <arg name="goal_orientation_z" default="0" />
-    <arg name="goal_orientation_w" default="1" />
+    <arg name="goal_orientation_w" default="0.7071067811865475" />
     <arg name="num_obs" default="10" />
     <arg name="serialize_file_name" default="" doc="Default value is an empty string. Give a name, e.g. serialize_10.pkl, you want to serialize a planner " />
 

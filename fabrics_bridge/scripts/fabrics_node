@@ -93,7 +93,8 @@ class FabricsNode(object):
             joint_limits = []
             for i in self.list_joints:
                 joint_limits.append([self.robot.joint_map[i].limit.lower, self.robot.joint_map[i].limit.upper])
-            collision_links = [f"panda_link{i}" for i in range(2,8)]
+            collision_links = ["panda_link3", "panda_link6"]
+            collision_links += ["panda_vacuum", "panda_vacuum_2"]
             self_collision_pairs = {"panda_hand": ["panda_link2"]}
 
             # The planner hides all the logic behind the function set_components.
@@ -117,7 +118,7 @@ class FabricsNode(object):
         goal_dict = {
             "position": {
                 "m": 3,
-                "w": 1.5, # attractor weight
+                "w": 0.1, # attractor weight
                 "prime": True,
                 "indices": [0, 1, 2],
                 "parent_link": "panda_link0",
@@ -128,7 +129,7 @@ class FabricsNode(object):
             },
             "orientation": {
                 "m": 2,
-                "w": 1.0, # attractor weight
+                "w": 0.1, # attractor weight
                 "prime": False,
                 "indices": [0, 1],
                 "parent_link": "panda_hand",
@@ -231,7 +232,7 @@ class FabricsNode(object):
 
         # Ensure right number of obstacles, if less are received fill with [100, 100, 100], if more received naively take the first ones.
         x_obst = np.full((self.num_obstacles, 3), [100.0]*3)
-        radius_obst = np.full((self.num_obstacles, 1), 0.05)
+        radius_obst = np.full((self.num_obstacles, 1), 0.15)
         for i, o in enumerate(self.obstacles):
             if i >= self.num_obstacles: break
             x_obst[i, :] = list(o.position)
