@@ -30,8 +30,8 @@ class ClientNode(object):
     def __init__(self):
         rospy.init_node('client_node')
         self._rate = rospy.Rate(10)
-        # if param num_obs is not set, default number of obstacles is 2
-        self._num_obs = 10 if not rospy.has_param("num_obs") else rospy.get_param("num_obs")
+        # default number of obstacles is 20
+        self._num_obs = 20
         self.init_publishers()
         self._goal = PoseStamped()
         # ring of spheres setting
