@@ -1,0 +1,3 @@
+geometry_msgs/PoseStamped goal_pose
+float32 weight_goal_0
+float32 weight_goal_1

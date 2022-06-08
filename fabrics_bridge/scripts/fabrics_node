@@ -12,7 +12,7 @@ from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point, PoseStamped, Pose, Quaternion, Vector3
 from visualization_msgs.msg import Marker, MarkerArray
 from urdf_parser_py.urdf import URDF
-from fabrics_msgs.msg import FabricGoal, FabricGoalArray, FabricsObstacle, FabricsObstacleArray, FabricsState
+from fabrics_msgs.msg import FabricsGoal, FabricsGoalArray, FabricsObstacle, FabricsObstacleArray, FabricsState
 
 from MotionPlanningGoal.goalComposition import GoalComposition
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
@@ -189,7 +189,7 @@ class FabricsNode(object):
         self.obstacles = []
         self.goal_subscriber = rospy.Subscriber(
             'planning_goal',
-            PoseStamped, self.goal_callback
+            FabricsGoal, self.goal_callback
         )
         self.joint_space_goal_subscriber = rospy.Subscriber(
             'joint_space_goal',
@@ -207,9 +207,11 @@ class FabricsNode(object):
     def obs_callback(self, msg: FabricsObstacleArray):
         self.obstacles = msg.obstacles
 
-    def goal_callback(self, msg: PoseStamped):
+    def goal_callback(self, msg: FabricsGoal):
         self.load_planner('ee_pose')
-        self.goal = msg
+        self.goal = msg.goal_pose
+        self.goal_weight_goal_0 = msg.weight_goal_0
+        self.goal_weight_goal_1 = msg.weight_goal_1
 
     def joint_space_goal_callback(self, msg: JointState):
         self.load_planner('joint_space')
@@ -262,8 +264,8 @@ class FabricsNode(object):
             'x_goal_0': list(self.goal.pose.position),
             'x_goal_1': np.array([0.0, 0.0]),
             'angle_goal_1':rot_mat,
-            'weight_goal_1': np.array(self.planning_goal.subGoals()[1].weight()),
-            'weight_goal_0': np.array([self.planning_goal.subGoals()[0].weight()]),
+            'weight_goal_1': np.array(self.goal_weight_goal_1),
+            'weight_goal_0': np.array(self.goal_weight_goal_0),
         }
         return goal_args
 
