@@ -1,0 +1,39 @@
+#!/usr/bin/env python3
+
+# ros imports
+import rospy
+from sensor_msgs.msg import JointState
+
+
+
+class JointSpaceExampleClient(object):
+    def __init__(self):
+        rospy.init_node('client_node')
+        self._rate = rospy.Rate(10)
+        # if param num_obs is not set, default number of obstacles is 2
+        self.init_publishers()
+
+    def init_publishers(self):
+        self._goal_publisher = rospy.Publisher(
+            'fabrics/joint_space_goal',
+            JointState, queue_size=10
+        )
+
+    def publish_goal(self):
+        goal = JointState()
+        goal.header.stamp = rospy.Time.now()
+        goal.name = [f"panda_joint{i}" for i in range(7)]
+        goal.position = [1.0, 0.3, 0.0, -1.501, 0.0, 1.8675, 0.0]
+        self._goal_publisher.publish(goal)
+
+    def run(self):
+        while not rospy.is_shutdown():     
+            self.publish_goal()
+            self._rate.sleep()
+
+if __name__ == "__main__":
+    client_node = JointSpaceExampleClient()
+    try:
+        client_node.run()
+    except rospy.ROSInterruptException:
+        pass
