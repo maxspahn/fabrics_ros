@@ -4,6 +4,7 @@ project(fabrics_msgs)
 find_package(catkin REQUIRED COMPONENTS
   geometry_msgs
   message_generation
+  sensor_msgs
   std_msgs
 )
 
@@ -19,6 +20,7 @@ add_message_files(
 generate_messages(
   DEPENDENCIES
   geometry_msgs
+  sensor_msgs
   std_msgs
 )
 
