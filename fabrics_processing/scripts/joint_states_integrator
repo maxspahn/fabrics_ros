@@ -53,11 +53,12 @@ class IntegratorNode(object):
         self._vel_msg_boxer = Twist()
         self._boxer_indices = [0, 1]
         self._latest_action_time_stamp = rospy.get_time()
+        self._acceleration_threshold = rospy.get_param("/joint_states_integrator/acceleration_threshold")
 
     def motion_stop_cb(self, data):
         self.stop_motion("user_call")
 
-    def stop_motion(self, cause):
+    def stop_motion(self, cause: str):
         rospy.logwarn("Stoping motion due to %s", cause)
         self._acc = np.zeros(self._n)
         self._qdot_old = np.zeros(self._n)
@@ -72,6 +73,9 @@ class IntegratorNode(object):
 
     def acc_cb(self, data):
         self._acc = np.array(data.data)
+        acceleration_magnitude = np.linalg.norm(self._acc)
+        if acceleration_magnitude > self._acceleration_threshold:
+            self.stop_motion(f"Acceleration threshold of {self._acceleration_threshold} exceeded. Commanded acceleration of magnitude {acceleration_magnitude}")
         self._latest_action_time_stamp = rospy.get_time()
 
     def integrateAction(self, indices, full_integration=False):

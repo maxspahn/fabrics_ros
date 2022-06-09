@@ -36,6 +36,7 @@ Quaternion.__iter__ = _it
 class FabricsNode(object):
     def __init__(self):
         rospy.init_node('fabrics_node')
+        self._goal_type = ""
         self.rate = rospy.Rate(500)
         # retrieve the robot model on the parameter server and parse it to create a URDF robot structure, not the same as robot_description
         self.robot = URDF.from_parameter_server("/robot_description")
@@ -65,12 +66,11 @@ class FabricsNode(object):
         rospy.sleep(1.0)
 
     def load_planner(self):
-        # if _planner is set already, return
-        if hasattr(self, '_planner'):
-            return
+        self.stop_acc_bool = True
         rospack = rospkg.RosPack()
         serialize_file = rospack.get_path('fabrics_bridge') + "/planner/" + f"fabric_planner_{self._goal_type}_obstacles_{self.num_obstacles}"
         self._planner = SerializedFabricPlanner(serialize_file)
+        self.stop_acc_bool = False
 
     def init_planner(self, goal_type: str):
         # TODO: Add full body control robot type as an option
@@ -206,8 +206,9 @@ class FabricsNode(object):
         self.obstacles = msg.obstacles
 
     def goal_callback(self, msg: FabricsGoal):
-        self._goal_type = msg.goal_type
-        self.load_planner()
+        if not self._goal_type == msg.goal_type:
+            self._goal_type = msg.goal_type
+            self.load_planner()
         if self._goal_type == "ee_pose":
             self.goal = msg.goal_pose
         elif self._goal_type == "joint_space":
