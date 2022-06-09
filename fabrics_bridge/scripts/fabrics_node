@@ -209,13 +209,13 @@ class FabricsNode(object):
         if not self._goal_type == msg.goal_type:
             self._goal_type = msg.goal_type
             self.load_planner()
-            if self._goal_type == "ee_pose":
-                self.goal = msg.goal_pose
-            elif self._goal_type == "joint_space":
-                self.goal = msg.goal_joint_state
-            else:
-                rospy.loginfo("Please specify a goal type, either ee_pose or joint_space")
-                return
+        if self._goal_type == "ee_pose":
+            self.goal = msg.goal_pose
+        elif self._goal_type == "joint_space":
+            self.goal = msg.goal_joint_state
+        else:
+            rospy.loginfo("Please specify a goal type, either ee_pose or joint_space")
+            return
         self.goal_weight_goal_0 = msg.weight_goal_0
         self.goal_weight_goal_1 = msg.weight_goal_1
 
