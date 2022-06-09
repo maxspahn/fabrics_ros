@@ -196,6 +196,11 @@ class FabricsNode(object):
             # lambda msg: self._joint_states=msg,
             tcp_nodelay=True
         )
+        # stop publishing joint_acc_des once the cb is triggered
+        self.acc_stop_subscriber = rospy.Subscriber(
+            "acc_stop_request",
+            Bool, self.acc_stop_callback
+        )
 
     def obs_callback(self, msg: FabricsObstacleArray):
         self.obstacles = msg.obstacles
@@ -219,6 +224,9 @@ class FabricsNode(object):
         self.joint_states.name = msg.name[5:]
         self.joint_states.position = msg.position[5:]
         self.joint_states.velocity = msg.velocity[5:]
+
+    def acc_stop_callback(self, msg: Bool):
+        self.stop_acc_bool = msg.data
 
     def init_markers(self):
         def init_marker(a, r, g, b, type=2):
