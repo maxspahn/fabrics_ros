@@ -1,3 +1,4 @@
 joint_states_integrator:
   rate: 500
   integration_threshold: 0.0001
+  acceleration_threshold: 4.0
