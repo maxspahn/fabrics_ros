@@ -12,7 +12,7 @@ from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point, PoseStamped, Pose, Quaternion, Vector3
 from visualization_msgs.msg import Marker, MarkerArray
 from urdf_parser_py.urdf import URDF
-from fabrics_msgs.msg import FabricGoal, FabricGoalArray, FabricsObstacle, FabricsObstacleArray, FabricsState
+from fabrics_msgs.msg import FabricsGoal, FabricsGoalArray, FabricsObstacle, FabricsObstacleArray, FabricsState
 
 from MotionPlanningGoal.goalComposition import GoalComposition
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
@@ -36,7 +36,6 @@ Quaternion.__iter__ = _it
 class FabricsNode(object):
     def __init__(self):
         rospy.init_node('fabrics_node')
-        self._goal_type = ""
         self.rate = rospy.Rate(500)
         # retrieve the robot model on the parameter server and parse it to create a URDF robot structure, not the same as robot_description
         self.robot = URDF.from_parameter_server("/robot_description")
@@ -49,7 +48,7 @@ class FabricsNode(object):
         self.angular_goal_tolerance = 0.10 if not rospy.has_param("angular_goal_tolerance") else rospy.get_param("angular_goal_tolerance")
         self.init_planner('joint_space')
         self.init_planner('ee_pose')
-	# stop motion bool
+	    # stop motion bool
         self.stop_acc_bool = False
 
         self.init_publishers()
@@ -65,15 +64,13 @@ class FabricsNode(object):
         self.tf_broadcaster = tf.TransformBroadcaster()
         rospy.sleep(1.0)
 
-    def load_planner(self, goal_type: str):
-        if goal_type == self._goal_type:
+    def load_planner(self):
+        # if _planner is set already, return
+        if hasattr(self, '_planner'):
             return
         rospack = rospkg.RosPack()
-        serialize_file = rospack.get_path('fabrics_bridge') + "/planner/" + f"fabric_planner_{goal_type}_obstacles_{self.num_obstacles}"
+        serialize_file = rospack.get_path('fabrics_bridge') + "/planner/" + f"fabric_planner_{self._goal_type}_obstacles_{self.num_obstacles}"
         self._planner = SerializedFabricPlanner(serialize_file)
-        self._goal_type = goal_type
-        self.planning_goal = self.goal_compose(goal_type)
-
 
     def init_planner(self, goal_type: str):
         # TODO: Add full body control robot type as an option
@@ -189,11 +186,7 @@ class FabricsNode(object):
         self.obstacles = []
         self.goal_subscriber = rospy.Subscriber(
             'planning_goal',
-            PoseStamped, self.goal_callback
-        )
-        self.joint_space_goal_subscriber = rospy.Subscriber(
-            'joint_space_goal',
-            JointState, self.joint_space_goal_callback
+            FabricsGoal, self.goal_callback
         )
         self.joint_states = JointState()
         self.joint_state_subscriber = rospy.Subscriber(
@@ -207,13 +200,18 @@ class FabricsNode(object):
     def obs_callback(self, msg: FabricsObstacleArray):
         self.obstacles = msg.obstacles
 
-    def goal_callback(self, msg: PoseStamped):
-        self.load_planner('ee_pose')
-        self.goal = msg
-
-    def joint_space_goal_callback(self, msg: JointState):
-        self.load_planner('joint_space')
-        self.goal = msg
+    def goal_callback(self, msg: FabricsGoal):
+        self._goal_type = msg.goal_type
+        self.load_planner()
+        if self._goal_type == "ee_pose":
+            self.goal = msg.goal_pose
+        elif self._goal_type == "joint_space":
+            self.goal = msg.goal_joint_state
+        else:
+            rospy.loginfo("Please specify a goal type, either ee_pose or joint_space")
+            return
+        self.goal_weight_goal_0 = msg.weight_goal_0
+        self.goal_weight_goal_1 = msg.weight_goal_1
 
     def joint_states_callback(self, msg: JointState):
         # TODO: better way of extracting just the panda joint states
@@ -262,20 +260,16 @@ class FabricsNode(object):
             'x_goal_0': list(self.goal.pose.position),
             'x_goal_1': np.array([0.0, 0.0]),
             'angle_goal_1':rot_mat,
-            'weight_goal_1': np.array(self.planning_goal.subGoals()[1].weight()),
-            'weight_goal_0': np.array([self.planning_goal.subGoals()[0].weight()]),
+            'weight_goal_1': np.array(self.goal_weight_goal_1),
+            'weight_goal_0': np.array(self.goal_weight_goal_0),
         }
         return goal_args
 
     def parse_joint_space_goal(self):
         return {
             'x_goal_0': np.array(self.goal.position),
-            'weight_goal_0': np.array([self.planning_goal.subGoals()[0].weight()]),
+            'weight_goal_0': np.array(self.goal_weight_goal_0),
         }
-
-
-
-
 
     def compute_action(self):
         # Ensure right number of obstacles, if less are received fill with [100, 100, 100], if more received naively take the first ones.

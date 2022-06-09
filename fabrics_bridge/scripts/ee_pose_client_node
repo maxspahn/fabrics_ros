@@ -8,7 +8,7 @@ import tf
 # ros imports
 import rospy
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
-from fabrics_msgs.msg import FabricGoal, FabricGoalArray, FabricsObstacle, FabricsObstacleArray
+from fabrics_msgs.msg import FabricsGoal, FabricsGoalArray, FabricsObstacle, FabricsObstacleArray
 
 # Helper functions for making Point and Quaternion iterable
 def _it(self):
@@ -33,7 +33,7 @@ class ClientNode(object):
         # default number of obstacles is 20
         self._num_obs = 20
         self.init_publishers()
-        self._goal = PoseStamped()
+        self._goal = FabricsGoal()
         # ring of spheres setting
         # radius of shelf (suppose it's a circular shelf)
         self.r_shelf = 0.30
@@ -44,7 +44,7 @@ class ClientNode(object):
     def init_publishers(self):
         self._goal_publisher = rospy.Publisher(
             'fabrics/planning_goal',
-            PoseStamped, queue_size=10
+            FabricsGoal, queue_size=10
         )
         self._obs_publisher = rospy.Publisher(
             'fabrics/planning_obs',
@@ -91,21 +91,24 @@ class ClientNode(object):
             self.obs.obstacles.append(o)
         return self.obs
 
-    def publish_goal(self, pos_x, pos_y, pos_z, quat_x, quat_y, quat_z, quat_w):
-        self._goal.pose.position = Point(x=pos_x, y=pos_y, z=pos_z)
-        self._goal.pose.orientation = Quaternion(x=quat_x, y=quat_y, z=quat_z, w=quat_w)
-        self._goal.header.frame_id = "panda_link0"
+    def publish_goal(self, pos_x, pos_y, pos_z, quat_x, quat_y, quat_z, quat_w, weight_0, weight_1):
+        self._goal.goal_pose.pose.position = Point(x=pos_x, y=pos_y, z=pos_z)
+        self._goal.goal_pose.pose.orientation = Quaternion(x=quat_x, y=quat_y, z=quat_z, w=quat_w)
+        self._goal.goal_pose.header.frame_id = "panda_link0"
+        self._goal.goal_type = "ee_pose"
+        self._goal.weight_goal_0 = weight_0
+        self._goal.weight_goal_1 = weight_1
         self._goal_publisher.publish(self._goal)
 
     def publish_obs(self):
         self.obs.obstacles = []
-        ring_obs = self.ring_spheres(self._goal)
+        ring_obs = self.ring_spheres(self._goal.goal_pose)
         self.append_obstacles(ring_obs)
         self._obs_publisher.publish(self.obs)
 
     def run(self):
         while not rospy.is_shutdown():
-            self.publish_goal(0.8, 0, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475)
+            self.publish_goal(0.8, 0, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475, 1, 2)
             self.publish_obs()
             self._rate.sleep()
 
