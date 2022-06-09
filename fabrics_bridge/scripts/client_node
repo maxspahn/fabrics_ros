@@ -95,8 +95,9 @@ class ClientNode(object):
         self._goal.goal_pose.pose.position = Point(x=pos_x, y=pos_y, z=pos_z)
         self._goal.goal_pose.pose.orientation = Quaternion(x=quat_x, y=quat_y, z=quat_z, w=quat_w)
         self._goal.goal_pose.header.frame_id = "panda_link0"
-        # self._goal.weight_goal_0 = 1.0
-        # self._goal.weight_goal_1 = 2.0
+        self._goal.goal_type = "ee_pose"
+        self._goal.weight_goal_0 = 1.0
+        self._goal.weight_goal_1 = 2.0
         self._goal_publisher.publish(self._goal)
 
     def publish_obs(self):
