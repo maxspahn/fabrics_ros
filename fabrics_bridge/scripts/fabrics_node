@@ -57,6 +57,7 @@ class FabricsNode(object):
 
         self.state = FabricsState()
         self.state.goal_reached = False
+        self.state.positional_error = 1
         self.state.angular_error = 1
 
         self.init_markers()
