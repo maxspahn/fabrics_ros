@@ -57,6 +57,7 @@ class FabricsNode(object):
 
         self.state = FabricsState()
         self.state.goal_reached = False
+        self.state.positional_error = 1
         self.state.angular_error = 1
 
         self.init_markers()
@@ -309,7 +310,6 @@ class FabricsNode(object):
         )
 
     def act(self):
-        if not len(self.joint_states.name) > 0 or self.stop_acc_bool: return
         self.action_message.data = [0, 0] + list(self.compute_action())
         self.action_publisher.publish(self.action_message)
 
@@ -356,7 +356,8 @@ class FabricsNode(object):
 
     def run(self):
         while not rospy.is_shutdown():
-            if hasattr(self, 'goal'):
+            # act and evaluate only when a goal, joint_states and a correct planner are received
+            if hasattr(self, 'goal') and len(self.joint_states.name) > 0 and not self.stop_acc_bool:
                 self.act()
                 self.evaluate()
                 self.update_markers()
