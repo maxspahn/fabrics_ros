@@ -7,7 +7,7 @@ from fabrics_msgs.msg import FabricsGoal, FabricsObstacleArray
 
 class JointSpaceExampleClient(object):
     def __init__(self):
-        rospy.init_node('client_node')
+        rospy.init_node("client_node")
         self._rate = rospy.Rate(10)
         # if param num_obs is not set, default number of obstacles is 2
         self.init_publishers()
@@ -16,12 +16,10 @@ class JointSpaceExampleClient(object):
 
     def init_publishers(self):
         self._goal_publisher = rospy.Publisher(
-            'fabrics/planning_goal',
-            FabricsGoal, queue_size=10
+            "fabrics/planning_goal", FabricsGoal, queue_size=10
         )
         self._obs_publisher = rospy.Publisher(
-            'fabrics/planning_obs',
-            FabricsObstacleArray, queue_size=10
+            "fabrics/planning_obs", FabricsObstacleArray, queue_size=10
         )
 
     def publish_goal(self):
@@ -34,10 +32,11 @@ class JointSpaceExampleClient(object):
         self._goal_publisher.publish(goal)
 
     def run(self):
-        while not rospy.is_shutdown():     
+        while not rospy.is_shutdown():
             self.publish_goal()
             self._obs_publisher.publish(self.obs)
             self._rate.sleep()
+
 
 if __name__ == "__main__":
     client_node = JointSpaceExampleClient()
