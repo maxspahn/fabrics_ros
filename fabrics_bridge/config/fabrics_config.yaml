@@ -1,0 +1,25 @@
+positional_goal_tolerance : 0.1
+num_obs : 5
+angular_goal_tolerance: 0.1
+collision_bodies:
+  radius_body_panda_link1: 0.1
+  radius_body_panda_link2: 0.1
+  radius_body_panda_link3: 0.1
+  radius_body_panda_link4: 0.1
+  radius_body_panda_link5: 0.1
+  radius_body_panda_link6: 0.1
+  radius_body_panda_link7: 0.1
+  radius_body_panda_link8: 0.1
+  radius_body_panda_vacuum: 0.03
+  radius_body_panda_vacuum_2: 0.03
+collision_links: 
+  - panda_link4
+  - panda_vacuum
+  - panda_vacuum_2
+self_collision_pairs: 
+    panda_hand: 
+      - panda_link2
+    panda_vacuum:
+      - panda_link1
+      - panda_link2
+      - panda_link3
