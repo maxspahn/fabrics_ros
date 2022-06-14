@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-import rospy
-
 from geometry_msgs.msg import Point, PoseStamped, Quaternion, Vector3
 from std_msgs.msg import ColorRGBA
 from visualization_msgs.msg import Marker, MarkerArray
@@ -10,15 +8,6 @@ class FabricsMarkerManager(object):
     def __init__(self, num_obstacles: int):
         self.num_obstacles = num_obstacles
         self.init_markers()
-        self.init_publishers()
-
-    def init_publishers(self):
-        self.goal_marker_publisher = rospy.Publisher(
-            "planning_goal/marker", Marker, queue_size=10
-        )
-        self.obs_markers_publisher = rospy.Publisher(
-            "planning_obs/markers", MarkerArray, queue_size=10
-        )
 
     def init_markers(self):
         def init_marker(a, r, g, b, type=2):
@@ -47,7 +36,6 @@ class FabricsMarkerManager(object):
             self.goal_marker.color.b = 0.0 if goal_is_reached else 1.0
 
             self.goal_marker.pose = goal.pose
-            self.goal_marker_publisher.publish(self.goal_marker)
 
             for i, o in enumerate(obstacles):
                 if i >= self.num_obstacles:
@@ -59,4 +47,3 @@ class FabricsMarkerManager(object):
                 self.obs_markers.markers[i].scale = Vector3(
                     o.radius * 2, o.radius * 2, o.radius * 2
                 )
-            self.obs_markers_publisher.publish(self.obs_markers)

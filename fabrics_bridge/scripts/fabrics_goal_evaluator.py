@@ -23,7 +23,6 @@ class FabricsGoalEvaluator(object):
         self.tf_broadcaster = tf.TransformBroadcaster()
         self.load_parameters()
         rospy.sleep(1.0)
-        self.state_publisher = rospy.Publisher("state", FabricsState, queue_size=10)
 
     def load_parameters(self):
         self.positional_goal_tolerance = rospy.get_param("/positional_goal_tolerance")
@@ -81,5 +80,4 @@ class FabricsGoalEvaluator(object):
                 and self.state.angular_error < self.angular_goal_tolerance
             )
         self.state.header.stamp = rospy.Time.now()
-        self.state_publisher.publish(self.state)
         return self.state.goal_reached
