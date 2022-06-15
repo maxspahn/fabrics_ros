@@ -16,23 +16,23 @@ from fabrics_msgs.msg import (
 )
 
 # Helper functions for making Point and Quaternion iterable
-def _it(self):
+def _it_point(self):
     yield self.x
     yield self.y
     yield self.z
 
 
-Point.__iter__ = _it
+Point.__iter__ = _it_point
 
 
-def _it(self):
+def _it_quat(self):
     yield self.x
     yield self.y
     yield self.z
     yield self.w
 
 
-Quaternion.__iter__ = _it
+Quaternion.__iter__ = _it_quat
 
 
 class ClientNode(object):
@@ -40,7 +40,7 @@ class ClientNode(object):
         rospy.init_node("client_node")
         self._rate = rospy.Rate(10)
         # default number of obstacles is 20
-        self._num_obs = 5
+        self._num_obs = 20
         self.init_publishers()
         self._goal = FabricsGoal()
         # ring of spheres setting

@@ -22,6 +22,7 @@ class FabricsGoalEvaluator(object):
         self.tf_listener = tf.TransformListener()
         self.tf_broadcaster = tf.TransformBroadcaster()
         self.load_parameters()
+        self.state_publisher = rospy.Publisher("state", FabricsState, queue_size=10)
         rospy.sleep(1.0)
 
     def load_parameters(self):
@@ -29,15 +30,15 @@ class FabricsGoalEvaluator(object):
         self.angular_goal_tolerance = rospy.get_param("/angular_goal_tolerance")
 
     def evaluate(self, goal: FabricsGoal, joint_states: JointState) -> bool:
-        if isinstance(goal, JointState):
+        if goal.goal_type == 'joint_space':
             self.state.positional_error = np.linalg.norm(
-                np.array(joint_states.position) - np.array(goal.position)
+                np.array(joint_states.position) - np.array(goal.goal_joint_state.position)
             )
             self.state.angular_error = 0.0
             self.state.goal_reached = (
                 self.state.positional_error < self.positional_goal_tolerance
             )
-        elif isinstance(goal, PoseStamped):
+        elif goal.goal_type == 'ee_pose':
             # broadcast goal frame
             # Note: at 10x lower frequency than act loop, because tf
             if not hasattr(self, "eval_i"):
@@ -46,8 +47,8 @@ class FabricsGoalEvaluator(object):
             if self.eval_i % 10 == 0:
                 self.eval_i = 0
                 self.tf_broadcaster.sendTransform(
-                    list(goal.pose.position),
-                    list(goal.pose.orientation),
+                    list(goal.goal_pose.pose.position),
+                    list(goal.goal_pose.pose.orientation),
                     rospy.Time.now(),
                     "/fabrics_goal",
                     "/panda_link0",
@@ -58,7 +59,7 @@ class FabricsGoalEvaluator(object):
                 "/panda_link0", "/panda_vacuum", rospy.Time(0)
             )
             self.state.positional_error = np.linalg.norm(
-                np.array(trans) - list(goal.pose.position)
+                np.array(trans) - list(goal.goal_pose.pose.position)
             )
 
             # evaluate angular_error
@@ -80,4 +81,5 @@ class FabricsGoalEvaluator(object):
                 and self.state.angular_error < self.angular_goal_tolerance
             )
         self.state.header.stamp = rospy.Time.now()
+        self.state_publisher.publish(self.state)
         return self.state.goal_reached

@@ -1,5 +1,5 @@
 positional_goal_tolerance : 0.1
-num_obs : 5
+num_obs : 20
 angular_goal_tolerance: 0.1
 collision_bodies:
   radius_body_panda_link1: 0.1

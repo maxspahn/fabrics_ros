@@ -5,7 +5,6 @@ import rospkg
 import os
 import hashlib
 
-import tf
 from std_msgs.msg import Float64MultiArray, Bool
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point, PoseStamped, Quaternion
@@ -81,7 +80,6 @@ class FabricsNode(object):
 
         self.init_planner("joint_space")
         self.init_planner("ee_pose")
-        rospy.sleep(1.0)
         self.stop_acc_bool = False
 
 
@@ -128,7 +126,6 @@ class FabricsNode(object):
         # TODO: Add full body control robot type as an option
 
         rospack = rospkg.RosPack()
-        rospy.loginfo(goal_type)
         file_hash = self.hash_planner_configuration(goal_type)
         serialize_file = rospack.get_path("fabrics_bridge") + "/planner/" + file_hash
         if os.path.exists(serialize_file):
@@ -182,14 +179,11 @@ class FabricsNode(object):
             ):
                 self.act()
                 goal_is_reached = self.state_evaluator.evaluate(
-                    self._goal, self.joint_states
+                    self._goal_msg, self.joint_states
                 )
                 self.marker_manager.update_markers(
-                    self._goal, self.obstacles, goal_is_reached
+                    self._goal_msg, self.obstacles, goal_is_reached
                 )
-            self.state_publisher.publish(self.state_evaluator.state)
-            self.obs_markers_publisher.publish(self.marker_manager.obs_markers)
-            self.goal_marker_publisher.publish(self.marker_manager.goal_marker)
             self.rate.sleep()
 
     def init_publishers(self):
@@ -197,13 +191,6 @@ class FabricsNode(object):
         self.action_publisher = rospy.Publisher(
             "/joint_acc_des", Float64MultiArray, queue_size=10
         )
-        self.goal_marker_publisher = rospy.Publisher(
-            "planning_goal/marker", Marker, queue_size=10
-        )
-        self.obs_markers_publisher = rospy.Publisher(
-            "planning_obs/markers", MarkerArray, queue_size=10
-        )
-        self.state_publisher = rospy.Publisher("state", FabricsState, queue_size=10)
 
     def init_subscribers(self):
         self.obs_subscriber = rospy.Subscriber(
@@ -230,6 +217,7 @@ class FabricsNode(object):
         self._obstacle_runtime_arguments = self.compose_runtime_obstacles_argument()
 
     def goal_callback(self, msg: FabricsGoal):
+        self._goal_msg = msg
         self._goal, changed_planner = self.goal_wrapper.wrap(msg)
 
     def joint_states_callback(self, msg: JointState):
