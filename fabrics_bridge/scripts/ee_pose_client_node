@@ -40,7 +40,7 @@ class ClientNode(object):
         rospy.init_node("client_node")
         self._rate = rospy.Rate(10)
         # default number of obstacles is 20
-        self._num_obs = 20
+        self._num_obs = 10
         self.init_publishers()
         self._goal = FabricsGoal()
         # ring of spheres setting

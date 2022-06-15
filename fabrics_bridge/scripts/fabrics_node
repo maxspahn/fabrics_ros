@@ -76,7 +76,7 @@ class FabricsNode(object):
         self.init_publishers()
         self.init_subscribers()
         self.state_evaluator = FabricsGoalEvaluator()
-        self.marker_manager = FabricsMarkerManager(self.num_obstacles)
+        self.marker_manager = FabricsMarkerManager(self.num_obstacles, self.collision_bodies, self.collision_links, self.self_collision_pairs)
 
         self.init_planner("joint_space")
         self.init_planner("ee_pose")
