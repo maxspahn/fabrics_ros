@@ -8,5 +8,5 @@ scipy
 git+ssh://git@github.com/maxspahn/fabrics.git@develop
 
 # public repos
-git+https://github.com/maxspahn/forwardKinematics.git@main#egg=forwardKinematics
+git+https://github.com/maxspahn/forwardKinematics.git@release-1.0#egg=forwardKinematics
 git+https://github.com/maxspahn/motion_planning_scenes.git@main#egg=motion_planning_scenes
