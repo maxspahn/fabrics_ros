@@ -81,6 +81,7 @@ class FabricsNode(object):
         self.init_planner("joint_space")
         self.init_planner("ee_pose")
         self.stop_acc_bool = False
+        self._obstacle_runtime_arguments = self.compose_runtime_obstacles_argument()
 
 
     def load_parameters(self):
