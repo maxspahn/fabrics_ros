@@ -1,10 +1,28 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
+    <rosparam command="load" file="$(find fabrics_bridge)/config/fabrics_config.yaml"/>
     <include file="$(find fabrics_bridge)/launch/fabrics_node.launch" />
-
     <node name="interactive_marker" pkg="fabrics_bridge" type="interactive_marker.py">
         <param name="link_name" value="panda_link0" />
-        <remap to="/fabrics/planning_goal" from="equilibrium_pose" />
     </node>
 
+    <!-- Note: /equilibrium_pose might not published yet before launching this node,
+    as launch file doesn't guarantee any control on order of nodes.
+    ERROR: Wrong input topic (or topic field): /equilibrium_pose might happen for the first run, just rerun this launch again,
+    it won't happen again because /equilibrium_pose has already been registered in roscore.
+    -->
+    <!-- Tranfrom /equilibrium_pose[type PoseStamped] to /fabrics/planning_goal[type FabricsGoal]-->
+    <node name="pose_to_fabricsgoal" pkg="topic_tools" type="transform"
+                args="/equilibrium_pose /fabrics/planning_goal fabrics_msgs/FabricsGoal
+                'fabrics_msgs.msg.FabricsGoal(
+                    goal_pose=geometry_msgs.msg.PoseStamped(
+                        header=m.header,
+                        pose=m.pose
+                    ),
+                    goal_type=&quot;ee_pose&quot;,
+                    weight_goal_0=0.3,
+                    weight_goal_1=1,
+                )'
+                --import geometry_msgs fabrics_msgs"
+    />
 </launch>
