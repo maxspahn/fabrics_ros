@@ -6,7 +6,3 @@ scipy
 # fabrics dependencies
 # install private repo using ssh credentials
 git+ssh://git@github.com/maxspahn/fabrics.git@develop
-
-# public repos
-git+https://github.com/maxspahn/forwardKinematics.git@main#egg=forwardKinematics
-git+https://github.com/maxspahn/motion_planning_scenes.git@main#egg=motion_planning_scenes
