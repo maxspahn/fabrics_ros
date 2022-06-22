@@ -8,30 +8,39 @@ import tf
 # ros imports
 import rospy
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
-from fabrics_msgs.msg import FabricsGoal, FabricsGoalArray, FabricsObstacle, FabricsObstacleArray
+from fabrics_msgs.msg import (
+    FabricsGoal,
+    FabricsGoalArray,
+    FabricsObstacle,
+    FabricsObstacleArray,
+)
 
 # Helper functions for making Point and Quaternion iterable
-def _it(self):
+def _it_point(self):
     yield self.x
     yield self.y
     yield self.z
-Point.__iter__ = _it
 
-def _it(self):
+
+Point.__iter__ = _it_point
+
+
+def _it_quat(self):
     yield self.x
     yield self.y
     yield self.z
     yield self.w
-Quaternion.__iter__ = _it
 
+
+Quaternion.__iter__ = _it_quat
 
 
 class ClientNode(object):
     def __init__(self):
-        rospy.init_node('client_node')
+        rospy.init_node("client_node")
         self._rate = rospy.Rate(10)
         # default number of obstacles is 20
-        self._num_obs = 20
+        self._num_obs = 10
         self.init_publishers()
         self._goal = FabricsGoal()
         # ring of spheres setting
@@ -43,38 +52,48 @@ class ClientNode(object):
 
     def init_publishers(self):
         self._goal_publisher = rospy.Publisher(
-            'fabrics/planning_goal',
-            FabricsGoal, queue_size=10
+            "fabrics/planning_goal", FabricsGoal, queue_size=10
         )
         self._obs_publisher = rospy.Publisher(
-            'fabrics/planning_obs',
-            FabricsObstacleArray, queue_size=10
+            "fabrics/planning_obs", FabricsObstacleArray, queue_size=10
         )
-
 
     # given a goal pose and radius of shelf and number of sphere
     # returns points on circumference of a circle, i.e. center of each sphere
     def ring_spheres(self, pose):
 
-        '''
+        """
         quaternion_matrix returns a 4*4 homogeneous rotation matrix from quaternion
         here we need to retrieve only the 3*3 rotation transform
-        '''
-        rot_matrix = tf.transformations.quaternion_matrix(list(pose.pose.orientation))[:3, :3]
+        """
+        rot_matrix = tf.transformations.quaternion_matrix(list(pose.pose.orientation))[
+            :3, :3
+        ]
 
-        '''
+        """
         Given a center point (pos_x, pos_y, poz_z) of a circle
         and an initial circle along x-y plane (when there is no rotation, the normal vector of a circle is along z axis)
         An initial circle can be be represented as [0, radius*cos(theta),radius*sin(theta)] (polar coordinates)
         All points on a rotated circle can be obtained by using the rotation matrix
         rotated_circle = [center_x, center_y, center_z] + rot_matrix*initial_circle
-        '''
+        """
 
         # create self._num_obs * 3 initial circles (10 cm above goal)
-        initial_circles = np.array([[self.r_shelf * np.cos(i*2*np.pi/self._num_obs), self.r_shelf * np.sin(i*2*np.pi/self._num_obs), -0.1] for i in range(self._num_obs)])
+        initial_circles = np.array(
+            [
+                [
+                    self.r_shelf * np.cos(i * 2 * np.pi / self._num_obs),
+                    self.r_shelf * np.sin(i * 2 * np.pi / self._num_obs),
+                    -0.1,
+                ]
+                for i in range(self._num_obs)
+            ]
+        )
         # apply rotation matrix (3*3) to [initial_circles (num_obs*3).transpose] and transpose again
         # so that list(goal posisition) (1*3) can be added to each circle
-        rotated_circles = np.matmul(rot_matrix, initial_circles.T).T + list(pose.pose.position)
+        rotated_circles = np.matmul(rot_matrix, initial_circles.T).T + list(
+            pose.pose.position
+        )
 
         return rotated_circles
 
@@ -83,17 +102,17 @@ class ClientNode(object):
             o = FabricsObstacle()
             o.header.frame_id = "panda_link0"
             o.radius = self.r_obs
-            o.position = Point(
-                x=ring_obs[i, 0],
-                y=ring_obs[i, 1],
-                z=ring_obs[i, 2]
-            )
+            o.position = Point(x=ring_obs[i, 0], y=ring_obs[i, 1], z=ring_obs[i, 2])
             self.obs.obstacles.append(o)
         return self.obs
 
-    def publish_goal(self, pos_x, pos_y, pos_z, quat_x, quat_y, quat_z, quat_w, weight_0, weight_1):
+    def publish_goal(
+        self, pos_x, pos_y, pos_z, quat_x, quat_y, quat_z, quat_w, weight_0, weight_1
+    ):
         self._goal.goal_pose.pose.position = Point(x=pos_x, y=pos_y, z=pos_z)
-        self._goal.goal_pose.pose.orientation = Quaternion(x=quat_x, y=quat_y, z=quat_z, w=quat_w)
+        self._goal.goal_pose.pose.orientation = Quaternion(
+            x=quat_x, y=quat_y, z=quat_z, w=quat_w
+        )
         self._goal.goal_pose.header.frame_id = "panda_link0"
         self._goal.goal_type = "ee_pose"
         self._goal.weight_goal_0 = weight_0
@@ -108,16 +127,16 @@ class ClientNode(object):
 
     def run(self):
         while not rospy.is_shutdown():
-            self.publish_goal(0.8, 0, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475, 1, 2)
+            self.publish_goal(
+                0.8, 0, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475, 1, 2
+            )
             self.publish_obs()
             self._rate.sleep()
 
+
 if __name__ == "__main__":
-    ClientNode = ClientNode()
+    client_node = ClientNode()
     try:
-        ClientNode.run()
+        client_node.run()
     except rospy.ROSInterruptException:
         pass
-
-
-

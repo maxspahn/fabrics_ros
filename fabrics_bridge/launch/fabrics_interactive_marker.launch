@@ -1,12 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-    <arg name="serialize_file_name" default="" doc="Default value is an empty string. Give a name, e.g. serialize_10.pkl, you want to serialize a planner " />
-
-    <group ns="fabrics">
-        <param name="serialize_file_name" type="string" value="$(arg serialize_file_name)" />
-        <!-- start fabric node -->
-        <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen"/>
-    </group>
+    <include file="$(find fabrics_bridge)/launch/fabrics_node.launch" />
 
     <node name="interactive_marker" pkg="fabrics_bridge" type="interactive_marker.py">
         <param name="link_name" value="panda_link0" />
