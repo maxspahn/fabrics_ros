@@ -215,7 +215,7 @@ class FabricsNode(object):
         self._obstacle_runtime_arguments = self.compose_runtime_obstacles_argument()
 
     def goal_callback(self, msg: FabricsGoal):
-        if not self._goal_msg == msg:
+        if not (hasattr(self, '_goal_msg') and self._goal_msg == msg):
             self.stop_acc_bool = False
         self._goal_msg = msg
         self._goal, changed_planner = self.goal_wrapper.wrap(msg)
