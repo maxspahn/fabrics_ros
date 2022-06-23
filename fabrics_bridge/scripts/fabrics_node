@@ -230,12 +230,10 @@ class FabricsNode(object):
     def preempt_goal_callback(self, msg: Bool):
         if msg.data:
             rospy.loginfo(f"goal preempted")
-            if self._goal_msg.goal_type == "ee_pose":
-                goal_not_move = FabricsGoal(goal_pose=self._goal_msg.goal_pose, goal_type="ee_pose", weight_goal_0=0, weight_goal_1=0)
-            elif self._goal_msg.goal_type == "joint_space":
-                goal_not_move = FabricsGoal(goal_joint_state=self._goal_msg.goal_joint_state, goal_type="joint_space", weight_goal_0=0, weight_goal_1=0)
-            self._goal_msg = goal_not_move
-            self._goal, changed_planner = self.goal_wrapper.wrap(goal_not_move)
+            # only change the weights
+            self._goal_msg.weight_goal_0=0
+            self._goal_msg.weight_goal_1=0
+            self._goal, changed_planner = self.goal_wrapper.wrap(self._goal_msg)
 
     def compose_runtime_obstacles_argument(self):
         x_obst = np.full((self.num_obstacles, 3), [100.0] * 3)
