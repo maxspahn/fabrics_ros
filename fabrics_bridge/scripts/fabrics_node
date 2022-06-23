@@ -96,7 +96,6 @@ class FabricsNode(object):
             self.collision_bodies[name] = np.array([radius])
 
     def load_planner(self, goal_type):
-        self.stop_acc_bool = True
         rospack = rospkg.RosPack()
         file_hash = self.hash_planner_configuration(goal_type)
         serialize_file = rospack.get_path("fabrics_bridge") + "/planner/" + file_hash
@@ -104,12 +103,10 @@ class FabricsNode(object):
         try:
             rospy.loginfo(f"Loading planner for goal type : {goal_type}")
             self._planner = self.planners[serialize_file]
-            self.stop_acc_bool = False
         except Exception as e:
             rospy.logwarn(e)
             rospy.loginfo("Planner not found: Waiting...")
             self._goal_type = ""
-            self.stop_acc_bool = True
 
     def hash_planner_configuration(self, goal_type: str):
         hash_obstacle = hashlib.md5(str(self.num_obstacles).encode("utf-8")).hexdigest()
@@ -218,6 +215,8 @@ class FabricsNode(object):
         self._obstacle_runtime_arguments = self.compose_runtime_obstacles_argument()
 
     def goal_callback(self, msg: FabricsGoal):
+        if not self._goal_msg == msg:
+            self.stop_acc_bool = False
         self._goal_msg = msg
         self._goal, changed_planner = self.goal_wrapper.wrap(msg)
 
