@@ -5,7 +5,7 @@ import rospkg
 import os
 import hashlib
 
-from std_msgs.msg import Float64MultiArray, Bool
+from std_msgs.msg import Float64MultiArray, Empty
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point, PoseStamped, Quaternion
 from urdf_parser_py.urdf import URDF
@@ -208,9 +208,9 @@ class FabricsNode(object):
             self.joint_states_callback,
             tcp_nodelay=True,
         )
-        # stop publishing joint_acc_des once the cb is triggered
-        self.acc_stop_subscriber = rospy.Subscriber(
-            "acc_stop_request", Bool, self.acc_stop_callback
+        # preempt the previous goal once this cb is triggered
+        self.preempt_goal_subscriber = rospy.Subscriber(
+            "preempt_goal", Empty, self.preempt_goal_callback
         )
 
     def obs_callback(self, msg: FabricsObstacleArray):
@@ -227,8 +227,12 @@ class FabricsNode(object):
         self.joint_states.position = msg.position[5:]
         self.joint_states.velocity = msg.velocity[5:]
 
-    def acc_stop_callback(self, msg: Bool):
-        self.stop_acc_bool = msg.data
+    def preempt_goal_callback(self, msg: Empty):
+        rospy.loginfo(f"goal preempted")
+        # only change the weights
+        self._goal_msg.weight_goal_0=0
+        self._goal_msg.weight_goal_1=0
+        self._goal, changed_planner = self.goal_wrapper.wrap(self._goal_msg)
 
     def compose_runtime_obstacles_argument(self):
         x_obst = np.full((self.num_obstacles, 3), [100.0] * 3)
