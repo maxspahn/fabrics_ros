@@ -1,5 +1,7 @@
 # fabrics_ros
 
+[![fabrics_ros test](https://github.com/maxspahn/fabrics_ros/actions/workflows/fabrics_ros_test.yml/badge.svg?branch=ft-ci)](https://github.com/maxspahn/fabrics_ros/actions/workflows/fabrics_ros_test.yml)
+
 This is a ROS wrapper for implementing [fabrics](https://github.com/maxspahn/fabrics)
 
 > ⚠️ `fabrics` is still a private repository at the moment 
