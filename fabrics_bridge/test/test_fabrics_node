@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 
 # locally (melodic) we use python2 but in ci workflow, it's python3 as it's tested in noetic
 import rospy
