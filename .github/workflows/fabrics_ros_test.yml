@@ -1,0 +1,51 @@
+name: fabrics_ros test
+
+on:
+  push:
+    branches:
+      - ft-ci
+  pull_request:
+jobs:
+  test_environment:
+    runs-on: [ubuntu-latest]
+    strategy:
+      matrix:
+        ros_distribution:
+          - noetic
+        include:
+          - docker_image: rostooling/setup-ros-docker:ubuntu-focal-ros-noetic-desktop-latest
+            ros_distribution: noetic
+            ros_version: 1
+    container:
+      image: ${{ matrix.docker_image }}
+    steps:
+      - name: checkout fabrics
+        uses: actions/checkout@v3
+        with:
+          repository: maxspahn/fabrics
+          token: ${{ secrets.ACCESS_TOKEN }}
+      - name: install fabrics and non ros dependencies
+        run: |
+          pip3 install . --ignore-installed PyYAML
+          pip3 install numpy pykalman scipy
+
+      # - name: install non ros dependencies using requirments.txt
+      #   run: |
+      #     git config --global url."https://${{ secrets.ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      #     pip3 install -r requirements.txt
+
+      - name: setup directories
+        run: mkdir -p karen_ws/src
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          path: karen_ws/src
+      - name: build and test
+        run: |
+          sudo apt-get install -y python3-catkin-tools #install catkin_tools
+          source /opt/ros/noetic/setup.bash
+          cd karen_ws && catkin build
+          source devel/setup.bash
+          roscd fabrics_bridge/test
+          chmod +x test_fabrics_node && ./test_fabrics_node
+        shell: bash
