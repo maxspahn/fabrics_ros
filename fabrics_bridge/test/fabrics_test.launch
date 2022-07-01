@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+    <arg name="model" default="$(find fabrics_bridge)/urdf/albert.urdf"/>
+
+    <rosparam command="load" file="$(find fabrics_bridge)/config/fabrics_config.yaml"/>
+    <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
+
+    <!-- start fabric node -->
+    <group ns="fabrics">
+        <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node"/>
+    </group>
+
+    <!-- start client node [joint_space] -->
+    <node pkg="fabrics_bridge" type="joint_space_client_node" name="joint_space_client_node"/>
+
+    <!-- fabrics_processing launch -->
+    <arg name="use_kf" default="true" />
+    <!-- load config files -->
+    <rosparam file="$(find fabrics_processing)/config/joint_states_integrator.yaml"/>
+    <rosparam file="$(find fabrics_processing)/config/joint_states_filter.yaml"/>
+    <!-- start nodes -->
+    <group if="$(arg use_kf)">
+      <node pkg="fabrics_processing" type="joint_states_kf" name="joint_states_kf"/>
+    </group>
+    <group unless="$(arg use_kf)">
+      <node pkg="fabrics_processing" type="joint_states_filter" name="joint_states_filter"/>
+    </group>
+    <node pkg="fabrics_processing" type="joint_states_integrator" name="joint_states_integrator"/>
+</launch>

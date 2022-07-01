@@ -1,0 +1,56 @@
+#!/usr/bin/env python2
+
+# locally (melodic) we use python2 but in ci workflow, it's python3 as it's tested in noetic
+import rospy
+import rospkg
+import unittest
+from fabrics_msgs.msg import FabricsState
+from std_msgs.msg import Float64MultiArray
+import subprocess
+import roslaunch
+
+class TestGoalReached(unittest.TestCase):
+    def __init__(self, *args):
+        super(TestGoalReached, self).__init__(*args)
+        # initialize pkg and bagfile paths
+        rospack = rospkg.RosPack()
+        self.pkg = rospack.get_path("fabrics_bridge")
+        self.bag_path = self.pkg + "/test/joint_space.bag"
+        # roslaunch initialization (roscore)
+        uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
+        roslaunch.configure_logging(uuid)
+        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [self.pkg+"/test/fabrics_test.launch"])
+        self.launch.start()
+        rospy.loginfo("started")
+        # initialize node
+        rospy.init_node("test_goal_reached")
+        # initialize subscribers
+        state_sub = rospy.Subscriber("fabrics/state", FabricsState, self.state_callback)
+        acc_sub = rospy.Subscriber("joint_acc_des", Float64MultiArray, self.acc_callback)
+    def test_goal_reached(self):
+        # waiting for initialization of fabric_node
+        while not hasattr(self, 'acc_des'):
+            pass
+        print("fabrics is ready, play rosbag now")
+        player_proc = subprocess.Popen(['rosbag', 'play', self.bag_path], cwd=self.pkg + "/test")
+        self.start_time = rospy.Time().now()
+        # let the rosbag play for 23s
+        while self.time_out(23):
+            pass
+        self.assertTrue(self.goal_reached, "goal is not reached")
+        rospy.loginfo("goal is reached")
+        rospy.sleep(2)
+        self.launch.shutdown()
+       
+    def state_callback(self, msg):
+        self.goal_reached = msg.goal_reached
+    
+    def acc_callback(self, msg):
+        self.acc_des = msg.data
+
+    def time_out(self, sec):
+        return rospy.Time().now() - self.start_time < rospy.Duration(sec)
+
+
+if __name__ == '__main__':
+    unittest.main()
