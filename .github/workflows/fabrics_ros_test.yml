@@ -29,7 +29,7 @@ jobs:
           pip3 install . --ignore-installed PyYAML
           pip3 install numpy pykalman scipy
 
-      # - name: install non ros dependencies using requirments.txt
+      # - name: install non ros dependencies using requirments.txt (used when fabrics is not private anymore)
       #   run: |
       #     git config --global url."https://${{ secrets.ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
       #     pip3 install -r requirements.txt
@@ -44,8 +44,10 @@ jobs:
         run: |
           sudo apt-get install -y python3-catkin-tools #install catkin_tools
           source /opt/ros/noetic/setup.bash
-          cd karen_ws && catkin build
-          source devel/setup.bash
+          cd karen_ws
+          sudo rosdep init || echo "rosdep was initialized already, continue regardlessly"
+          rosdep update && rosdep install --from-paths src --ignore-src -y
+          catkin build && source devel/setup.bash
           roscd fabrics_bridge/test
           chmod +x test_fabrics_node && ./test_fabrics_node
         shell: bash
