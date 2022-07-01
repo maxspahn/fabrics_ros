@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 # locally (melodic) we use python2 but in ci workflow, it's python3 as it's tested in noetic
 import rospy
 import rospkg
@@ -27,6 +26,7 @@ class TestGoalReached(unittest.TestCase):
         # initialize subscribers
         state_sub = rospy.Subscriber("fabrics/state", FabricsState, self.state_callback)
         acc_sub = rospy.Subscriber("joint_acc_des", Float64MultiArray, self.acc_callback)
+
     def test_goal_reached(self):
         # waiting for initialization of fabric_node
         while not hasattr(self, 'acc_des'):
@@ -34,12 +34,13 @@ class TestGoalReached(unittest.TestCase):
         print("fabrics is ready, play rosbag now")
         player_proc = subprocess.Popen(['rosbag', 'play', self.bag_path], cwd=self.pkg + "/test")
         self.start_time = rospy.Time().now()
-        # let the rosbag play for 23s
+        # let the rosbag play for 23s because the duration of joint_space.bag is 21s
         while self.time_out(23):
             pass
         self.assertTrue(self.goal_reached, "goal is not reached")
         rospy.loginfo("goal is reached")
         rospy.sleep(2)
+        # shutdown fabrics_test.launch
         self.launch.shutdown()
        
     def state_callback(self, msg):
@@ -50,7 +51,6 @@ class TestGoalReached(unittest.TestCase):
 
     def time_out(self, sec):
         return rospy.Time().now() - self.start_time < rospy.Duration(sec)
-
 
 if __name__ == '__main__':
     unittest.main()
