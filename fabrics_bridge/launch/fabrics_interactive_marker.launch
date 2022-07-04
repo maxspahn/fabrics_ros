@@ -1,10 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
+    <rosparam command="load" file="$(find fabrics_bridge)/config/fabrics_config.yaml"/>
     <include file="$(find fabrics_bridge)/launch/fabrics_node.launch" />
-
     <node name="interactive_marker" pkg="fabrics_bridge" type="interactive_marker.py">
         <param name="link_name" value="panda_link0" />
-        <remap to="/fabrics/planning_goal" from="equilibrium_pose" />
     </node>
 
 </launch>
