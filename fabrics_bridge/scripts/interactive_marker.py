@@ -15,7 +15,7 @@ from geometry_msgs.msg import PoseStamped
 from franka_msgs.msg import FrankaState
 
 marker_pose = PoseStamped()
-fabrics_goal = FabricsGoal(goal_type="ee_pose", weight_goal_0=1, weight_goal_1=2)
+fabrics_goal = FabricsGoal(goal_type="ee_pose", weight_goal_0=1, weight_goal_1=0.5)
 # [[min_x, max_x], [min_y, max_y], [min_z, max_z]]ls
 position_limits = [[-0.6, 0.6], [-0.6, 0.6], [0.05, 0.9]]
 
