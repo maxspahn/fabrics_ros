@@ -1,10 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-    <arg name="num_obs" default="20" />
     <rosparam command="load" file="$(find fabrics_bridge)/config/fabrics_config.yaml"/>
     <group ns="fabrics">
-        <!-- set number of obstacles on the parameter server -->
-        <param name="num_obs" type="int" value="$(arg num_obs)" />
         <!-- start fabric node -->
         <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node" output="screen"/>
     </group>

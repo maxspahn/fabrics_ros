@@ -34,13 +34,9 @@ class JointSpaceExampleClient(object):
 
             self.obs.obstacles.append(o)
         
-
     def init_publishers(self):
         self._goal_publisher = rospy.Publisher(
             "fabrics/planning_goal", FabricsGoal, queue_size=10
-        )
-        self._obs_publisher = rospy.Publisher(
-            "fabrics/planning_obs", FabricsObstacleArray, queue_size=10
         )
 
     def publish_goal(self):
