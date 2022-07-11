@@ -3,7 +3,7 @@ name: fabrics_ros test
 on:
   push:
     branches:
-      - ft-ci
+      - master
   pull_request:
 jobs:
   test_environment:
