@@ -26,10 +26,18 @@ class FabricsGoalEvaluator(object):
         rospy.sleep(1.0)
 
     def load_parameters(self):
-        self.positional_goal_tolerance = rospy.get_param("/positional_goal_tolerance")
-        self.angular_goal_tolerance = rospy.get_param("/angular_goal_tolerance")
+        self.default_positional_goal_tolerance = rospy.get_param("/positional_goal_tolerance")
+        self.default_angular_goal_tolerance = rospy.get_param("/angular_goal_tolerance")
 
     def evaluate(self, goal: FabricsGoal, joint_states: JointState) -> bool:
+        if goal.tolerance_goal_0 == 0:
+            self.positional_goal_tolerance = self.default_positional_goal_tolerance
+        else:
+            self.positional_goal_tolerance = goal.tolerance_goal_0
+        if goal.tolerance_goal_1 == 0:
+            self.angular_goal_tolerance = self.default_angular_goal_tolerance
+        else:
+            self.angular_goal_tolerance = goal.tolerance_goal_1
         if goal.goal_type == 'joint_space':
             self.state.positional_error = np.linalg.norm(
                 np.array(joint_states.position) - np.array(goal.goal_joint_state.position)
@@ -81,5 +89,7 @@ class FabricsGoalEvaluator(object):
                 and self.state.angular_error < self.angular_goal_tolerance
             )
         self.state.header.stamp = rospy.Time.now()
+        self.state.tolerance_goal_0 = self.positional_goal_tolerance
+        self.state.tolerance_goal_1 = self.angular_goal_tolerance
         self.state_publisher.publish(self.state)
         return self.state.goal_reached
