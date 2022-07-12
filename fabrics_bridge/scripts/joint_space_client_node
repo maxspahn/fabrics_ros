@@ -2,7 +2,10 @@
 
 # ros imports
 import rospy
-from fabrics_msgs.msg import FabricsGoal, FabricsObstacleArray
+from fabrics_msgs.msg import FabricsGoal, FabricsObstacleArray, FabricsObstacle
+from geometry_msgs.msg import Point
+
+from rectangle_spheres import *
 
 
 class JointSpaceExampleClient(object):
@@ -11,7 +14,26 @@ class JointSpaceExampleClient(object):
         self._rate = rospy.Rate(10)
         # if param num_obs is not set, default number of obstacles is 2
         self.init_publishers()
+        self.obs = FabricsObstacleArray()
+        self.obs.obstacles = []
+        origin = [-0.4, 0.0, 0.33]
+        width = 0.34
+        height = 0.52
+        inflation_r = 0.05
+        extra_spheres = 0
+        rec_obs = rectangle_spheres(origin, width, height, inflation_r, extra_spheres)
+        for obs in rec_obs:
+            o = FabricsObstacle()
+            o.header.frame_id = "panda_link0"
+            o.radius = inflation_r
+            o.position = Point(
+                x=obs[0],
+                y=obs[1],
+                z=obs[2],
+            )
 
+            self.obs.obstacles.append(o)
+        
     def init_publishers(self):
         self._goal_publisher = rospy.Publisher(
             "fabrics/planning_goal", FabricsGoal, queue_size=10
@@ -21,14 +43,16 @@ class JointSpaceExampleClient(object):
         goal = FabricsGoal()
         goal.goal_joint_state.header.stamp = rospy.Time.now()
         goal.goal_joint_state.name = [f"panda_joint{i}" for i in range(7)]
-        goal.goal_joint_state.position = [0.0, -0.9, 0.0, -1.501, 0.0, 1.8675, 0.0]
+        #goal.goal_joint_state.position = [0.0, -0.9, 0.0, -1.501, 0.0, 1.8675, 0.0]
+        goal.goal_joint_state.position = [-1.7, -0.2, -1.4, -1.501, 0.0, 1.2675, 0.0]
         goal.goal_type = "joint_space"
-        goal.weight_goal_0 = 0.2
+        goal.weight_goal_0 = 1.0
         self._goal_publisher.publish(goal)
 
     def run(self):
         while not rospy.is_shutdown():
             self.publish_goal()
+            self._obs_publisher.publish(self.obs)
             self._rate.sleep()
 
 

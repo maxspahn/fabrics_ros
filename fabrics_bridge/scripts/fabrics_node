@@ -24,6 +24,48 @@ from fabrics_goal_evaluator import FabricsGoalEvaluator
 from fabrics_goal_wrapper import FabricsGoalWrapper
 from visualization_msgs.msg import Marker, MarkerArray
 
+def create_planner(urdf):
+    base_energy: str = (
+        "0.5 * 0.2 * ca.dot(xdot, xdot)"
+    )
+    collision_geometry: str = (
+        "-0.5 / (x ** 2) * xdot ** 2"
+    )
+    collision_finsler: str = (
+        "0.1/(x**2) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
+    )
+    limit_geometry: str = (
+        "-0.50 / (x ** 2) * xdot ** 2"
+    )
+    limit_finsler: str = (
+        "0.4/(x**1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
+    )
+    self_collision_geometry: str = (
+        "-0.5 / (x ** 1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot ** 2"
+    )
+    self_collision_finsler: str = (
+        "0.1/(x**2) * xdot**2"
+    )
+    attractor_potential: str = (
+        "5.0 * (ca.norm_2(x) + 1 / 10 * ca.log(1 + ca.exp(-2 * 10 * ca.norm_2(x))))"
+    )
+    attractor_metric: str = (
+        "((2.0 - 0.3) * ca.exp(-1 * (0.75 * ca.norm_2(x))**2) + 0.3) * ca.SX(np.identity(x.size()[0]))"
+    )
+    robot_type = "panda"
+    degrees_of_freedom = 7
+    return ParameterizedFabricPlanner(
+        degrees_of_freedom,
+        robot_type,
+        urdf=urdf,
+        root_link="panda_link0",
+        end_link=["panda_vacuum_2", "panda_vacuum"],
+        collision_geometry=collision_geometry,
+        collision_finsler=collision_finsler,
+        self_collision_finsler=self_collision_finsler,
+        limit_geometry=limit_geometry,
+        limit_finsler=limit_finsler,
+    )
 
 # Helpers
 def _it(self):
@@ -61,7 +103,7 @@ class FabricsNode(object):
         self.stop_acc_bool = True
         self.planners = {}
         self.goal_wrapper = FabricsGoalWrapper()
-        self.rate = rospy.Rate(500)
+        self.rate = rospy.Rate(100)
         self.load_parameters()
         # TODO get the joints list from ListControllers srv
         self.list_joints = [
@@ -133,16 +175,8 @@ class FabricsNode(object):
             rospy.loginfo(f"Planner is already serialized in {serialize_file}")
             self.planners[serialize_file] = SerializedFabricPlanner(serialize_file)
             return
-        robot_type = "panda"
-        degrees_of_freedom = 7
 
-        planner = ParameterizedFabricPlanner(
-            degrees_of_freedom,
-            robot_type,
-            urdf=self.urdf,
-            root_link="panda_link0",
-            end_link=["panda_vacuum_2", "panda_vacuum"],
-        )
+        planner = create_planner(self.urdf)
         # get the joint limits for each joint
         self.robot = URDF.from_parameter_server("/robot_description")
         joint_limits = []
@@ -175,7 +209,6 @@ class FabricsNode(object):
             # act and evaluate only when a goal, joint_states and a correct planner are received
             if (
                 hasattr(self, '_goal')
-                and len(self.joint_states.name) > 0
                 and not self.stop_acc_bool
             ):
                 self.act()
@@ -195,11 +228,13 @@ class FabricsNode(object):
 
     def init_subscribers(self):
         self.obs_subscriber = rospy.Subscriber(
-            "planning_obs", FabricsObstacleArray, self.obs_callback
+            "planning_obs", FabricsObstacleArray, self.obs_callback,
+            tcp_nodelay=True,
         )
         self.obstacles = []
         self.goal_subscriber = rospy.Subscriber(
-            "planning_goal", FabricsGoal, self.goal_callback
+            "planning_goal", FabricsGoal, self.goal_callback,
+            tcp_nodelay=True,
         )
         self.joint_states = JointState()
         self.joint_state_subscriber = rospy.Subscriber(
