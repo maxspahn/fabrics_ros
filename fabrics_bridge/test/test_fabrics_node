@@ -7,50 +7,67 @@ from fabrics_msgs.msg import FabricsState
 from std_msgs.msg import Float64MultiArray
 import subprocess
 import roslaunch
+import rosbag
+import time
 
 class TestGoalReached(unittest.TestCase):
     def __init__(self, *args):
         super(TestGoalReached, self).__init__(*args)
+        # a bool to make sure not to run ee_pose_client twice
+        self.run_ee_pose_client = True
+        # the real factor when the bag was recorded
+        self.gazebo_rt_factor = 1
         # initialize pkg and bagfile paths
         rospack = rospkg.RosPack()
         self.pkg = rospack.get_path("fabrics_bridge")
-        self.bag_path = self.pkg + "/test/joint_space.bag"
+        # bag file and duration
+        self.bag_file, self.bag_duration = self.bag("test.bag")
         # roslaunch initialization (roscore)
         uuid = roslaunch.rlutil.get_or_generate_uuid(None, False)
         roslaunch.configure_logging(uuid)
-        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [self.pkg+"/test/fabrics_test.launch"])
+        self.launch = roslaunch.parent.ROSLaunchParent(uuid, [self.pkg+"/test/test_fabrics.launch"])
         self.launch.start()
-        rospy.loginfo("started")
-        # initialize node
-        rospy.init_node("test_goal_reached")
+        rospy.loginfo("started launch file")
+        # run test_joint_state_client_node
+        joint_state_client_node = roslaunch.core.Node("fabrics_bridge", "test_joint_space_client_node")
+        jt_launch = roslaunch.scriptapi.ROSLaunch()
+        jt_launch.start()
+        self.jt_node_process = jt_launch.launch(joint_state_client_node)
+        # initialize test node
+        rospy.init_node("test_goals_reached")
         # initialize subscribers
         state_sub = rospy.Subscriber("fabrics/state", FabricsState, self.state_callback)
         acc_sub = rospy.Subscriber("joint_acc_des", Float64MultiArray, self.acc_callback)
 
-    def test_goal_reached(self):
-        # waiting for initialization of fabric_node
-        while not hasattr(self, 'acc_des'):
-            pass
-        print("fabrics is ready, play rosbag now")
-        player_proc = subprocess.Popen(['rosbag', 'play', self.bag_path], cwd=self.pkg + "/test")
-        self.start_time = rospy.Time().now()
-        # let the rosbag play for 23s because the duration of joint_space.bag is 21s
-        while self.time_out(23):
-            pass
+    def test_goals_reached(self):
+        # run the test bag
+        player_proc = subprocess.Popen(['rosbag', 'play', '--clock', '-q', '-r', str(self.gazebo_rt_factor), self.bag_file], cwd=self.pkg + "/test")
+        # sleep for bag_duration/gazebo_real_factor to let the bag file finish running
+        time.sleep(self.bag_duration/self.gazebo_rt_factor)
+        # test if the ee_pose has been reached after the bag file has been completely play
         self.assertTrue(self.goal_reached, "goal is not reached")
-        rospy.loginfo("goal is reached")
-        rospy.sleep(2)
-        # shutdown fabrics_test.launch
+        rospy.loginfo("joint space goal is reached")
+        # shutdown test_fabrics.launch
         self.launch.shutdown()
-       
+
+    # get bag path and bag duration
+    def bag(self, name):
+        path = self.pkg + "/test/" + name
+        duration = rosbag.Bag(path).get_end_time() - rosbag.Bag(path).get_start_time()
+        return path, duration
+
     def state_callback(self, msg):
         self.goal_reached = msg.goal_reached
-    
-    def acc_callback(self, msg):
-        self.acc_des = msg.data
+        # if the joint_space goal has reached, run the ee_pose_client
+        if self.goal_reached and self.run_ee_pose_client:
+            # shutdown joint_space_client_node and launch the ee_pose_client_node
+            self.jt_node_process.stop()
+            print("run test_ee_pose_client_node")
+            rosrun_proc = subprocess.Popen(['rosrun', 'fabrics_bridge', 'test_ee_pose_client_node'], cwd=self.pkg)
+            self.run_ee_pose_client = False
 
-    def time_out(self, sec):
-        return rospy.Time().now() - self.start_time < rospy.Duration(sec)
+    def acc_callback(self, msg):
+        self.joint_acc_des = msg.data
 
 if __name__ == '__main__':
     unittest.main()
