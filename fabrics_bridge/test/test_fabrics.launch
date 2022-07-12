@@ -2,16 +2,15 @@
 <launch>
     <arg name="model" default="$(find fabrics_bridge)/test/albert.urdf"/>
 
-    <rosparam command="load" file="$(find fabrics_bridge)/config/fabrics_config.yaml"/>
+    <rosparam command="load" file="$(find fabrics_bridge)/test/test_fabrics_config.yaml"/>
     <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
-
+  
+    <!-- make sure the system is using simulated time stored in a bag file -->
+    <param name ="/use_sim_time" value="true"/>
     <!-- start fabric node -->
     <group ns="fabrics">
         <node pkg="fabrics_bridge" type="fabrics_node" name="fabrics_node"/>
     </group>
-
-    <!-- start client node [joint_space] -->
-    <node pkg="fabrics_bridge" type="joint_space_client_node" name="joint_space_client_node"/>
 
     <!-- fabrics_processing launch -->
     <arg name="use_kf" default="true" />
