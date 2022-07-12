@@ -38,6 +38,9 @@ class JointSpaceExampleClient(object):
         self._goal_publisher = rospy.Publisher(
             "fabrics/planning_goal", FabricsGoal, queue_size=10
         )
+        self._obs_publisher = rospy.Publisher(
+            "fabrics/planning_obs", FabricsObstacleArray, queue_size=10
+        )
 
     def publish_goal(self):
         goal = FabricsGoal()
@@ -47,6 +50,7 @@ class JointSpaceExampleClient(object):
         goal.goal_joint_state.position = [-1.7, -0.2, -1.4, -1.501, 0.0, 1.2675, 0.0]
         goal.goal_type = "joint_space"
         goal.weight_goal_0 = 1.0
+        goal.tolerance_goal_0 = 0.02
         self._goal_publisher.publish(goal)
 
     def run(self):
