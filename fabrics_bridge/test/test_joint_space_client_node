@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+
+# ros imports
+import rospy
+from fabrics_msgs.msg import FabricsGoal, FabricsObstacleArray, FabricsObstacle
+from geometry_msgs.msg import Point
+
+
+class JointSpaceExampleClient(object):
+    def __init__(self):
+        rospy.init_node("client_node")
+        self._rate = rospy.Rate(10)
+        # if param num_obs is not set, default number of obstacles is 2
+        self.init_publishers()
+
+    def init_publishers(self):
+        self._goal_publisher = rospy.Publisher(
+            "fabrics/planning_goal", FabricsGoal, queue_size=10
+        )
+
+    def publish_goal(self):
+        goal = FabricsGoal()
+        goal.goal_joint_state.header.stamp = rospy.Time.now()
+        goal.goal_joint_state.name = [f"panda_joint{i}" for i in range(7)]
+        #goal.goal_joint_state.position = [0.0, -0.9, 0.0, -1.501, 0.0, 1.8675, 0.0]
+        goal.goal_joint_state.position = [-1.7, -0.2, -1.4, -1.501, 0.0, 1.2675, 0.0]
+        goal.goal_type = "joint_space"
+        goal.weight_goal_0 = 1.0
+        self._goal_publisher.publish(goal)
+
+    def run(self):
+        while not rospy.is_shutdown():
+            self.publish_goal()
+            self._rate.sleep()
+
+
+if __name__ == "__main__":
+    client_node = JointSpaceExampleClient()
+    try:
+        client_node.run()
+    except rospy.ROSInterruptException:
+        pass
