@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-    <arg name="model" default="$(find fabrics_bridge)/urdf/albert.urdf"/>
+    <arg name="model" default="$(find fabrics_bridge)/test/albert.urdf"/>
 
     <rosparam command="load" file="$(find fabrics_bridge)/config/fabrics_config.yaml"/>
     <param name="robot_description" command="$(find xacro)/xacro $(arg model)" />
