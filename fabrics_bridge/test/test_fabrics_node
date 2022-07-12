@@ -16,7 +16,7 @@ class TestGoalReached(unittest.TestCase):
         # a bool to make sure not to run ee_pose_client twice
         self.run_ee_pose_client = True
         # the real factor when the bag was recorded
-        self.gazebo_rt_factor = 1
+        self.gazebo_rt_factor = 0.3
         # initialize pkg and bagfile paths
         rospack = rospkg.RosPack()
         self.pkg = rospack.get_path("fabrics_bridge")
