@@ -1,0 +1,48 @@
+name: fabrics_ros test
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+jobs:
+  test_environment:
+    runs-on: [ubuntu-latest]
+    strategy:
+      matrix:
+        ros_distribution:
+          - noetic
+        include:
+          - docker_image: rostooling/setup-ros-docker:ubuntu-focal-ros-noetic-desktop-latest
+            ros_distribution: noetic
+            ros_version: 1
+    container:
+      image: ${{ matrix.docker_image }}
+    steps:
+      - name: checkout fabrics
+        uses: actions/checkout@v3
+        with:
+          repository: maxspahn/fabrics
+          token: ${{ secrets.ACCESS_TOKEN }}
+      - name: install fabrics and non ros dependencies
+        run: |
+          pip3 install . --ignore-installed PyYAML
+          pip3 install numpy pykalman scipy
+
+      # - name: install non ros dependencies using requirments.txt (used when fabrics is not private anymore)
+      #   run: |
+      #     git config --global url."https://${{ secrets.ACCESS_TOKEN }}@github.com/".insteadOf "https://github.com/"
+      #     pip3 install -r requirements.txt
+
+      - name: setup directories
+        run: mkdir -p karen_ws/src
+      - name: checkout
+        uses: actions/checkout@v3
+        with:
+          path: karen_ws/src
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: build and test
+        run: |
+          chmod +x ${GITHUB_WORKSPACE}/karen_ws/src/.github/workflows/script.sh
+          . ${GITHUB_WORKSPACE}/karen_ws/src/.github/workflows/script.sh
+        shell: bash
