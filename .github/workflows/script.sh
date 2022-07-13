@@ -1,5 +1,5 @@
 #!/bin/bash
-sudo apt-get install -y python3-catkin-tools #install catkin_tools
+sudo apt-get install -y python3-catkin-tools git-lfs #install catkin_tools
 source /opt/ros/noetic/setup.bash
 cd karen_ws
 sudo rosdep init || echo "rosdep was initialized already, continue regardlessly"
