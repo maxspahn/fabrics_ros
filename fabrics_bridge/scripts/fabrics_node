@@ -59,7 +59,7 @@ def create_planner(urdf):
         robot_type,
         urdf=urdf,
         root_link="panda_link0",
-        end_link=["panda_vacuum_2", "panda_vacuum"],
+        end_link=["panda_link5_offset", "panda_vacuum_2", "panda_vacuum"],
         collision_geometry=collision_geometry,
         collision_finsler=collision_finsler,
         self_collision_finsler=self_collision_finsler,
