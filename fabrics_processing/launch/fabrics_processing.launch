@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
     <arg name="use_kf" default="true" />
+    <arg name="use_active_inference" default="false" />
 
     <!-- load config files -->
     <rosparam file="$(find fabrics_processing)/config/joint_states_integrator.yaml"/>
@@ -14,4 +15,8 @@
       <node pkg="fabrics_processing" type="joint_states_filter" name="joint_states_filter"/>
     </group>
     <node pkg="fabrics_processing" type="joint_states_integrator" name="joint_states_integrator" output="screen"/>
+    <group if="$(arg use_active_inference)">
+      <node pkg="fabrics_processing" type="joint_state_translator" name="joint_state_translator"/>
+    </group>
+	
 </launch>

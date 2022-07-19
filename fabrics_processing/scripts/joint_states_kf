@@ -159,11 +159,14 @@ class AlbertJointStates(object):
 
     def joint_states_cb(self, data):
         obs_pos, obs_vel = [], []
-        for i, joint in enumerate(data.name):
-            if not joint in self._joint_state.name: continue
-            idx = self._joint_state.name.index(joint)
-            self._joint_state.position[idx] = data.position[i]
-            self._joint_state.velocity[idx] = data.velocity[i]
+        try:
+            for i, joint in enumerate(data.name):
+                if not joint in self._joint_state.name: continue
+                idx = self._joint_state.name.index(joint)
+                self._joint_state.position[idx] = data.position[i]
+                self._joint_state.velocity[idx] = data.velocity[i]
+        except IndexError as e:
+            rospy.logwarn("No joint states being published")
 
     @property
     def current(self):

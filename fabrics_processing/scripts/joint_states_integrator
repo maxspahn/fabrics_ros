@@ -42,8 +42,9 @@ class IntegratorNode(object):
         self._q = np.zeros(self._n)
         self._qdot = np.zeros(self._n)
         self._acc = np.zeros(self._n)
-        self._maxVel = np.ones(self._n) * 1
-        self._minVel = np.ones(self._n) * -1
+        scaling_factor = rospy.get_param('/joint_states_integrator/velocity_scaling')
+        self._maxVel = np.array(rospy.get_param("/joint_states_integrator/velocity_limits/upper")) * scaling_factor
+        self._minVel = np.array(rospy.get_param("/joint_states_integrator/velocity_limits/lower")) * scaling_factor
         self._qdot_old = np.zeros(self._n)
         self._qdot_int = np.zeros(self._n)
         """ panda specifics """
