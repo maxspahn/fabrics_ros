@@ -16,7 +16,7 @@ class OptunaNode(object):
         self._study_file = study_file
         rospy.init_node("client_node")
         self._weights = {"path_length": 0.3, "time_to_goal": 0.7}
-        self._rate = rospy.Rate(10)
+        self._rate = rospy.Rate(100)
         # if param num_obs is not set, default number of obstacles is 2
         self.init_connections()
         self.initialize_study()
@@ -120,6 +120,7 @@ class OptunaNode(object):
         rospy.set_param('/fabrics_geometries/self_collision_avoidance/fin/k', 0.1)
         rospy.set_param('/fabrics_geometries/self_collision_avoidance/geo/exp', 0.1)
         rospy.set_param('/fabrics_geometries/self_collision_avoidance/geo/k', 0.1)
+        rospy.set_param('/fabrics_geometry/base_inertia', 0.5)
 
     def publish_goal(self, weight):
         self.reset_parameters()
@@ -162,6 +163,7 @@ class OptunaNode(object):
         self.sample_parameter(trial, ['self_collision_avoidance', 'fin', 'k'], [1, 5], param_is_int=False)
         self.sample_parameter(trial, ['self_collision_avoidance', 'geo', 'exp'], [1, 5], param_is_int=True)
         self.sample_parameter(trial, ['self_collision_avoidance', 'geo', 'k'], [1, 5], param_is_int=False)
+        rospy.set_param('/fabrics_geometries/base_inertia', trial.suggest_float('base_inertia', 0, 1, log=False))
         weight = trial.suggest_float('w', 0.1, 2, log=False)
         return {'attractor_weight': weight}
             
