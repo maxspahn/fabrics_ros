@@ -2,3 +2,25 @@ joint_states_integrator:
   rate: 500
   integration_threshold: 0.0001
   acceleration_threshold: 15.0
+  velocity_scaling: 0.15
+  velocity_limits:
+          upper:
+                - 1.0
+                - 1.0
+                - 2.1750
+                - 2.1750 
+                - 2.1750
+                - 2.1750
+                - 2.6100 
+                - 2.6100 
+                - 2.6100
+          lower:
+                - -1.0
+                - -1.0
+                - -2.1750
+                - -2.1750 
+                - -2.1750
+                - -2.1750
+                - -2.6100 
+                - -2.6100 
+                - -2.6100

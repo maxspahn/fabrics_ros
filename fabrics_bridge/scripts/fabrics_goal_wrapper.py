@@ -94,7 +94,7 @@ class FabricsGoalWrapper(object):
         goal_args = {}
         for i, sub_goal in enumerate(goal.subGoals()):
             goal_args[f'x_goal_{i}'] = np.array(sub_goal.position())
-            goal_args[f'weight_goal_{i}'] = np.array([sub_goal.weight()])
+            goal_args[f'weight_goal_{i}'] = 0.5 * np.array([sub_goal.weight()])
             if hasattr(sub_goal, 'angle') and sub_goal.angle():
                 euler_goal = list(
                     tf.transformations.euler_from_quaternion(
