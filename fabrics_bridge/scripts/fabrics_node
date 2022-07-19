@@ -7,7 +7,7 @@ import hashlib
 
 from std_msgs.msg import Float64MultiArray, Empty
 from sensor_msgs.msg import JointState
-from geometry_msgs.msg import Point, PoseStamped, Quaternion
+from geometry_msgs.msg import Point, Quaternion
 from urdf_parser_py.urdf import URDF
 from fabrics_msgs.msg import (
     FabricsState,
@@ -15,14 +15,12 @@ from fabrics_msgs.msg import (
     FabricsObstacleArray,
 )
 
-from MotionPlanningGoal.goalComposition import GoalComposition
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
 from fabrics.planner.serialized_planner import SerializedFabricPlanner
 
 from fabrics_marker_manager import FabricsMarkerManager
 from fabrics_goal_evaluator import FabricsGoalEvaluator
 from fabrics_goal_wrapper import FabricsGoalWrapper
-from visualization_msgs.msg import Marker, MarkerArray
 
 def create_planner(urdf):
     base_energy: str = (
@@ -63,8 +61,10 @@ def create_planner(urdf):
         collision_geometry=collision_geometry,
         collision_finsler=collision_finsler,
         self_collision_finsler=self_collision_finsler,
+        self_collision_geometry=self_collision_geometry,
         limit_geometry=limit_geometry,
         limit_finsler=limit_finsler,
+        base_energy=base_energy,
     )
 
 # Helpers
