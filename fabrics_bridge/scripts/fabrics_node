@@ -299,6 +299,8 @@ class FabricsNode(object):
         exp_limit_fin = np.array([rospy.get_param('/fabrics_geometries/limit/fin/exp')])
         k_self_fin = np.array([rospy.get_param('/fabrics_geometries/self_collision_avoidance/fin/k')])
         exp_self_fin = np.array([rospy.get_param('/fabrics_geometries/self_collision_avoidance/fin/exp')])
+        base_inertia = np.array([rospy.get_param('/fabrics_geometries/base_inertia')])
+        self._parameter_runtime_arguments[f'base_inertia'] = base_inertia
         for i in range(self.num_obstacles):
             for link in self.collision_links:
                 self._parameter_runtime_arguments[f'exp_col_fin_obst_{i}_{link}_leaf'] = exp_col_fin

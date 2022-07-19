@@ -40,6 +40,7 @@ self_collision_pairs:
     camera_link:
       - panda_link2
 fabrics_geometries:
+  base_inertia: 0.5
   collision_avoidance:
     geo:
       k: 1.0
@@ -56,8 +57,8 @@ fabrics_geometries:
       exp: 2.0
   limit:
     geo:
-      k: 0.2
-      exp: 2.0
+      k: 2.5
+      exp: 1.0
     fin:
-      k: 0.2
-      exp: 2.0
+      k: 2.5
+      exp: 1.0
