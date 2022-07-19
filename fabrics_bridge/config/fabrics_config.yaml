@@ -30,3 +30,25 @@ self_collision_pairs:
       - panda_link3
     panda_link6:
       - panda_link4
+fabrics_geometries:
+  collision_avoidance:
+    geo:
+      k: 1.0
+      exp: 2.0
+    fin:
+      k: 1.0
+      exp: 2.0
+  self_collision_avoidance:
+    geo:
+      k: 1.0
+      exp: 2.0
+    fin:
+      k: 1.0
+      exp: 2.0
+  limit:
+    geo:
+      k: 0.2
+      exp: 2.0
+    fin:
+      k: 0.2
+      exp: 2.0

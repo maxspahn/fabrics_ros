@@ -26,25 +26,25 @@ from visualization_msgs.msg import Marker, MarkerArray
 
 def create_planner(urdf):
     base_energy: str = (
-        "0.5 * 0.2 * ca.dot(xdot, xdot)"
+        "0.5 * sym('base_inertia') * ca.dot(xdot, xdot)"
     )
     collision_geometry: str = (
-        "-0.5 / (x ** 2) * xdot ** 2"
+        "-sym('k_col_geo') / (x ** sym('exp_col_geo')) * xdot ** 2"
     )
     collision_finsler: str = (
-        "0.1/(x**2) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
+        "sym('k_col_fin')/(x**sym('exp_col_fin')) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
     )
     limit_geometry: str = (
-        "-0.50 / (x ** 2) * xdot ** 2"
+        "-sym('k_limit_geo') / (x ** sym('exp_limit_geo')) * xdot ** 2"
     )
     limit_finsler: str = (
-        "0.4/(x**1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
+        "sym('k_limit_fin')/(x**sym('exp_limit_fin')) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
     )
     self_collision_geometry: str = (
-        "-0.5 / (x ** 1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot ** 2"
+        "-sym('k_self_geo') / (x ** sym('exp_self_geo')) * (-0.5 * (ca.sign(xdot) - 1)) * xdot ** 2"
     )
     self_collision_finsler: str = (
-        "0.1/(x**2) * xdot**2"
+        "sym('k_self_fin')/(x**sym('exp_self_fin')) * xdot**2"
     )
     attractor_potential: str = (
         "5.0 * (ca.norm_2(x) + 1 / 10 * ca.log(1 + ca.exp(-2 * 10 * ca.norm_2(x))))"
@@ -119,11 +119,12 @@ class FabricsNode(object):
         self.init_subscribers()
         self.state_evaluator = FabricsGoalEvaluator()
         self.marker_manager = FabricsMarkerManager(self.num_obstacles, self.collision_bodies, self.collision_links, self.self_collision_pairs)
+        self._obstacle_runtime_arguments = self.compose_runtime_obstacles_argument()
+        self._parameter_runtime_arguments = {}
 
         self.init_planner("joint_space")
         self.init_planner("ee_pose")
         self.stop_acc_bool = False
-        self._obstacle_runtime_arguments = self.compose_runtime_obstacles_argument()
 
 
     def load_parameters(self):
@@ -255,6 +256,7 @@ class FabricsNode(object):
     def goal_callback(self, msg: FabricsGoal):
         self._goal_msg = msg
         self._goal, changed_planner = self.goal_wrapper.wrap(msg)
+        self.compose_runtime_parameter_argument()
 
     def joint_states_callback(self, msg: JointState):
         # TODO: better way of extracting just the panda joint states
@@ -284,6 +286,40 @@ class FabricsNode(object):
         obstacle_runtime_arguments.update({'x_obst': x_obst, 'radius_obst': radius_obst})
         return obstacle_runtime_arguments
 
+    def compose_runtime_parameter_argument(self):
+        k_col_geo = np.array([rospy.get_param('/fabrics_geometries/collision_avoidance/geo/k')])
+        exp_col_geo = np.array([rospy.get_param('/fabrics_geometries/collision_avoidance/geo/exp')])
+        k_limit_geo = np.array([rospy.get_param('/fabrics_geometries/limit/geo/k')])
+        exp_limit_geo = np.array([rospy.get_param('/fabrics_geometries/limit/geo/exp')])
+        k_self_geo = np.array([rospy.get_param('/fabrics_geometries/self_collision_avoidance/geo/k')])
+        exp_self_geo = np.array([rospy.get_param('/fabrics_geometries/self_collision_avoidance/geo/exp')])
+        k_col_fin = np.array([rospy.get_param('/fabrics_geometries/collision_avoidance/fin/k')])
+        exp_col_fin = np.array([rospy.get_param('/fabrics_geometries/collision_avoidance/fin/exp')])
+        k_limit_fin = np.array([rospy.get_param('/fabrics_geometries/limit/fin/k')])
+        exp_limit_fin = np.array([rospy.get_param('/fabrics_geometries/limit/fin/exp')])
+        k_self_fin = np.array([rospy.get_param('/fabrics_geometries/self_collision_avoidance/fin/k')])
+        exp_self_fin = np.array([rospy.get_param('/fabrics_geometries/self_collision_avoidance/fin/exp')])
+        for i in range(self.num_obstacles):
+            for link in self.collision_links:
+                self._parameter_runtime_arguments[f'exp_col_fin_obst_{i}_{link}_leaf'] = exp_col_fin
+                self._parameter_runtime_arguments[f'k_col_fin_obst_{i}_{link}_leaf'] = k_col_fin
+                self._parameter_runtime_arguments[f'exp_col_geo_obst_{i}_{link}_leaf'] = exp_col_geo
+                self._parameter_runtime_arguments[f'k_col_geo_obst_{i}_{link}_leaf'] = k_col_geo
+        for i in range(7):
+            for j in range(2):
+                self._parameter_runtime_arguments[f'exp_limit_fin_limit_joint_{i}_{j}_leaf'] = exp_limit_fin
+                self._parameter_runtime_arguments[f'k_limit_fin_limit_joint_{i}_{j}_leaf'] = k_limit_fin
+                self._parameter_runtime_arguments[f'exp_limit_geo_limit_joint_{i}_{j}_leaf'] = exp_limit_geo
+                self._parameter_runtime_arguments[f'k_limit_geo_limit_joint_{i}_{j}_leaf'] = k_limit_geo
+        for link, paired_links in self.self_collision_pairs.items():
+            for paired_link in paired_links:
+                self._parameter_runtime_arguments[f'exp_self_fin_self_collision_{link}_{paired_link}'] = exp_self_fin
+                self._parameter_runtime_arguments[f'k_self_fin_self_collision_{link}_{paired_link}'] = k_self_fin
+                self._parameter_runtime_arguments[f'exp_self_geo_self_collision_{link}_{paired_link}'] = exp_self_geo
+                self._parameter_runtime_arguments[f'k_self_geo_self_collision_{link}_{paired_link}'] = k_self_geo
+
+
+
 
     def compute_action(self):
         goal_runtime_arguments = self.goal_wrapper.compose_runtime_arguments(self._goal)
@@ -293,6 +329,7 @@ class FabricsNode(object):
         runtime_arguments.update(goal_runtime_arguments)
         runtime_arguments.update(self._obstacle_runtime_arguments)
         runtime_arguments.update(state_runtime_arguments)
+        runtime_arguments.update(self._parameter_runtime_arguments)
         return self._planner.compute_action(
             **runtime_arguments,
         )
