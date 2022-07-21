@@ -30,6 +30,9 @@ class FabricsGoalEvaluator(object):
         self.default_angular_goal_tolerance = rospy.get_param("/angular_goal_tolerance")
 
     def evaluate(self, goal: FabricsGoal, joint_states: JointState) -> bool:
+        if len(joint_states.position) == 0:
+            rospy.logwarn("Not receiving joint states in evaluator.")
+            return False
         if goal.tolerance_goal_0 == 0:
             self.positional_goal_tolerance = self.default_positional_goal_tolerance
         else:
