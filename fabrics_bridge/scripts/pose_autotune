@@ -15,39 +15,61 @@ import quaternionic
 from fabrics_bridge.rectangle_spheres import *
 from fabrics_bridge.optuna_node import OptunaNode
 
+"""
 def generate_random_orientation(w_amp, z_amp):
-    quat_array =  np.array([-0.707 + np.random.random(1) * w_amp, 0, -0.707 + np.random.random(1) * z_amp, 0])
+    quat_array =  np.array([-0.707 + np.random.random(1)[0] * w_amp, 0, -0.707 + np.random.random(1)[0] * z_amp, 0])
     return quat_array/np.linalg.norm(quat_array)
+"""
+
+def generate_random_orientation(mean, rotation=0.0, tilting=0.0):
+    """
+    Generate random orientation of feasible reaching tasks.
+
+    params
+    mean:list
+        mean of quaternion, good: mean = [0.0, 0.707, 0.0, 0.0]
+    rotation: float
+        amount of rotation around z axis
+    tilting: float
+        amount of tilting
+    """
+    lower_limit = np.array([0, 0, -rotation, -tilting])
+    upper_limit = np.array([0, 0, rotation, tilting])
+    orientation = np.array(mean) + np.random.uniform(lower_limit, upper_limit, 4)
+    orientation /= np.linalg.norm(orientation)
+    return orientation.tolist()
+
+def generate_random_position():
+    return np.random.uniform(np.array([0.7, -0.2, 0.6]), np.array([0.9, 0.2, 0.7]), 3)
+
 
 
 class PoseOptunaNode(OptunaNode):
-    def __init__(self, study_file: str = None):
-        super().__init__(study_file=study_file)
+    def __init__(self):
+        super().__init__()
         self._obstacle_resolution = 10
         self.tf_listener = tf.TransformListener()
 
-    def publish_goal(self, weight):
+    def publish_goal(self):
         self.goal = FabricsGoal()
-        self.goal.goal_pose.pose.position.x = np.random.random(1) * 0.2 + 0.6
-        self.goal.goal_pose.pose.position.y = np.random.random(1) * 0.8 - 0.4
-        self.goal.goal_pose.pose.position.z = np.random.random(1) * 0.5 + 0.3
-        goal_orientation = generate_random_orientation(0.3, 0.4)
-        self.goal.goal_pose.pose.orientation.x = goal_orientation[0]
-        self.goal.goal_pose.pose.orientation.y = goal_orientation[1]
-        self.goal.goal_pose.pose.orientation.z = goal_orientation[2]
-        self.goal.goal_pose.pose.orientation.w = goal_orientation[3]
+        position = generate_random_position()
+        self.goal.goal_pose.pose.position.x = position[0]
+        self.goal.goal_pose.pose.position.y = position[1]
+        self.goal.goal_pose.pose.position.z = position[2]
+        mean = [-0.707, 0, -0.707, 0.0]
+        self._goal_orientation = generate_random_orientation(mean, rotation=0.1, tilting=0.1)
+        self.goal.goal_pose.header.frame_id = "panda_link0"
+        self.goal.goal_pose.pose.orientation.w = self._goal_orientation[0]
+        self.goal.goal_pose.pose.orientation.x = self._goal_orientation[1]
+        self.goal.goal_pose.pose.orientation.y = self._goal_orientation[2]
+        self.goal.goal_pose.pose.orientation.z = self._goal_orientation[3]
         self.goal.goal_type = "ee_pose"
-        self.goal.weight_goal_0 = weight
-        self.goal.weight_goal_1 = weight * 2
+        self.goal.weight_goal_0 = 1.0
+        self.goal.weight_goal_1 = 2.0
         self.goal.tolerance_goal_0 = 0.02
         self.goal.tolerance_goal_1 = 0.02
-        self._goal_reached = 0
         for _ in range(10):
             self._goal_publisher.publish(self.goal)
-
-    def sample_fabrics_params(self, trial):
-        weight = trial.suggest_float('w', 0.1, 2, log=False)
-        return {'attractor_weight': weight}
 
     def get_current_pose(self):
         trans, _ = self.tf_listener.lookupTransform("panda_link0", "panda_vacuum", rospy.Time(0))
@@ -56,7 +78,7 @@ class PoseOptunaNode(OptunaNode):
     # returns points on circumference of a circle, i.e. center of each sphere
     def ring_spheres(self):
         self.obs = FabricsObstacleArray()
-        ring_orientation = generate_random_orientation(0.3, 0.3)
+        ring_orientation = generate_random_orientation(self._goal_orientation, rotation=0.1, tilting=0.1)
         rotation_matrix_ring = quaternionic.array(ring_orientation).to_rotation_matrix
         whole_position = np.array(
                 [
@@ -64,7 +86,7 @@ class PoseOptunaNode(OptunaNode):
                     self.goal.goal_pose.pose.position.y,
                     self.goal.goal_pose.pose.position.z
                 ]
-            )[:,0]
+            )
         radius_ring = 0.31
         for i in range(self._obstacle_resolution + 1):
             angle = i/self._obstacle_resolution * 2.*np.pi
@@ -84,11 +106,11 @@ class PoseOptunaNode(OptunaNode):
 
     def objective(self, trial):
         self.return_home()
+        if self.stopped():
+            return 100
         params = self.sample_fabrics_params(trial)
-        weight = params['attractor_weight']
-        self._goal_reached = 0
         self._manually_ended = False
-        self.publish_goal(weight)
+        self.publish_goal()
         self.ring_spheres()
         # Initialize costs
         goal_position = np.array([self.goal.goal_pose.pose.position.x, self.goal.goal_pose.pose.position.y, self.goal.goal_pose.pose.position.z])
@@ -96,24 +118,24 @@ class PoseOptunaNode(OptunaNode):
         path_length = 0.0
         distance_to_goal = 0.0
         for number_steps in range(self._maximum_steps):
-            if number_steps % 10000 == 0:
+            if number_steps % 100 == 0:
                 rospy.loginfo(f"Ran {number_steps} steps")
-            self._rate.sleep()
+            self._goal_publisher.publish(self.goal)
             distance_to_goal += np.linalg.norm(self.get_current_pose() - goal_position)/initial_distance_to_goal
             path_length += np.linalg.norm(self._joint_positions - self._old_joint_positions)
             self._old_joint_positions = self._joint_positions
-            if self._goal_reached > 100:
-                break
             if self._manually_ended:
                 return 100
+            self._rate.sleep()
         costs = {
             "path_length": path_length/initial_distance_to_goal,
-            "time_to_goal": distance_to_goal/number_steps,
+            "time_to_goal": distance_to_goal/self._maximum_steps,
         }
         return self.total_costs(costs)
 
 if __name__ == "__main__":
-    optuna_node = PoseOptunaNode('pose_tuned.pkl')
+    #optuna_node = PoseOptunaNode(study_file="panda_tuned.pkl")
+    optuna_node = PoseOptunaNode()
     try:
         optuna_node.run()
     except rospy.ROSInterruptException:

@@ -1,0 +1,7 @@
+optuna:
+  weights:
+    path_length: 0
+    time_to_goal: 1
+  number_trials: 10
+  maximum_time_steps: 400
+  study_file: panda_study.pkl
