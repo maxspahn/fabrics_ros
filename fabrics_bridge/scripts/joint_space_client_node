@@ -5,7 +5,7 @@ import rospy
 from fabrics_msgs.msg import FabricsGoal, FabricsObstacleArray, FabricsObstacle
 from geometry_msgs.msg import Point
 
-from rectangle_spheres import *
+from fabrics_bridge.rectangle_spheres import *
 
 
 class JointSpaceExampleClient(object):
@@ -24,7 +24,7 @@ class JointSpaceExampleClient(object):
         rec_obs = rectangle_spheres(origin, width, height, inflation_r, extra_spheres)
         for obs in rec_obs:
             o = FabricsObstacle()
-            o.header.frame_id = "panda_link0"
+            o.header.frame_id = rospy.get_param("/root_link")
             o.radius = inflation_r
             o.position = Point(
                 x=obs[0],
@@ -45,9 +45,9 @@ class JointSpaceExampleClient(object):
     def publish_goal(self):
         goal = FabricsGoal()
         goal.goal_joint_state.header.stamp = rospy.Time.now()
-        goal.goal_joint_state.name = [f"panda_joint{i}" for i in range(7)]
-        #goal.goal_joint_state.position = [0.0, -0.9, 0.0, -1.501, 0.0, 1.8675, 0.0]
-        goal.goal_joint_state.position = [-1.7, -0.2, -1.4, -1.501, 0.0, 1.2675, 0.0]
+        goal.goal_joint_state.name = rospy.get_param('/joint_names')
+        goal.goal_joint_state.position = [0.0, -0.0, 0.0, -1.501, 0.0, 1.8675, 0.0]
+        #goal.goal_joint_state.position = [-1.7, -0.2, -1.4, -1.501, 0.0, 1.2675, 0.0]
         goal.goal_type = "joint_space"
         goal.weight_goal_0 = 1.0
         goal.tolerance_goal_0 = 0.02

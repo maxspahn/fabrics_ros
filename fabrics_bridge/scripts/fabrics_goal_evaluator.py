@@ -59,12 +59,12 @@ class FabricsGoalEvaluator(object):
                     list(goal.goal_pose.pose.orientation),
                     rospy.Time.now(),
                     "/fabrics_goal",
-                    "/panda_link0",
+                    rospy.get_param("/root_link"),
                 )
 
             # evaluate positional_error
             trans, _ = self.tf_listener.lookupTransform(
-                "/panda_link0", "/panda_vacuum", rospy.Time(0)
+                rospy.get_param("/root_link"), rospy.get_param("/end_effector_link"), rospy.Time(0)
             )
             self.state.positional_error = np.linalg.norm(
                 np.array(trans) - list(goal.goal_pose.pose.position)
@@ -73,7 +73,7 @@ class FabricsGoalEvaluator(object):
             # evaluate angular_error
             # Note: this is done by taking the L2 norm between a point at z=0.5 along the '/panda_link8' frame and transforming it to the goal frame
             p1 = PoseStamped()
-            p1.header.frame_id = "/panda_vacuum"
+            p1.header.frame_id = rospy.get_param("/end_effector_link")
             p1.pose.position = Point(x=0, y=0, z=0.5)
             try:
                 p2 = self.tf_listener.transformPose("/fabrics_goal", p1)

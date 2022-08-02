@@ -52,14 +52,14 @@ def create_planner(urdf):
     attractor_metric: str = (
         "((2.0 - 0.3) * ca.exp(-1 * (0.75 * ca.norm_2(x))**2) + 0.3) * ca.SX(np.identity(x.size()[0]))"
     )
-    robot_type = "panda"
+    robot_type = rospy.get_param("/robot_type")
     degrees_of_freedom = 7
     return ParameterizedFabricPlanner(
         degrees_of_freedom,
         robot_type,
         urdf=urdf,
-        root_link="panda_link0",
-        end_link=["panda_link5_offset", "panda_vacuum_2", "panda_vacuum", "camera_link"],
+        root_link=rospy.get_param("/root_link"),
+        end_link=rospy.get_param("/end_links"),
         collision_geometry=collision_geometry,
         collision_finsler=collision_finsler,
         self_collision_finsler=self_collision_finsler,
@@ -105,16 +105,7 @@ class FabricsNode(object):
         self.goal_wrapper = FabricsGoalWrapper()
         self.rate = rospy.Rate(100)
         self.load_parameters()
-        # TODO get the joints list from ListControllers srv
-        self.list_joints = [
-            "panda_joint1",
-            "panda_joint2",
-            "panda_joint3",
-            "panda_joint4",
-            "panda_joint5",
-            "panda_joint6",
-            "panda_joint7",
-        ]
+        self.joint_names = rospy.get_param("/joint_names")
         self.init_publishers()
         self.init_subscribers()
         self.state_evaluator = FabricsGoalEvaluator()
@@ -176,11 +167,12 @@ class FabricsNode(object):
             self.planners[serialize_file] = SerializedFabricPlanner(serialize_file)
             return
 
+        rospy.loginfo(f"Creating the planner for goal_type:  {goal_type}")
         planner = create_planner(self.urdf)
         # get the joint limits for each joint
         self.robot = URDF.from_parameter_server("/robot_description")
         joint_limits = []
-        for i in self.list_joints:
+        for i in self.joint_names:
             joint_limits.append(
                 [
                     self.robot.joint_map[i].limit.lower,
