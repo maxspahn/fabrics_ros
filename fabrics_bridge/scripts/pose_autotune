@@ -6,6 +6,7 @@ import tf
 from fabrics_msgs.msg import FabricsGoal, FabricsObstacleArray, FabricsObstacle, FabricsState
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point
+from std_msgs.msg import Empty
 
 from pynput.keyboard import Listener,KeyCode
 import joblib
@@ -104,11 +105,15 @@ class PoseOptunaNode(OptunaNode):
         self._obs_publisher.publish(self.obs)
 
 
-    def objective(self, trial):
+
+    def objective(self, trial=None):
         self.return_home()
         if self.stopped():
             return 100
-        params = self.sample_fabrics_params(trial)
+        if trial:
+            self.sample_fabrics_params(trial)
+        else:
+            self.select_best_params()
         self._manually_ended = False
         self.publish_goal()
         self.ring_spheres()
