@@ -30,6 +30,9 @@ class FabricsGoalEvaluator(object):
         self.default_angular_goal_tolerance = rospy.get_param("/angular_goal_tolerance")
 
     def evaluate(self, goal: FabricsGoal, joint_states: JointState) -> bool:
+        if rospy.get_param("/planner_type") == "nonholonomic":
+            rospy.logwarn("Planning state evaluation not available for nonholonomic robots.")
+            return False
         if goal.tolerance_goal_0 == 0:
             self.positional_goal_tolerance = self.default_positional_goal_tolerance
         else:
@@ -80,7 +83,8 @@ class FabricsGoalEvaluator(object):
                 self.state.angular_error = np.linalg.norm(
                     np.array(list(p1.pose.position)) - list(p2.pose.position)
                 )
-            except Exception as _:
+            except Exception as e:
+                rospy.loginfo(e)
                 rospy.loginfo("Waiting for tf to be on time.")
 
             # update state

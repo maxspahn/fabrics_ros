@@ -38,15 +38,17 @@ class FabricsGoalWrapper(object):
 
     def compose_goal(self, goal_msg: FabricsGoal):
         if goal_msg.goal_type == "ee_pose":
+            indices = rospy.get_param('/goal_indices')
+            goal_position = [list(goal_msg.goal_pose.pose.position)[i] for i in indices]
             goal_dict = {
                 "position": {
-                    "m": 3,
+                    "m": len(indices),
                     "w": goal_msg.weight_goal_0,
                     "prime": True,
-                    "indices": [0, 1, 2],
+                    "indices": indices, 
                     "parent_link": rospy.get_param("/root_link"),
                     "child_link": rospy.get_param("/end_effector_link"),
-                    "desired_position": list(goal_msg.goal_pose.pose.position),
+                    "desired_position": goal_position,
                     "epsilon": 0.01,
                     "type": "staticSubGoal",
                 },
@@ -86,7 +88,7 @@ class FabricsGoalWrapper(object):
         goal_msg = FabricsGoal()
         goal_msg.goal_type = goal_type
         if goal_type == 'joint_space':
-            goal_msg.goal_joint_state.position = [0, ] * 7
+            goal_msg.goal_joint_state.position = [0, ] * rospy.get_param("/degrees_of_freedom")
         return self.compose_goal(goal_msg)
         
 

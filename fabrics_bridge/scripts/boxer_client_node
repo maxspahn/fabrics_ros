@@ -1,0 +1,103 @@
+#!/usr/bin/env python3
+# general python imports
+import numpy as np
+import math
+import time
+import tf
+
+# ros imports
+import rospy
+from geometry_msgs.msg import PoseStamped, Point, Quaternion
+from fabrics_msgs.msg import (
+    FabricsGoal,
+    FabricsGoalArray,
+    FabricsObstacle,
+    FabricsObstacleArray,
+)
+
+# Helper functions for making Point and Quaternion iterable
+def _it_point(self):
+    yield self.x
+    yield self.y
+    yield self.z
+
+
+Point.__iter__ = _it_point
+
+
+def _it_quat(self):
+    yield self.x
+    yield self.y
+    yield self.z
+    yield self.w
+
+
+Quaternion.__iter__ = _it_quat
+
+
+class ClientNode(object):
+    def __init__(self):
+        rospy.init_node("client_node")
+        self._rate = rospy.Rate(10)
+        # default number of obstacles is 20
+        self._num_obs = 1
+        self.init_publishers()
+        self._goal = FabricsGoal()
+        # ring of spheres setting
+        # radius of shelf (suppose it's a circular shelf)
+        self.r_shelf = 0.30
+        # diameter of a sphere
+        self.r_obs = 0.15
+        self.obs = FabricsObstacleArray()
+        self._obstacles = [[2.0, 2.0, 0.0]]
+
+    def init_publishers(self):
+        self._goal_publisher = rospy.Publisher(
+            "fabrics/planning_goal", FabricsGoal, queue_size=10
+        )
+        self._obs_publisher = rospy.Publisher(
+            "fabrics/planning_obs", FabricsObstacleArray, queue_size=10
+        )
+
+    def append_obstacles(self, ring_obs):
+        for obst in self._obstacles:
+            o = FabricsObstacle()
+            o.header.frame_id = rospy.get_param("/root_link")
+            o.radius = self.r_obs
+            o.position = Point(x=obst[0], y=obst[1], z=obst[2])
+            self.obs.obstacles.append(o)
+        return self.obs
+
+    def publish_goal(
+        self, pos_x, pos_y, pos_z, quat_x, quat_y, quat_z, quat_w, weight_0, weight_1
+    ):
+        self._goal.goal_pose.pose.position = Point(x=pos_x, y=pos_y, z=pos_z)
+        self._goal.goal_pose.pose.orientation = Quaternion(
+            x=quat_x, y=quat_y, z=quat_z, w=quat_w
+        )
+        self._goal.goal_pose.header.frame_id = rospy.get_param("/root_link")
+        self._goal.goal_type = "ee_pose"
+        self._goal.weight_goal_0 = weight_0
+        self._goal.weight_goal_1 = weight_1
+        self._goal_publisher.publish(self._goal)
+
+    def publish_obs(self):
+        self.obs.obstacles = []
+        self.append_obstacles(self._obstacles)
+        self._obs_publisher.publish(self.obs)
+
+    def run(self):
+        while not rospy.is_shutdown():
+            self.publish_goal(
+                4.0, 4.0, 0.10, 0, -0.7071067811865475, 0, -0.7071067811865475, 1, 0
+            )
+            self.publish_obs()
+            self._rate.sleep()
+
+
+if __name__ == "__main__":
+    client_node = ClientNode()
+    try:
+        client_node.run()
+    except rospy.ROSInterruptException:
+        pass
