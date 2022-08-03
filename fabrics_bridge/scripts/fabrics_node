@@ -70,10 +70,10 @@ def create_planner(urdf, planner_type: str):
         )
     if planner_type == "nonholonomic":
         collision_geometry: str = (
-            "-3.5 / (x ** 1) * xdot ** 2"
+            "-sym('k_geo_col') / (x ** 1) * xdot ** 2"
         )
         collision_finsler: str = (
-            "1.0/(x**1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
+            "sym('k_fin_col')/(x**1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
         )
         return NonHolonomicParameterizedFabricPlanner(
             degrees_of_freedom,
@@ -124,6 +124,7 @@ class FabricsNode(object):
         self.changed_planner = True
         self.stop_acc_bool = True
         self.planners = {}
+        self._runtime_arguments = {}
         self.goal_wrapper = FabricsGoalWrapper()
         self.rate = rospy.Rate(100)
         self.load_parameters()
@@ -140,7 +141,27 @@ class FabricsNode(object):
         self.init_planner("joint_space")
         self.init_planner("ee_pose")
         self.stop_acc_bool = False
-        self._obstacle_runtime_arguments = self.compose_runtime_obstacles_argument()
+        self.init_runtime_arguments()
+        self.compose_runtime_obstacles_argument()
+
+    def init_runtime_arguments(self):
+        if self._planner_type == 'nonholonomic':
+            self._runtime_arguments.update({
+                "m_arm": np.array([rospy.get_param("/m_arm")]),
+                "m_base_x": np.array([rospy.get_param("/m_base")]),
+                "m_base_y": np.array([rospy.get_param("/m_base")]),
+                "m_rot": np.array([rospy.get_param("/m_rot")])
+            })
+            parameters = {}
+            k_fin_col = np.array([rospy.get_param("/k_fin_col")])
+            k_geo_col = np.array([rospy.get_param("/k_geo_col")])
+            for i in range(self.num_obstacles):
+                for collision_link in self.collision_links:
+                    parameters[f'k_fin_col_obst_{i}_{collision_link}_leaf'] = k_fin_col
+                    parameters[f'k_geo_col_obst_{i}_{collision_link}_leaf'] = k_geo_col
+            self._runtime_arguments.update(parameters)
+        else:
+            self._runtime_arguments = {}
 
 
     def load_parameters(self):
@@ -307,30 +328,18 @@ class FabricsNode(object):
                 break
             x_obst[i, :] = list(o.position)
             radius_obst[i] = o.radius
-        obstacle_runtime_arguments = self.collision_bodies
-        obstacle_runtime_arguments.update({'x_obst': x_obst, 'radius_obst': radius_obst})
-        return obstacle_runtime_arguments
+        self._runtime_arguments.update(self.collision_bodies)
+        self._runtime_arguments.update({'x_obst': x_obst, 'radius_obst': radius_obst})
 
 
     def compute_action(self):
-        goal_runtime_arguments = self.goal_wrapper.compose_runtime_arguments(self._goal)
-        state_runtime_arguments = {'q': list(self.joint_states.position), 'qdot': list(self.joint_states.velocity)}
-        if self._planner_type == 'nonholonomic':
-            runtime_arguments = {
-                "m_arm": np.array([rospy.get_param("/m_arm")]),
-                "m_base_x": np.array([rospy.get_param("/m_base")]),
-                "m_base_y": np.array([rospy.get_param("/m_base")]),
-                "m_rot": np.array([rospy.get_param("/m_rot")])
-            }
-            state_runtime_arguments['qudot'] =  list(self._qudot)
-        else:
-            runtime_arguments = {}
-
-        runtime_arguments.update(goal_runtime_arguments)
-        runtime_arguments.update(self._obstacle_runtime_arguments)
-        runtime_arguments.update(state_runtime_arguments)
+        self.goal_wrapper.compose_runtime_arguments(self._goal, self._runtime_arguments)
+        self._runtime_arguments['q'] = list(self.joint_states.position)
+        self._runtime_arguments['qdot'] = list(self.joint_states.velocity)
+        if self._planner_type == "nonholonomic":
+            self._runtime_arguments['qudot'] =  list(self._qudot)
         return self._planner.compute_action(
-            **runtime_arguments,
+            **self._runtime_arguments,
         )
 
     def act(self):

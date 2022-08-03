@@ -30,8 +30,8 @@ class FabricsGoalEvaluator(object):
         self.default_angular_goal_tolerance = rospy.get_param("/angular_goal_tolerance")
 
     def evaluate(self, goal: FabricsGoal, joint_states: JointState) -> bool:
-        if rospy.get_param("/planner_type") == "nonholonomic":
-            rospy.logwarn("Planning state evaluation not available for nonholonomic robots.")
+        if rospy.get_param("/robot_type") == "boxer":
+            rospy.logwarn("Planning state evaluation not available for boxer robot")
             return False
         if goal.tolerance_goal_0 == 0:
             self.positional_goal_tolerance = self.default_positional_goal_tolerance

@@ -92,11 +92,10 @@ class FabricsGoalWrapper(object):
         return self.compose_goal(goal_msg)
         
 
-    def compose_runtime_arguments(self, goal: GoalComposition) -> dict:
-        goal_args = {}
+    def compose_runtime_arguments(self, goal: GoalComposition, runtime_arguments: dict) -> None:
         for i, sub_goal in enumerate(goal.subGoals()):
-            goal_args[f'x_goal_{i}'] = np.array(sub_goal.position())
-            goal_args[f'weight_goal_{i}'] = 0.5 * np.array([sub_goal.weight()])
+            runtime_arguments[f'x_goal_{i}'] = np.array(sub_goal.position())
+            runtime_arguments[f'weight_goal_{i}'] = 0.5 * np.array([sub_goal.weight()])
             if hasattr(sub_goal, 'angle') and sub_goal.angle():
                 euler_goal = list(
                     tf.transformations.euler_from_quaternion(
@@ -106,5 +105,4 @@ class FabricsGoalWrapper(object):
                 rot_mat = tf.transformations.euler_matrix(
                     -euler_goal[1], -euler_goal[0], 0, "ryxz"
                 )[:3, :3]
-                goal_args[f'angle_goal_{i}'] = rot_mat
-        return goal_args
+                runtime_arguments[f'angle_goal_{i}'] = rot_mat
