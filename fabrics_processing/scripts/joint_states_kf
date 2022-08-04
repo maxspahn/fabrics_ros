@@ -72,6 +72,7 @@ class JointStatesKF(object):
         )
 
     def pub_filtered_states(self):
+        self._joint_states_filtered.header.stamp = rospy.Time.now()
         self._joint_states_filtered.position     = list(self._filtered_state_means[:self.num_joints])
         self._joint_states_filtered.velocity     = list(self._filtered_state_means[self.num_joints:2*self.num_joints])
 
