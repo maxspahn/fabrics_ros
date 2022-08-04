@@ -25,71 +25,7 @@ from fabrics_marker_manager import FabricsMarkerManager
 from fabrics_goal_evaluator import FabricsGoalEvaluator
 from fabrics_bridge.planner_creation import create_planner
 from fabrics_goal_wrapper import FabricsGoalWrapper
-from visualization_msgs.msg import Marker, MarkerArray
-
-def create_planner(urdf, planner_type: str):
-    base_energy: str = (
-        "0.5 * 0.2 * ca.dot(xdot, xdot)"
-    )
-    collision_geometry: str = (
-        "-0.5 / (x ** 2) * xdot ** 2"
-    )
-    collision_finsler: str = (
-        "0.1/(x**2) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
-    )
-    limit_geometry: str = (
-        "-0.50 / (x ** 2) * xdot ** 2"
-    )
-    limit_finsler: str = (
-        "0.4/(x**1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
-    )
-    self_collision_geometry: str = (
-        "-0.5 / (x ** 1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot ** 2"
-    )
-    self_collision_finsler: str = (
-        "0.1/(x**2) * xdot**2"
-    )
-    attractor_potential: str = (
-        "5.0 * (ca.norm_2(x) + 1 / 10 * ca.log(1 + ca.exp(-2 * 10 * ca.norm_2(x))))"
-    )
-    attractor_metric: str = (
-        "((2.0 - 0.3) * ca.exp(-1 * (0.75 * ca.norm_2(x))**2) + 0.3) * ca.SX(np.identity(x.size()[0]))"
-    )
-    robot_type = rospy.get_param("/robot_type")
-    degrees_of_freedom = rospy.get_param("/degrees_of_freedom")
-    if planner_type == "holonomic":
-        return ParameterizedFabricPlanner(
-            degrees_of_freedom,
-            robot_type,
-            urdf=urdf,
-            root_link=rospy.get_param("/root_link"),
-            end_link=rospy.get_param("/end_links"),
-            collision_geometry=collision_geometry,
-            collision_finsler=collision_finsler,
-            self_collision_finsler=self_collision_finsler,
-            limit_geometry=limit_geometry,
-            limit_finsler=limit_finsler,
-        )
-    if planner_type == "nonholonomic":
-        collision_geometry: str = (
-            "-sym('k_geo_col') / (x ** 1) * xdot ** 2"
-        )
-        collision_finsler: str = (
-            "sym('k_fin_col')/(x**1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
-        )
-        return NonHolonomicParameterizedFabricPlanner(
-            degrees_of_freedom,
-            robot_type,
-            urdf=urdf,
-            root_link=rospy.get_param("/root_link"),
-            end_link=rospy.get_param("/end_links"),
-            collision_geometry=collision_geometry,
-            collision_finsler=collision_finsler,
-            self_collision_finsler=self_collision_finsler,
-            limit_geometry=limit_geometry,
-            limit_finsler=limit_finsler,
-            l_offset=rospy.get_param("/l_offset"),
-        )
+from visualization_msgs.msg import Marker
 
 # Helpers
 def _it(self):
@@ -133,7 +69,8 @@ class FabricsNode(object):
         self.joint_names = rospy.get_param("/joint_names")
         self._index_list = rospy.get_param("/index_list")
         self._planner_type = rospy.get_param("/planner_type")
-        if self._planner_type == "nonholonomic":
+        self._kinematic_type = rospy.get_param("/kinematic_type")
+        if self._kinematic_type == "nonholonomic":
             self._index_list_qudot = rospy.get_param("/index_list_qudot")
         self.init_publishers()
         self.init_subscribers()
@@ -147,7 +84,7 @@ class FabricsNode(object):
         self.compose_runtime_obstacles_argument()
 
     def init_runtime_arguments(self):
-        if self._planner_type == 'nonholonomic':
+        if self._kinematic_type == 'nonholonomic':
             self._runtime_arguments.update({
                 "m_arm": np.array([rospy.get_param("/m_arm")]),
                 "m_base_x": np.array([rospy.get_param("/m_base")]),
@@ -204,13 +141,16 @@ class FabricsNode(object):
         hash_collision_links = list_to_unique_hash(self.collision_links)
         hash_goal_type = hashlib.md5(goal_type.encode("utf-8")).hexdigest()
         hash_planner_type = self._planner_type
+        hash_kinematic_type = self._kinematic_type
+        hash_robot_type = rospy.get_param("/robot_type")
         return (
-            hash_robot_type
+            hash_robot_type + "_" 
+            + hash_goal_type + "_"
+            + hash_planner_type + "_"
+            + hash_kinematic_type + "_"
             + hash_obstacle
             + hash_self_collision_pairs
             + hash_collision_links
-            + hash_goal_type
-            + hash_planner_type
         )
 
     def init_planner(self, goal_type: str):
@@ -315,7 +255,7 @@ class FabricsNode(object):
         self.joint_states.name = np.array(msg.name)[self._index_list]
         self.joint_states.position = np.array(msg.position)[self._index_list]
         self.joint_states.velocity = np.array(msg.velocity)[self._index_list]
-        if self._planner_type == "nonholonomic":
+        if self._kinematic_type == "nonholonomic":
             self._qudot = np.array(msg.velocity)[self._index_list_qudot]
 
     def preempt_goal_callback(self, msg: Empty):
@@ -388,7 +328,7 @@ class FabricsNode(object):
         self.goal_wrapper.compose_runtime_arguments(self._goal, self._runtime_arguments)
         self._runtime_arguments['q'] = list(self.joint_states.position)
         self._runtime_arguments['qdot'] = list(self.joint_states.velocity)
-        if self._planner_type == "nonholonomic":
+        if self._kinematic_type == "nonholonomic":
             self._runtime_arguments['qudot'] =  list(self._qudot)
         return self._planner.compute_action(
             **self._runtime_arguments,

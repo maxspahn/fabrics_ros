@@ -33,7 +33,7 @@ class FabricsGoalEvaluator(object):
         if rospy.get_param("/robot_type") == "boxer":
             rospy.logwarn("Planning state evaluation not available for boxer robot")
             return False        
-	if len(joint_states.position) == 0:
+        if len(joint_states.position) == 0:
             rospy.logwarn("Not receiving joint states in evaluator.")
             return False
         if goal.tolerance_goal_0 == 0:

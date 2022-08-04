@@ -1,6 +1,7 @@
 positional_goal_tolerance : 0.02
 robot_type: "panda"
-planner_type: "holonomic"
+kinematic_type: "holonomic"
+planner_type: "static"
 degrees_of_freedom: 7
 goal_indices: 
   - 0
@@ -40,7 +41,7 @@ published_indices:
   - 7
   - 8
 fabrics_planner_type: symbolic
-num_obs : 20
+num_obs : 1
 angular_goal_tolerance: 0.1
 collision_bodies:
   radius_body_panda_link0: 0.1
