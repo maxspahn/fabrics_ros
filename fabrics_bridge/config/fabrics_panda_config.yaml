@@ -1,7 +1,7 @@
 positional_goal_tolerance : 0.02
 robot_type: "panda"
-kinematic_type: "holonomic"
-planner_type: "static"
+kinematic_type: holonomic
+planner_type: symbolic
 degrees_of_freedom: 7
 goal_indices: 
   - 0

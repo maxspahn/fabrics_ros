@@ -1,12 +1,7 @@
 positional_goal_tolerance : 0.02
-robot_type: "boxer"
-planner_type: "nonholonomic"
-m_arm: 10.0
-m_base: 1.0
-m_rot: 0.1
-l_offset: 1.0
-k_geo_col: 2.5
-k_fin_col: 3.0
+robot_type: boxer
+planner_type: static
+kinematic_type: nonholonomic
 degrees_of_freedom: 3
 goal_indices: 
   - 0
@@ -39,4 +34,36 @@ collision_links:
   - base_link
   - ee_link
 self_collision_pairs: None
+fabrics_geometries:
+  m_arm: 10.0
+  m_base: 1.0
+  m_rot: 0.1
+  l_offset: 1.0
+  base_inertia: 0.2
+  damper:
+    alpha_b: 0.5
+    radius_shift: 0.02
+    beta_close: 6.5
+    beta_distant: 0.01
+  collision_avoidance:
+    geo:
+      k: 2.5
+      exp: 2.0
+    fin:
+      k: 2.0
+      exp: 2.0
+  self_collision_avoidance:
+    geo:
+      k: 0.5
+      exp: 1.0
+    fin:
+      k: 0.1
+      exp: 2.0
+  limit:
+    geo:
+      k: 0.5
+      exp: 2.0
+    fin:
+      k: 0.4
+      exp: 2.0
 
