@@ -4,6 +4,6 @@ optuna:
     path_length: 0.1
     time_to_goal: 0.7
     obstacles: 0.2
-  number_trials: 2
+  number_trials: 10
   maximum_seconds: 30
   study_file: panda_quick.pkl
