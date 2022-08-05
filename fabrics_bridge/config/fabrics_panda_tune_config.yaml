@@ -1,0 +1,99 @@
+positional_goal_tolerance : 0.02
+robot_type: "panda"
+kinematic_type: holonomic
+planner_type: symbolic
+degrees_of_freedom: 7
+goal_indices: 
+  - 0
+  - 1
+  - 2
+urdf_source: "/robot_description"
+root_link: "panda_link0"
+end_effector_link: "panda_hand"
+orientation_helper_link: "panda_link7"
+end_links: 
+  - "panda_link5_offset"
+  - "panda_vacuum"
+  - "panda_vacuum_2"
+  - "camera_link"
+joint_names:
+  - "panda_joint1"
+  - "panda_joint2"
+  - "panda_joint3"
+  - "panda_joint4"
+  - "panda_joint5"
+  - "panda_joint6"
+  - "panda_joint7"
+index_list:
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+published_indices:
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+fabrics_planner_type: symbolic
+num_obs : 10
+angular_goal_tolerance: 0.1
+collision_bodies:
+  radius_body_panda_link0: 0.1
+  radius_body_panda_link1: 0.1
+  radius_body_panda_link2: 0.1
+  radius_body_panda_link3: 0.1
+  radius_body_panda_link4: 0.1
+  radius_body_panda_link5: 0.08
+  radius_body_panda_link6: 0.08
+  radius_body_panda_link5_offset: 0.1
+  radius_body_panda_link7: 0.08
+  radius_body_panda_link8: 0.1
+  radius_body_panda_vacuum: 0.02
+  radius_body_panda_vacuum_2: 0.02
+  radius_body_panda_hand: 0.08
+  radius_body_camera_link: 0.03
+collision_links: 
+  - panda_link4
+  - panda_link5
+  - panda_link7
+  - panda_link8
+  - panda_hand
+self_collision_pairs: 
+    panda_hand: 
+      - panda_link2
+      - panda_link4
+fabrics_geometries:
+  base_inertia: 0.2
+  damper:
+    alpha_b: 0.5
+    radius_shift: 0.02
+    beta_close: 6.5
+    beta_distant: 0.01
+    ex_factor: 1.0
+  collision_avoidance:
+    geo:
+      k: 0.5
+      exp: 2.0
+    fin:
+      k: 0.1
+      exp: 2.0
+  self_collision_avoidance:
+    geo:
+      k: 0.5
+      exp: 1.0
+    fin:
+      k: 0.1
+      exp: 2.0
+  limit:
+    geo:
+      k: 0.5
+      exp: 2.0
+    fin:
+      k: 0.4
+      exp: 2.0

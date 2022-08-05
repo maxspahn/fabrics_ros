@@ -247,48 +247,6 @@ class FabricsNode(object):
         rospy.loginfo("Setting parameters from parameter server")
         self.compose_runtime_parameter_argument()
 
-    def compose_runtime_parameter_argument(self):
-        k_col_geo = np.array([rospy.get_param('/fabrics_geometries/collision_avoidance/geo/k')])
-        exp_col_geo = np.array([rospy.get_param('/fabrics_geometries/collision_avoidance/geo/exp')])
-        k_limit_geo = np.array([rospy.get_param('/fabrics_geometries/limit/geo/k')])
-        exp_limit_geo = np.array([rospy.get_param('/fabrics_geometries/limit/geo/exp')])
-        k_self_geo = np.array([rospy.get_param('/fabrics_geometries/self_collision_avoidance/geo/k')])
-        exp_self_geo = np.array([rospy.get_param('/fabrics_geometries/self_collision_avoidance/geo/exp')])
-        k_col_fin = np.array([rospy.get_param('/fabrics_geometries/collision_avoidance/fin/k')])
-        exp_col_fin = np.array([rospy.get_param('/fabrics_geometries/collision_avoidance/fin/exp')])
-        k_limit_fin = np.array([rospy.get_param('/fabrics_geometries/limit/fin/k')])
-        exp_limit_fin = np.array([rospy.get_param('/fabrics_geometries/limit/fin/exp')])
-        k_self_fin = np.array([rospy.get_param('/fabrics_geometries/self_collision_avoidance/fin/k')])
-        exp_self_fin = np.array([rospy.get_param('/fabrics_geometries/self_collision_avoidance/fin/exp')])
-        base_inertia = np.array([rospy.get_param('/fabrics_geometries/base_inertia')])
-        alpha_b_damper = np.array([rospy.get_param('/fabrics_geometries/damper/alpha_b')])
-        radius_shift_damper = np.array([rospy.get_param('/fabrics_geometries/damper/radius_shift')])
-        beta_distant_damper = np.array([rospy.get_param('/fabrics_geometries/damper/beta_distant')])
-        beta_close_damper = np.array([rospy.get_param('/fabrics_geometries/damper/beta_close')])
-        self._runtime_arguments[f'base_inertia'] = base_inertia
-        self._runtime_arguments[f'alpha_b_damper'] = alpha_b_damper
-        self._runtime_arguments[f'radius_shift_damper'] = radius_shift_damper
-        self._runtime_arguments[f'beta_close_damper'] = beta_close_damper
-        self._runtime_arguments[f'beta_distant_damper'] = beta_distant_damper
-        for i in range(self.num_obstacles):
-            for link in self.collision_links:
-                self._runtime_arguments[f'exp_fin_obst_{i}_{link}_leaf'] = exp_col_fin
-                self._runtime_arguments[f'k_fin_obst_{i}_{link}_leaf'] = k_col_fin
-                self._runtime_arguments[f'exp_geo_obst_{i}_{link}_leaf'] = exp_col_geo
-                self._runtime_arguments[f'k_geo_obst_{i}_{link}_leaf'] = k_col_geo
-        for i in range(7):
-            for j in range(2):
-                self._runtime_arguments[f'exp_limit_fin_limit_joint_{i}_{j}_leaf'] = exp_limit_fin
-                self._runtime_arguments[f'k_limit_fin_limit_joint_{i}_{j}_leaf'] = k_limit_fin
-                self._runtime_arguments[f'exp_limit_geo_limit_joint_{i}_{j}_leaf'] = exp_limit_geo
-                self._runtime_arguments[f'k_limit_geo_limit_joint_{i}_{j}_leaf'] = k_limit_geo
-        for link, paired_links in self.self_collision_pairs.items():
-            for paired_link in paired_links:
-                self._runtime_arguments[f'exp_self_fin_self_collision_{link}_{paired_link}'] = exp_self_fin
-                self._runtime_arguments[f'k_self_fin_self_collision_{link}_{paired_link}'] = k_self_fin
-                self._runtime_arguments[f'exp_self_geo_self_collision_{link}_{paired_link}'] = exp_self_geo
-                self._runtime_arguments[f'k_self_geo_self_collision_{link}_{paired_link}'] = k_self_geo
-
     def obs_callback(self, msg: FabricsObstacleArray):
         self.obstacles = msg.obstacles
         self.compose_runtime_obstacles_argument()
@@ -344,11 +302,13 @@ class FabricsNode(object):
         radius_shift_damper = np.array([rospy.get_param('/fabrics_geometries/damper/radius_shift')])
         beta_distant_damper = np.array([rospy.get_param('/fabrics_geometries/damper/beta_distant')])
         beta_close_damper = np.array([rospy.get_param('/fabrics_geometries/damper/beta_close')])
+        ex_factor_damper = np.array([rospy.get_param('/fabrics_geometries/damper/ex_factor')])
         self._runtime_arguments[f'base_inertia'] = base_inertia
         self._runtime_arguments[f'alpha_b_damper'] = alpha_b_damper
         self._runtime_arguments[f'radius_shift_damper'] = radius_shift_damper
         self._runtime_arguments[f'beta_close_damper'] = beta_close_damper
         self._runtime_arguments[f'beta_distant_damper'] = beta_distant_damper
+        self._runtime_arguments[f'ex_factor_damper'] = ex_factor_damper
         for i in range(self.num_obstacles):
             for link in self.collision_links:
                 self._runtime_arguments[f'exp_fin_obst_{i}_{link}_leaf'] = exp_col_fin

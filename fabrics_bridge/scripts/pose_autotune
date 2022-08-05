@@ -41,7 +41,7 @@ def generate_random_orientation(mean, rotation=0.0, tilting=0.0):
     return orientation.tolist()
 
 def generate_random_position():
-    return np.random.uniform(np.array([0.7, -0.2, 0.6]), np.array([0.9, 0.2, 0.7]), 3)
+    return np.random.uniform(np.array([0.5, -0.2, 0.6]), np.array([0.7, 0.2, 0.7]), 3)
 
 
 
@@ -65,16 +65,12 @@ class PoseOptunaNode(OptunaNode):
         self.goal.goal_pose.pose.orientation.y = self._goal_orientation[2]
         self.goal.goal_pose.pose.orientation.z = self._goal_orientation[3]
         self.goal.goal_type = "ee_pose"
-        self.goal.weight_goal_0 = 1.0
-        self.goal.weight_goal_1 = 2.0
+        self.goal.weight_goal_0 = 1.0 * self._gazebo_factor
+        self.goal.weight_goal_1 = 5.0 * self._gazebo_factor
         self.goal.tolerance_goal_0 = 0.02
         self.goal.tolerance_goal_1 = 0.02
         for _ in range(10):
             self._goal_publisher.publish(self.goal)
-
-    def get_current_pose(self):
-        trans, _ = self.tf_listener.lookupTransform("panda_link0", "panda_vacuum", rospy.Time(0))
-        return np.array(trans)
 
     # returns points on circumference of a circle, i.e. center of each sphere
     def ring_spheres(self):
@@ -88,28 +84,30 @@ class PoseOptunaNode(OptunaNode):
                     self.goal.goal_pose.pose.position.z
                 ]
             )
-        radius_ring = 0.31
+        radius_ring = 0.27
         for i in range(self._obstacle_resolution + 1):
             angle = i/self._obstacle_resolution * 2.*np.pi
             origin_position = [
                 radius_ring * np.cos(angle),
                 radius_ring * np.sin(angle),
-                0.0,
+                0.05,
             ]
             position = np.dot(np.transpose(rotation_matrix_ring), origin_position) + whole_position
             obstacle = FabricsObstacle()
             obstacle.header.frame_id = "panda_link0"
-            obstacle.radius = 0.1
+            obstacle.radius = 0.08
             obstacle.position = Point(x=position[0], y=position[1], z=position[2])
             self.obs.obstacles.append(obstacle)
         self._obs_publisher.publish(self.obs)
 
 
+    def evaluate_distance_to_goal(self, goal_position: np.ndarray):
+        return np.linalg.norm(goal_position - self.get_current_pose(rospy.get_param("/end_effector_link"))) / self._initial_distance_to_goal
 
     def objective(self, trial=None):
         self.return_home()
         if self.stopped():
-            return 100
+            return {"path_length": 1.0, "time_to_goal": 1.0, "obstacles": 1.0}
         if trial:
             self.sample_fabrics_params(trial)
         else:
@@ -117,29 +115,34 @@ class PoseOptunaNode(OptunaNode):
         self._manually_ended = False
         self.publish_goal()
         self.ring_spheres()
+        self.create_collision_metric(self.obs)
         # Initialize costs
         goal_position = np.array([self.goal.goal_pose.pose.position.x, self.goal.goal_pose.pose.position.y, self.goal.goal_pose.pose.position.z])
-        initial_distance_to_goal = np.linalg.norm(self.get_current_pose() - goal_position)
+        self._initial_distance_to_goal = np.linalg.norm(self.get_current_pose(rospy.get_param("/end_effector_link")) - goal_position)
+        initial_distance_to_obstacles = self.evaluate_distance_to_closest_obstacle(self.obs, self._joint_positions)
+        distances_to_goal = []
+        distances_to_closest_obstacle = []
         path_length = 0.0
-        distance_to_goal = 0.0
-        for number_steps in range(self._maximum_steps):
-            if number_steps % 100 == 0:
-                rospy.loginfo(f"Ran {number_steps} steps")
+        start = rospy.Time.now().to_sec()
+        rospy.loginfo(f"Starting trial at {start}")
+        x_old = self._joint_positions
+        while (rospy.Time.now().to_sec() - start) < self._maximum_seconds:
             self._goal_publisher.publish(self.goal)
-            distance_to_goal += np.linalg.norm(self.get_current_pose() - goal_position)/initial_distance_to_goal
-            path_length += np.linalg.norm(self._joint_positions - self._old_joint_positions)
-            self._old_joint_positions = self._joint_positions
+            path_length += np.linalg.norm(self._joint_positions - x_old)
+            x_old = self._joint_positions
+            distances_to_goal.append(self.evaluate_distance_to_goal(goal_position))
+            distances_to_closest_obstacle.append(self.evaluate_distance_to_closest_obstacle(self.obs, self._joint_positions))
             if self._manually_ended:
-                return 100
+                return {"path_length": 1.0, "time_to_goal": 1.0, "obstacles": 1.0}
             self._rate.sleep()
         costs = {
-            "path_length": path_length/initial_distance_to_goal,
-            "time_to_goal": distance_to_goal/self._maximum_steps,
+            "path_length": path_length/10,
+            "time_to_goal": np.mean(np.array(distances_to_goal)),
+            "obstacles": 1 - np.min(distances_to_closest_obstacle) / initial_distance_to_obstacles
         }
-        return self.total_costs(costs)
+        return costs
 
 if __name__ == "__main__":
-    #optuna_node = PoseOptunaNode(study_file="panda_tuned.pkl")
     optuna_node = PoseOptunaNode()
     try:
         optuna_node.run()

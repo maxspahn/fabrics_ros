@@ -1,9 +1,12 @@
 # ros imports
 from abc import abstractmethod
 import rospy
+import csv
+import datetime
 import rospkg
 import optuna
 import joblib
+import casadi as ca
 from fabrics_msgs.msg import FabricsGoal, FabricsObstacleArray, FabricsObstacle, FabricsState
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point
@@ -13,14 +16,16 @@ from pynput.keyboard import Listener,KeyCode
 
 from fabrics_bridge.rectangle_spheres import *
 
+from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
+
 
 class OptunaNode(object):
     def __init__(self):
         rospy.init_node("client_node")
         ros_pack = rospkg.RosPack()
-        package_path = ros_pack.get_path('fabrics_bridge')
+        self._package_path = ros_pack.get_path('fabrics_bridge')
         try:
-            self._study_file = package_path + '/studies/' + rospy.get_param('/optuna/study_file')
+            self._study_file = self._package_path + '/studies/' + rospy.get_param('/optuna/study_file')
         except Exception as e:
             self._study_file = None
         self._name_map = {}
@@ -41,11 +46,16 @@ class OptunaNode(object):
         self._name_map['beta_distant_damper'] = 'damper/beta_distant'
         self._name_map['radius_shift_damper'] = 'damper/radius_shift'
         self._number_trials = rospy.get_param('/optuna/number_trials')
-        self._maximum_steps = rospy.get_param('/optuna/maximum_time_steps')
+        self._maximum_seconds = rospy.get_param('/optuna/maximum_seconds')
         self._weights = rospy.get_param('/optuna/weights')
         rospy.loginfo(self._weights)
+        self._gazebo_factor =  1.0
+        self._goal_reached = 0
+        self._urdf = rospy.get_param(rospy.get_param("/urdf_source"))
+        self._generic_fk = GenericURDFFk(self._urdf, rospy.get_param("/root_link"), rospy.get_param("/end_effector_link"))
 
-        self._rate = rospy.Rate(10)
+
+        self._rate = rospy.Rate(1)
         # if param num_obs is not set, default number of obstacles is 2
         self.init_connections()
         self.initialize_study()
@@ -77,16 +87,16 @@ class OptunaNode(object):
         self._home_goal.goal_joint_state.header.stamp = rospy.Time.now()
         self._home_goal.goal_joint_state.name = [f"panda_joint{i}" for i in range(7)]
         #self._home_goal.goal_joint_state.position = [0.0, -0.9, 0.0, -1.501, 0.0, 1.8675, 0.0]
-        self._home_goal.goal_joint_state.position = [0.0, -0.9, 0.0, -1.501, 0.0, 1.8675, np.pi/ 4]
+        self._home_goal.goal_joint_state.position = [0.0, -1.0, 0.0, -1.501, 0.0, 1.8675, 0.0]
         self._home_goal.goal_type = "joint_space"
-        self._home_goal.weight_goal_0 = 3.0 * 0.5
+        self._home_goal.weight_goal_0 = 1.0 * self._gazebo_factor
         self._home_goal.tolerance_goal_0 = 0.02
 
     def _on_press(self, key):
-        if key == KeyCode.from_char('e'):
+        if key == KeyCode.from_char('8'):
             rospy.loginfo("Ending trial due to user call.")
             self._manually_ended = True
-        if key == KeyCode.from_char('s'):
+        if key == KeyCode.from_char('9'):
             rospy.loginfo("Stopping study due to user call.")
             self._stopped_study = True
 
@@ -110,7 +120,7 @@ class OptunaNode(object):
             "state", FabricsState, self.state_cb
         )
         self._joint_state_sub = rospy.Subscriber(
-            "joint_states_filtered", JointState, self.joint_state_cb
+            "/joint_states_filtered", JointState, self.joint_state_cb
         )
         self._parameter_pub = rospy.Publisher(
             "set_parameters", Empty, queue_size=10,
@@ -193,7 +203,8 @@ class OptunaNode(object):
         self.sample_parameter(trial, ['damper', 'radius_shift'], [0.01, 0.1]) 
         self.sample_parameter(trial, ['damper', 'beta_close'], [5., 20.0]) 
         self.sample_parameter(trial, ['damper', 'beta_distant'], [0.01, 0.1]) 
-        self.sample_parameter(trial, ['base_inertia'], [0, 1.00])
+        self.sample_parameter(trial, ['damper', 'ex_factor'], [1.00, 30.0]) 
+        self.sample_parameter(trial, ['base_inertia'], [0.01, 1.00])
         self._parameter_pub.publish(Empty())
 
     @abstractmethod
@@ -201,29 +212,9 @@ class OptunaNode(object):
         pass
 
 
-    def objective(self, trial):
-        self.return_home()
-        self.sample_fabrics_params(trial)
-        self._manually_ended = False
-        self.publish_goal()
-        # Initialize costs
-        initial_distance_to_goal = np.linalg.norm(self._home_goal.goal_joint_state.position - self.goal.goal_joint_state.position)
-        path_length = 0.0
-        distance_to_goal = 0.0
-        for number_steps in range(self._maximum_steps):
-            if number_steps % 10000 == 0:
-                rospy.loginfo(f"Ran {number_steps} steps")
-            self._rate.sleep()
-            distance_to_goal += np.linalg.norm(self._joint_positions - self.goal.goal_joint_state.position)/initial_distance_to_goal
-            path_length += np.linalg.norm(self._joint_positions - self._old_joint_positions)
-            self._old_joint_positions = self._joint_positions
-            if self._manually_ended:
-                return 100
-        costs = {
-            "path_length": path_length/initial_distance_to_goal,
-            "time_to_goal": distance_to_goal/number_steps,
-        }
-        return self.total_costs(costs)
+    @abstractmethod
+    def objective(self, trial=None):
+        pass
 
     def total_costs(self, costs):
         return sum([self._weights[i] * costs[i] for i in self._weights])
@@ -233,17 +224,46 @@ class OptunaNode(object):
 
 
     def tune(self):
-        self._study.optimize(lambda trial: self.objective(trial), n_trials=self._number_trials)
+        self._study.optimize(lambda trial: self.total_costs(self.objective(trial)), n_trials=self._number_trials)
 
     def test(self):
         costs_per_run = []
-        for i in range(self._number_trials):
-            cost_run_i = self.objective()
-            rospy.loginfo(f"Cost for run {i} : {cost_run_i}")
-            costs_per_run.append(cost_run_i)
+        timeStamp = "{:%Y%m%d_%H%M%S}".format(datetime.datetime.now())
+        with open(f"{self._package_path}/results/result_{timeStamp}.csv", "w") as f:
+            writer = csv.writer(f)
+            for i in range(self._number_trials):
+                cost_run_i = self.objective()
+                rospy.loginfo(f"Cost for run {i} : {cost_run_i}")
+                writer.writerow(list(cost_run_i.values()))
+                costs_per_run.append(cost_run_i)
+
         rospy.loginfo(costs_per_run)
+
+    def create_collision_metric(self, obstacles):
+        q = ca.SX.sym("q", rospy.get_param("/degrees_of_freedom"))
+        distance_to_obstacles = 10000
+        collision_links: list = rospy.get_param("/collision_links")
+        root_link = rospy.get_param("/root_link")
+        for link in collision_links:
+            fk = self._generic_fk.fk(q, root_link, link, positionOnly=True)
+            for obst in obstacles.obstacles:
+                obst_position = np.array([obst.position.x, obst.position.y, obst.position.z])
+                distance_to_obstacles = ca.fmin(distance_to_obstacles, ca.norm_2(obst_position - fk))
+        self._collision_metric = ca.Function("collision_metric", [q], [distance_to_obstacles])
+
+
+    def evaluate_distance_to_closest_obstacle(self, obstacles, q: np.ndarray):
+        casadi_metric = self._collision_metric(q)
+        return casadi_metric
+
+    def get_current_pose(self, link : str):
+        trans, _ = self.tf_listener.lookupTransform("panda_link0", link, rospy.Time(0))
+        return np.array(trans)
 
 
     def run(self):
-        result = self.test()
+        if rospy.get_param('/optuna/test'):
+            result = self.test()
+        else:
+            result = self.tune()
         rospy.loginfo(f"Test result was {result}")
