@@ -233,6 +233,7 @@ class OptunaNode(object):
             writer = csv.writer(f)
             for i in range(self._number_trials):
                 cost_run_i = self.objective()
+                cost_run_i['total_costs'] = self.total_costs(cost_run_i)
                 rospy.loginfo(f"Cost for run {i} : {cost_run_i}")
                 writer.writerow(list(cost_run_i.values()))
                 costs_per_run.append(cost_run_i)
