@@ -45,6 +45,24 @@ class OptunaNode(object):
         self._name_map['beta_close_damper'] = 'damper/beta_close'
         self._name_map['beta_distant_damper'] = 'damper/beta_distant'
         self._name_map['radius_shift_damper'] = 'damper/radius_shift'
+        self._name_map['ex_factor_damper'] = 'damper/ex_factor'
+        self._name_map['damper_alpha_b'] = 'damper/alpha_b'
+        self._name_map['damper_beta_close'] = 'damper/beta_close'
+        self._name_map['damper_beta_distant'] = 'damper/beta_distant'
+        self._name_map['damper_radius_shift'] = 'damper/radius_shift'
+        self._name_map['damper_ex_factor'] = 'damper/ex_factor'
+        self._name_map['collision_avoidance_geo_k'] = 'collision_avoidance/geo/k'
+        self._name_map['collision_avoidance_geo_exp'] = 'collision_avoidance/geo/exp'
+        self._name_map['collision_avoidance_fin_k'] = 'collision_avoidance/fin/k'
+        self._name_map['collision_avoidance_fin_exp'] = 'collision_avoidance/fin/exp'
+        self._name_map['self_collision_avoidance_geo_k'] = 'self_collision_avoidance/geo/k'
+        self._name_map['self_collision_avoidance_geo_exp'] = 'self_collision_avoidance/geo/exp'
+        self._name_map['self_collision_avoidance_fin_k'] = 'self_collision_avoidance/fin/k'
+        self._name_map['self_collision_avoidance_fin_exp'] = 'self_collision_avoidance/fin/exp'
+        self._name_map['limit_geo_k'] = 'limit/geo/k'
+        self._name_map['limit_geo_exp'] = 'limit/geo/exp'
+        self._name_map['limit_fin_k'] = 'limit/fin/k'
+        self._name_map['limit_fin_exp'] = 'limit/fin/exp'
         self._number_trials = rospy.get_param('/optuna/number_trials')
         self._maximum_seconds = rospy.get_param('/optuna/maximum_seconds')
         self._weights = rospy.get_param('/optuna/weights')
@@ -107,6 +125,7 @@ class OptunaNode(object):
             rospy.loginfo(f"Loaded study from {self._study_file}")
         else:
             self._study = optuna.create_study(direction="minimize")
+            self._study_file = self._package_path + '/studies/temp_optuna_file.pkl'
             rospy.loginfo("Created new study")
         
     def init_connections(self):
@@ -158,7 +177,6 @@ class OptunaNode(object):
         while self._goal_reached < 100:
             self._goal_publisher.publish(self._home_goal)
             self._rate.sleep()
-        joblib.dump(self._study, "temp_optuna_file.pkl")
 
     def sample_parameter(self, trial, name, limits, param_is_int = False, log=False):
         parameter_name = '/fabrics_geometries'
@@ -172,6 +190,8 @@ class OptunaNode(object):
             rospy.set_param(parameter_name, trial.suggest_float(fabrics_name, limits[0], limits[1], log=log))
 
     def set_parameter(self, name, value):
+        if name[0] == "_":
+            name = name[1:]
         if name in list(self._name_map.keys()):
             mapped_name = self._name_map[name]
         else:
@@ -188,21 +208,21 @@ class OptunaNode(object):
 
     def sample_fabrics_params(self, trial):
         self.sample_parameter(trial, ['collision_avoidance', 'fin', 'exp'], [1, 5], param_is_int=True)
-        self.sample_parameter(trial, ['collision_avoidance', 'fin', 'k'], [0.1, 0.5], param_is_int=False, log=True)
+        self.sample_parameter(trial, ['collision_avoidance', 'fin', 'k'], [0.01, 1.0], param_is_int=False, log=True)
         self.sample_parameter(trial, ['collision_avoidance', 'geo', 'exp'], [1, 5], param_is_int=True)
-        self.sample_parameter(trial, ['collision_avoidance', 'geo', 'k'], [0.1, 0.5], param_is_int=False, log=True)
-        self.sample_parameter(trial, ['limit', 'fin', 'exp'], [1, 5], param_is_int=True)
-        self.sample_parameter(trial, ['limit', 'fin', 'k'], [0.01, 0.5], param_is_int=False, log=True)
-        self.sample_parameter(trial, ['limit', 'geo', 'exp'], [1, 5], param_is_int=True)
-        self.sample_parameter(trial, ['limit', 'geo', 'k'], [0.01, 0.5], param_is_int=False, log=True)
+        self.sample_parameter(trial, ['collision_avoidance', 'geo', 'k'], [0.01, 1.0], param_is_int=False, log=True)
         self.sample_parameter(trial, ['self_collision_avoidance', 'fin', 'exp'], [1, 5], param_is_int=True)
-        self.sample_parameter(trial, ['self_collision_avoidance', 'fin', 'k'], [0.1, 0.5], param_is_int=False, log=True)
+        self.sample_parameter(trial, ['self_collision_avoidance', 'fin', 'k'], [0.01, 1.0], param_is_int=False, log=True)
         self.sample_parameter(trial, ['self_collision_avoidance', 'geo', 'exp'], [1, 5], param_is_int=True)
-        self.sample_parameter(trial, ['self_collision_avoidance', 'geo', 'k'], [0.1, 0.5], param_is_int=False, log=True)
+        self.sample_parameter(trial, ['self_collision_avoidance', 'geo', 'k'], [0.01, 1.0], param_is_int=False, log=True)
+        self.sample_parameter(trial, ['limit', 'fin', 'exp'], [1, 5], param_is_int=True)
+        self.sample_parameter(trial, ['limit', 'fin', 'k'], [0.01, 0.2], param_is_int=False, log=True)
+        self.sample_parameter(trial, ['limit', 'geo', 'exp'], [1, 1], param_is_int=True)
+        self.sample_parameter(trial, ['limit', 'geo', 'k'], [0.01, 0.2], param_is_int=False, log=True)
         self.sample_parameter(trial, ['damper', 'alpha_b'], [0.0, 1.0]) 
         self.sample_parameter(trial, ['damper', 'radius_shift'], [0.01, 0.1]) 
         self.sample_parameter(trial, ['damper', 'beta_close'], [5., 20.0]) 
-        self.sample_parameter(trial, ['damper', 'beta_distant'], [0.01, 0.1]) 
+        self.sample_parameter(trial, ['damper', 'beta_distant'], [0.0, 1.0]) 
         self.sample_parameter(trial, ['damper', 'ex_factor'], [1.00, 30.0]) 
         self.sample_parameter(trial, ['base_inertia'], [0.01, 1.00])
         self._parameter_pub.publish(Empty())
@@ -225,6 +245,7 @@ class OptunaNode(object):
 
     def tune(self):
         self._study.optimize(lambda trial: self.total_costs(self.objective(trial)), n_trials=self._number_trials)
+        joblib.dump(self._study, self._study_file)
 
     def test(self):
         costs_per_run = []
@@ -232,6 +253,7 @@ class OptunaNode(object):
         with open(f"{self._package_path}/results/result_{timeStamp}.csv", "w") as f:
             writer = csv.writer(f)
             for i in range(self._number_trials):
+                self.select_best_params()
                 cost_run_i = self.objective()
                 cost_run_i['total_costs'] = self.total_costs(cost_run_i)
                 rospy.loginfo(f"Cost for run {i} : {cost_run_i}")
