@@ -12,10 +12,7 @@ root_link: "panda_link0"
 end_effector_link: "panda_hand"
 orientation_helper_link: "panda_link7"
 end_links: 
-  - "panda_link5_offset"
-  - "panda_vacuum"
-  - "panda_vacuum_2"
-  - "camera_link"
+  - "panda_hand"
 joint_names:
   - "panda_joint1"
   - "panda_joint2"

@@ -12,7 +12,6 @@ from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point
 from std_msgs.msg import Empty
 
-from pynput.keyboard import Listener,KeyCode
 
 from fabrics_bridge.rectangle_spheres import *
 
@@ -74,8 +73,6 @@ class OptunaNode(object):
         self._lower_limits = 1.0 * np.array(panda_limits[:, 0])
         self._upper_limits = 1.0 * np.array(panda_limits[:, 1])
 
-        self._key_listener = Listener(on_press=self._on_press)
-        self._key_listener.start()
         self.initialize_home_goal()
         self._joint_positions = np.array(7)
         self._old_joint_positions = np.array(7)
@@ -91,14 +88,6 @@ class OptunaNode(object):
         self._home_goal.goal_type = "joint_space"
         self._home_goal.weight_goal_0 = 1.0 * self._gazebo_factor
         self._home_goal.tolerance_goal_0 = 0.02
-
-    def _on_press(self, key):
-        if key == KeyCode.from_char('8'):
-            rospy.loginfo("Ending trial due to user call.")
-            self._manually_ended = True
-        if key == KeyCode.from_char('9'):
-            rospy.loginfo("Stopping study due to user call.")
-            self._stopped_study = True
 
     def initialize_study(self):
         rospy.loginfo(f"Initialize study from file {self._study_file}")
