@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <rosparam
+    command="load"
+    file="$(find fabrics_bridge)/config/albert_optuna_config.yaml"
+  />
+    <group ns="fabrics">
+      <!-- start fabric node -->
+      <node
+        pkg="fabrics_bridge"
+        type="albert_autotune"
+        name="albert_autotune"
+        output="screen"
+      />
+    </group>
+
+</launch>

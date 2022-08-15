@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<launch>
+  <rosparam
+    command="load"
+    file="$(find fabrics_bridge)/config/optuna_config.yaml"
+  />
+    <group ns="fabrics">
+      <!-- start fabric node -->
+      <node
+        pkg="fabrics_bridge"
+        type="boxer_autotune"
+        name="boxer_autotune"
+        output="screen"
+      />
+    </group>
+
+</launch>

@@ -1,0 +1,173 @@
+#!/usr/bin/env python3
+
+# ros imports
+import rospy
+import tf
+import numpy as np
+from fabrics_msgs.msg import FabricsGoal, FabricsObstacleArray, FabricsObstacle, FabricsState
+from sensor_msgs.msg import JointState
+from geometry_msgs.msg import Point
+from std_msgs.msg import Empty
+
+from pynput.keyboard import Listener,KeyCode
+import joblib
+import optuna
+import quaternionic
+
+from fabrics_bridge.rectangle_spheres import *
+from fabrics_bridge.optuna_node import OptunaNode
+
+from forwardkinematics.urdfFks.boxerFk import BoxerFk
+
+"""
+def generate_random_orientation(w_amp, z_amp):
+    quat_array =  np.array([-0.707 + np.random.random(1)[0] * w_amp, 0, -0.707 + np.random.random(1)[0] * z_amp, 0])
+    return quat_array/np.linalg.norm(quat_array)
+"""
+
+def generate_random_position():
+    position = np.zeros(2)
+    while np.linalg.norm(position) < 3:
+        position = np.random.uniform(np.array([-5, -5]), np.array([5, 5]), 2)
+    return position
+
+
+
+class BoxerOptunaNode(OptunaNode):
+    def __init__(self):
+        super().__init__()
+        self._number_obstacles = 10
+        self.tf_listener = tf.TransformListener()
+        self._static_goal_position = [4.5, -5.0]
+        self._fk = BoxerFk()
+        self._joint_positions = np.array(3)
+        self._old_joint_positions = np.array(3)
+
+    def joint_state_cb(self, state: JointState):
+        self._joint_positions = np.array(state.position[:3])
+
+    def initialize_home_goal(self):
+        self._home_goal = FabricsGoal()
+        self._home_goal.goal_joint_state.header.stamp = rospy.Time.now()
+        self._home_goal.goal_pose.pose.position.x = 0.0
+        self._home_goal.goal_pose.pose.position.y = 0.0
+        self._home_goal.goal_pose.pose.orientation.w = 1.0
+        self._home_goal.goal_type = "ee_pose"
+        self._home_goal.weight_goal_0 = 1.0
+        self._home_goal.tolerance_goal_0 = 0.05
+
+
+    def sample_fabrics_params(self, trial):
+        super().sample_fabrics_params(trial)
+        self.sample_parameter(trial, ['m_base'], [0.0, 10.00])
+        self.sample_parameter(trial, ['l_offset'], [0.0, 1.00])
+        self.sample_parameter(trial, ['m_rot'], [0.0, 10.00])
+
+    def get_current_pose(self, link : str):
+        return self._fk.fk(self._joint_positions, link, positionOnly=True)[0:2]
+
+
+    def publish_goal(self):
+        self.goal = FabricsGoal()
+        if self._randomize:
+            position = generate_random_position()
+        else:
+            position = self._static_goal_position
+        rospy.loginfo(f"Going to {position}")
+        self.goal.goal_pose.pose.position.x = position[0]
+        self.goal.goal_pose.pose.position.y = position[1]
+        self.goal.goal_pose.pose.position.z = 0.1
+        self.goal.goal_pose.header.frame_id = "odom"
+        self.goal.goal_pose.pose.orientation.w = 1.0
+        self.goal.goal_type = "ee_pose"
+        self.goal.weight_goal_0 = 1.0 * self._gazebo_factor
+        self.goal.tolerance_goal_0 = 0.02
+        for _ in range(10):
+            self._goal_publisher.publish(self.goal)
+    
+    def publish_obstacles(self):
+        self.obs.obstacles = []
+        if self._randomize:
+            obstacle_positions = []
+            for _ in range(self._number_obstacles):
+                x = 0.0
+                y = 0.0
+                while np.linalg.norm(np.array([x, y])) < 2:
+                    x = np.random.random(1) * 10 - 5
+                    y = np.random.random(1) * 10 - 5
+                obstacle_positions.append([x, y, 0.0])
+        else:
+            obstacle_positions = [
+                [2.4, -1.25, 0.0],
+                [2.2, -1.5, 0.0], 
+                [2.0, -1.75, 0.0],
+                [1.8, -2.0, 0.0],
+                [1.6, -2.25, 0.0],
+                [1.4, -2.5, 0.0], 
+                [-1.0, -2.0, 0.0], 
+                [3.0, -5.5, 0.0], 
+                [-2.0, -4.0, 0.0], 
+                [-1.5, -4.5, 0.0], 
+            ]
+        for obstacle_position in obstacle_positions:
+            obstacle = FabricsObstacle()
+            obstacle.header.frame_id = "odom"
+            obstacle.radius = 0.5
+            obstacle.position = Point(x=obstacle_position[0], y=obstacle_position[1], z=0.0)
+            self.obs.obstacles.append(obstacle)
+        self._obs_publisher.publish(self.obs)
+
+    def reset_parameters(self):
+        super().reset_parameters()
+        rospy.set_param('/fabrics_geometries/m_base', 0.1)
+        rospy.set_param('/fabrics_geometries/m_rot', 0.02)
+        rospy.set_param('/fabrics_geometries/l_offset', 1.0)
+
+    def evaluate_distance_to_goal(self, goal_position: np.ndarray):
+        return np.linalg.norm(goal_position[0:2] - self.get_current_pose(rospy.get_param("/end_effector_link"))) / self._initial_distance_to_goal
+
+    def objective(self, trial=None):
+        self.return_home()
+        if self.stopped():
+            return {"path_length": 1.0, "time_to_goal": 1.0, "obstacles": 1.0}
+        if trial:
+            self.sample_fabrics_params(trial)
+        else:
+            self.select_best_params()
+        self._manually_ended = False
+        self.publish_goal()
+        self.publish_obstacles()
+        self.create_collision_metric(self.obs)
+        # Initialize costs
+        goal_position = np.array([self.goal.goal_pose.pose.position.x, self.goal.goal_pose.pose.position.y])
+        self._initial_distance_to_goal = np.linalg.norm(self.get_current_pose(rospy.get_param("/end_effector_link")) - goal_position)
+        initial_distance_to_obstacles = self.evaluate_distance_to_closest_obstacle(self.obs, self._joint_positions)
+        distances_to_goal = []
+        distances_to_closest_obstacle = []
+        path_length = 0.0
+        start = rospy.Time.now().to_sec()
+        rospy.loginfo(f"Starting trial at {start}")
+        x_old = self._joint_positions[0:2]
+        while (rospy.Time.now().to_sec() - start) < self._maximum_seconds:
+            self._goal_publisher.publish(self.goal)
+            path_length += np.linalg.norm(self._joint_positions[0:2] - x_old)
+            x_old = self._joint_positions[0:2]
+            distances_to_goal.append(self.evaluate_distance_to_goal(goal_position))
+            distances_to_closest_obstacle.append(self.evaluate_distance_to_closest_obstacle(self.obs, self._joint_positions))
+            if self._manually_ended:
+                return {"path_length": 1.0, "time_to_goal": 1.0, "obstacles": 1.0}
+            self._rate.sleep()
+        costs = {
+            "path_length": path_length/20,
+            "time_to_goal": np.mean(np.array(distances_to_goal)),
+            "obstacles": 1 - np.min(distances_to_closest_obstacle) / initial_distance_to_obstacles
+        }
+        rospy.loginfo(f"Finished trial with costs {costs}")
+        return costs
+
+if __name__ == "__main__":
+    optuna_node = BoxerOptunaNode()
+    try:
+        optuna_node.run()
+    except rospy.ROSInterruptException:
+        pass

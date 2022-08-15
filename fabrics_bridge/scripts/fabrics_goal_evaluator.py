@@ -13,6 +13,8 @@ from fabrics_msgs.msg import (
     FabricsGoal,
 )
 
+from forwardkinematics.urdfFks.boxerFk import BoxerFk
+
 
 class FabricsGoalEvaluator(object):
     def __init__(self):
@@ -24,18 +26,13 @@ class FabricsGoalEvaluator(object):
         self.load_parameters()
         self.state_publisher = rospy.Publisher("state", FabricsState, queue_size=10)
         rospy.sleep(1.0)
+        self._boxer_fk = BoxerFk()
 
     def load_parameters(self):
         self.default_positional_goal_tolerance = rospy.get_param("/positional_goal_tolerance")
         self.default_angular_goal_tolerance = rospy.get_param("/angular_goal_tolerance")
 
     def evaluate(self, goal: FabricsGoal, joint_states: JointState) -> bool:
-        if rospy.get_param("/robot_type") == "boxer":
-            rospy.logwarn("Planning state evaluation not available for boxer robot")
-            return False        
-        if len(joint_states.position) == 0:
-            rospy.logwarn("Not receiving joint states in evaluator.")
-            return False
         if goal.tolerance_goal_0 == 0:
             self.positional_goal_tolerance = self.default_positional_goal_tolerance
         else:
@@ -44,10 +41,31 @@ class FabricsGoalEvaluator(object):
             self.angular_goal_tolerance = self.default_angular_goal_tolerance
         else:
             self.angular_goal_tolerance = goal.tolerance_goal_1
-        if goal.goal_type == 'joint_space':
+        if rospy.get_param("/robot_type") == "boxer":
+            fk = self._boxer_fk.fk_by_name(joint_states.position, "ee_link", positionOnly=True)
             self.state.positional_error = np.linalg.norm(
-                np.array(joint_states.position) - np.array(goal.goal_joint_state.position)
+                np.array(fk[0:2]) - np.array([goal.goal_pose.pose.position.x, goal.goal_pose.pose.position.y])
             )
+            self.state.angular_error = 0.0
+            self.state.goal_reached = (
+                self.state.positional_error < self.positional_goal_tolerance
+            )
+            self.state.tolerance_goal_0 = self.positional_goal_tolerance
+            self.state.tolerance_goal_1 = self.angular_goal_tolerance
+            self.state_publisher.publish(self.state)
+            return self.state.goal_reached
+        if len(joint_states.position) == 0:
+            rospy.logwarn("Not receiving joint states in evaluator.")
+            return False
+        if goal.goal_type == 'joint_space':
+            if rospy.get_param("/robot_type") == "albert":
+                error_vector_base = np.array(joint_states.position[:2]) - np.array(goal.goal_joint_state.position[:2])
+                error_vector_arm = np.array(joint_states.position[3:]) - np.array(goal.goal_joint_state.position[3:])
+                self.state.positional_error = np.linalg.norm(error_vector_arm) + np.linalg.norm(error_vector_base)
+            else:
+                self.state.positional_error = np.linalg.norm(
+                    np.array(joint_states.position) - np.array(goal.goal_joint_state.position)
+                )
             self.state.angular_error = 0.0
             self.state.goal_reached = (
                 self.state.positional_error < self.positional_goal_tolerance

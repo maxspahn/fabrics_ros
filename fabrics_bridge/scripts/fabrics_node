@@ -85,24 +85,7 @@ class FabricsNode(object):
         self.compose_runtime_parameter_argument()
 
     def init_runtime_arguments(self):
-        if self._kinematic_type == 'nonholonomic':
-            self._runtime_arguments.update({
-                "m_arm": np.array([rospy.get_param("/fabrics_geometries/m_arm")]),
-                "m_base_x": np.array([rospy.get_param("/fabrics_geometries/m_base")]),
-                "m_base_y": np.array([rospy.get_param("/fabrics_geometries/m_base")]),
-                "m_rot": np.array([rospy.get_param("/fabrics_geometries/m_rot")])
-            })
-            parameters = {}
-            k_fin_col = np.array([rospy.get_param("/fabrics_geometries/collision_avoidance/fin/k")])
-            k_geo_col = np.array([rospy.get_param("/fabrics_geometries/collision_avoidance/geo/k")])
-            for i in range(self.num_obstacles):
-                for collision_link in self.collision_links:
-                    parameters[f'k_fin_col_obst_{i}_{collision_link}_leaf'] = k_fin_col
-                    parameters[f'k_geo_col_obst_{i}_{collision_link}_leaf'] = k_geo_col
-            self._runtime_arguments.update(parameters)
-        else:
-            self._runtime_arguments = {}
-
+        self._runtime_arguments = {}
 
     def load_parameters(self):
         self.num_obstacles = rospy.get_param("/num_obs")
@@ -309,13 +292,21 @@ class FabricsNode(object):
         self._runtime_arguments[f'beta_close_damper'] = beta_close_damper
         self._runtime_arguments[f'beta_distant_damper'] = beta_distant_damper
         self._runtime_arguments[f'ex_factor_damper'] = ex_factor_damper
+        if self._kinematic_type == 'nonholonomic':
+            self._runtime_arguments.update({
+                "m_arm": np.array([rospy.get_param("/fabrics_geometries/m_arm")]),
+                "m_base_x": np.array([rospy.get_param("/fabrics_geometries/m_base")]),
+                "m_base_y": np.array([rospy.get_param("/fabrics_geometries/m_base")]),
+                "m_rot": np.array([rospy.get_param("/fabrics_geometries/m_rot")]),
+                "l_offset": np.array([rospy.get_param("/fabrics_geometries/l_offset")]),
+            })
         for i in range(self.num_obstacles):
             for link in self.collision_links:
                 self._runtime_arguments[f'exp_fin_obst_{i}_{link}_leaf'] = exp_col_fin
                 self._runtime_arguments[f'k_fin_obst_{i}_{link}_leaf'] = k_col_fin
                 self._runtime_arguments[f'exp_geo_obst_{i}_{link}_leaf'] = exp_col_geo
                 self._runtime_arguments[f'k_geo_obst_{i}_{link}_leaf'] = k_col_geo
-        for i in range(7):
+        for i in range(rospy.get_param("/degrees_of_freedom")):
             for j in range(2):
                 self._runtime_arguments[f'exp_limit_fin_limit_joint_{i}_{j}_leaf'] = exp_limit_fin
                 self._runtime_arguments[f'k_limit_fin_limit_joint_{i}_{j}_leaf'] = k_limit_fin
