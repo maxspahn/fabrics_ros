@@ -41,6 +41,7 @@ fabrics_geometries:
   l_offset: 1.0
   base_inertia: 0.2
   damper:
+    ex_factor: 10
     alpha_b: 0.5
     radius_shift: 0.02
     beta_close: 6.5

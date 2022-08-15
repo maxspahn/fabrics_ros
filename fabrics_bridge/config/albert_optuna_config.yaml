@@ -1,0 +1,9 @@
+optuna:
+  test: True
+  weights:
+    path_length: 0.2
+    time_to_goal: 0.6
+    obstacles: 0.2
+  number_trials: 30
+  maximum_seconds: 50
+  study_file: albert_gazebo.pkl

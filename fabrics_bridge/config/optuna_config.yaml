@@ -1,9 +1,8 @@
 optuna:
-  test: True
+  test: False
   weights:
     path_length: 0.1
     time_to_goal: 0.7
     obstacles: 0.2
-  number_trials: 50
+  number_trials: 2
   maximum_seconds: 30
-  study_file: panda_quick.pkl

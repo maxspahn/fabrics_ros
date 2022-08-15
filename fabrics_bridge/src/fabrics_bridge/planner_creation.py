@@ -37,7 +37,7 @@ def create_planner():
             urdf=urdf,
             root_link=rospy.get_param("/root_link"),
             end_link=rospy.get_param("/end_links"),
-            l_offset=rospy.get_param("/l_offset"),
+            l_offset="sym('l_offset')",
             **planner_arguments,
         )
 

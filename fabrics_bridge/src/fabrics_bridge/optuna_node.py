@@ -71,6 +71,7 @@ class OptunaNode(object):
         self._goal_reached = 0
         self._urdf = rospy.get_param(rospy.get_param("/urdf_source"))
         self._generic_fk = GenericURDFFk(self._urdf, rospy.get_param("/root_link"), rospy.get_param("/end_effector_link"))
+        self._randomize = rospy.get_param("/optuna/test")
 
 
         self._rate = rospy.Rate(1)
@@ -79,36 +80,11 @@ class OptunaNode(object):
         self.initialize_study()
         self.obs = FabricsObstacleArray()
         self.obs.obstacles = []
-        origin = [-0.4, 0.0, 0.33]
-        panda_limits = np.array([
-                [-2.8973, 2.8973],
-                [-1.7628, 1.7628],
-                [-2.8974, 2.8973],
-                [-3.0718, -0.0698],
-                [-2.8973, 2.8973],
-                [2.0175, 3.7525],
-                [-2.8973, 2.8973]
-            ])
-        self._lower_limits = 1.0 * np.array(panda_limits[:, 0])
-        self._upper_limits = 1.0 * np.array(panda_limits[:, 1])
-
         self._key_listener = Listener(on_press=self._on_press)
         self._key_listener.start()
         self.initialize_home_goal()
-        self._joint_positions = np.array(7)
-        self._old_joint_positions = np.array(7)
         self._stopped_study = False
 
-
-    def initialize_home_goal(self):
-        self._home_goal = FabricsGoal()
-        self._home_goal.goal_joint_state.header.stamp = rospy.Time.now()
-        self._home_goal.goal_joint_state.name = [f"panda_joint{i}" for i in range(7)]
-        #self._home_goal.goal_joint_state.position = [0.0, -0.9, 0.0, -1.501, 0.0, 1.8675, 0.0]
-        self._home_goal.goal_joint_state.position = [0.0, -1.0, 0.0, -1.501, 0.0, 1.8675, 0.0]
-        self._home_goal.goal_type = "joint_space"
-        self._home_goal.weight_goal_0 = 1.0 * self._gazebo_factor
-        self._home_goal.tolerance_goal_0 = 0.02
 
     def _on_press(self, key):
         if key == KeyCode.from_char('8'):
@@ -145,8 +121,10 @@ class OptunaNode(object):
             "set_parameters", Empty, queue_size=10,
         )
 
+    @abstractmethod
     def joint_state_cb(self, state: JointState):
-        self._joint_positions = np.array(state.position[5:])
+        pass
+
 
     def state_cb(self, state: FabricsState):
         if state.goal_reached:
@@ -168,13 +146,20 @@ class OptunaNode(object):
         rospy.set_param('/fabrics_geometries/self_collision_avoidance/geo/exp', 1.0)
         rospy.set_param('/fabrics_geometries/self_collision_avoidance/geo/k', 1.0)
         rospy.set_param('/fabrics_geometries/base_inertia', 0.5)
+        rospy.set_param('/fabrics_geometries/damper/ex_factor', 1)
+        rospy.set_param('/fabrics_geometries/damper/alpha_b', 0.5)
+        rospy.set_param('/fabrics_geometries/damper/radius_shift', 0.1)
+        rospy.set_param('/fabrics_geometries/damper/beta_distant', 0.02)
+        rospy.set_param('/fabrics_geometries/damper/beta_close', 6.5)
 
     def return_home(self):
         self._goal_reached = 0
         rospy.loginfo("Returning home")
         self.reset_parameters()
         self._parameter_pub.publish(Empty())
+        self.obs.obstacles = []
         while self._goal_reached < 100:
+            self._obs_publisher.publish(self.obs)
             self._goal_publisher.publish(self._home_goal)
             self._rate.sleep()
 
@@ -280,7 +265,7 @@ class OptunaNode(object):
         return casadi_metric
 
     def get_current_pose(self, link : str):
-        trans, _ = self.tf_listener.lookupTransform("panda_link0", link, rospy.Time(0))
+        trans, _ = self.tf_listener.lookupTransform(rospy.get_param("/root_link"), link, rospy.Time(0))
         return np.array(trans)
 
 
