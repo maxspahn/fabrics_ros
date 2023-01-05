@@ -100,7 +100,7 @@ class ClientNode(object):
     def append_obstacles(self, ring_obs):
         for i in range(self._num_obs):
             o = FabricsObstacle()
-            o.header.frame_id = "panda_link0"
+            o.header.frame_id = rospy.get_param("/root_link")
             o.radius = self.r_obs
             o.position = Point(x=ring_obs[i, 0], y=ring_obs[i, 1], z=ring_obs[i, 2])
             self.obs.obstacles.append(o)
@@ -113,7 +113,7 @@ class ClientNode(object):
         self._goal.goal_pose.pose.orientation = Quaternion(
             x=quat_x, y=quat_y, z=quat_z, w=quat_w
         )
-        self._goal.goal_pose.header.frame_id = "panda_link0"
+        self._goal.goal_pose.header.frame_id = rospy.get_param("/root_link")
         self._goal.goal_type = "ee_pose"
         self._goal.weight_goal_0 = weight_0
         self._goal.weight_goal_1 = weight_1
@@ -128,7 +128,7 @@ class ClientNode(object):
     def run(self):
         while not rospy.is_shutdown():
             self.publish_goal(
-                0.8, 0, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475, 1, 2
+                0.8, 0.2, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475, 1, 2
             )
             self.publish_obs()
             self._rate.sleep()

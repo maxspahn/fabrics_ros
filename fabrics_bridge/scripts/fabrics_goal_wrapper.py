@@ -38,15 +38,17 @@ class FabricsGoalWrapper(object):
 
     def compose_goal(self, goal_msg: FabricsGoal):
         if goal_msg.goal_type == "ee_pose":
+            indices = rospy.get_param('/goal_indices')
+            goal_position = [list(goal_msg.goal_pose.pose.position)[i] for i in indices]
             goal_dict = {
                 "position": {
-                    "m": 3,
+                    "m": len(indices),
                     "w": goal_msg.weight_goal_0,
                     "prime": True,
-                    "indices": [0, 1, 2],
-                    "parent_link": "panda_link0",
-                    "child_link": "panda_vacuum",
-                    "desired_position": list(goal_msg.goal_pose.pose.position),
+                    "indices": indices, 
+                    "parent_link": rospy.get_param("/root_link"),
+                    "child_link": rospy.get_param("/end_effector_link"),
+                    "desired_position": goal_position,
                     "epsilon": 0.01,
                     "type": "staticSubGoal",
                 },
@@ -55,8 +57,8 @@ class FabricsGoalWrapper(object):
                     "w": goal_msg.weight_goal_1,
                     "prime": False,
                     "indices": [0, 1],
-                    "parent_link": "panda_hand",
-                    "child_link": "panda_vacuum",
+                    "parent_link": rospy.get_param("/orientation_helper_link"),
+                    "child_link": rospy.get_param("/end_effector_link"),
                     "angle": list(goal_msg.goal_pose.pose.orientation),
                     "desired_position": [0.0, 0.0],
                     "epsilon": 0.01,
@@ -86,15 +88,14 @@ class FabricsGoalWrapper(object):
         goal_msg = FabricsGoal()
         goal_msg.goal_type = goal_type
         if goal_type == 'joint_space':
-            goal_msg.goal_joint_state.position = [0, ] * 7
+            goal_msg.goal_joint_state.position = [0, ] * rospy.get_param("/degrees_of_freedom")
         return self.compose_goal(goal_msg)
         
 
-    def compose_runtime_arguments(self, goal: GoalComposition) -> dict:
-        goal_args = {}
+    def compose_runtime_arguments(self, goal: GoalComposition, runtime_arguments: dict) -> None:
         for i, sub_goal in enumerate(goal.subGoals()):
-            goal_args[f'x_goal_{i}'] = np.array(sub_goal.position())
-            goal_args[f'weight_goal_{i}'] = 0.5 * np.array([sub_goal.weight()])
+            runtime_arguments[f'x_goal_{i}'] = np.array(sub_goal.position())
+            runtime_arguments[f'weight_goal_{i}'] = 0.5 * np.array([sub_goal.weight()])
             if hasattr(sub_goal, 'angle') and sub_goal.angle():
                 euler_goal = list(
                     tf.transformations.euler_from_quaternion(
@@ -104,5 +105,4 @@ class FabricsGoalWrapper(object):
                 rot_mat = tf.transformations.euler_matrix(
                     -euler_goal[1], -euler_goal[0], 0, "ryxz"
                 )[:3, :3]
-                goal_args[f'angle_goal_{i}'] = rot_mat
-        return goal_args
+                runtime_arguments[f'angle_goal_{i}'] = rot_mat

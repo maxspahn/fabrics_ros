@@ -1,5 +1,69 @@
 positional_goal_tolerance : 0.02
-num_obs : 20
+robot_type: "albert"
+planner_type: "nonholonomic"
+degrees_of_freedom: 10
+m_arm: 5.0
+m_base: 5.0
+m_rot: 0.5
+k_geo_col: 0.1
+k_fin_col: 0.1
+l_offset: 0.5
+goal_indices: 
+  - 0
+  - 1
+  - 2
+root_link: "odom"
+urdf_source: "/robot_description_fabrics"
+end_effector_link: "panda_vacuum"
+orientation_helper_link: "panda_hand"
+end_links: 
+  - "panda_link5_offset"
+  - "panda_vacuum"
+  - "panda_vacuum_2"
+  - "camera_link"
+joint_names:
+  - "world_base_x"
+  - "world_base_y"
+  - "world_base_theta"
+  - "panda_joint1"
+  - "panda_joint2"
+  - "panda_joint3"
+  - "panda_joint4"
+  - "panda_joint5"
+  - "panda_joint6"
+  - "panda_joint7"
+index_list:
+  - 0
+  - 1
+  - 2
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+index_list_qudot:
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+published_indices:
+  - 0
+  - 1
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+num_obs : 5
 angular_goal_tolerance: 0.1
 collision_bodies:
   radius_body_panda_link0: 0.2
@@ -16,7 +80,9 @@ collision_bodies:
   radius_body_panda_vacuum_2: 0.02
   radius_body_panda_hand: 0.08
   radius_body_camera_link: 0.03
+  radius_body_base_link: 0.5
 collision_links: 
+  - base_link
   - panda_link3
   - panda_link6
   - panda_link4

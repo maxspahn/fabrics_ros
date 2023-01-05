@@ -99,12 +99,12 @@ class IntegratorNode(object):
                 self.stop_motion("timeout")
             else:
                 self.integrateAction(self._panda_indices, full_integration=True)
-            #self.integrateAction(self._boxer_indices, full_integration=False)
+            self.integrateAction(self._boxer_indices, full_integration=True)
             self._vel_msg_panda.data = self._qdot_int.tolist()[2:]
-            #self._vel_msg_boxer.linear.x = self._qdot_int[0]
-            #self._vel_msg_boxer.angular.z = self._qdot_int[1]
+            self._vel_msg_boxer.linear.x = self._qdot_int[0]
+            self._vel_msg_boxer.angular.z = self._qdot_int[1]
             self._vel_pub_panda.publish(self._vel_msg_panda)
-            #self._vel_pub_boxer.publish(self._vel_msg_boxer)
+            self._vel_pub_boxer.publish(self._vel_msg_boxer)
             self._rate.sleep()
         return []
 
