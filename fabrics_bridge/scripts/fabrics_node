@@ -238,7 +238,7 @@ class FabricsNode(object):
         )
         self.joint_states = JointState()
         self.joint_state_subscriber = rospy.Subscriber(
-            "/joint_states_filtered",
+            "/joint_states",
             JointState,
             self.joint_states_callback,
             tcp_nodelay=True,
@@ -257,10 +257,17 @@ class FabricsNode(object):
         self._goal, changed_planner = self.goal_wrapper.wrap(msg)
 
     def joint_states_callback(self, msg: JointState):
-        # TODO: better way of extracting just the panda joint states
-        self.joint_states.name = msg.name[5:]
-        self.joint_states.position = msg.position[5:]
-        self.joint_states.velocity = msg.velocity[5:]
+        name, velocity, position = [], [], []
+
+        for joint_name in self.list_joints:
+            i = msg.name.index(joint_name)
+            name.append(msg.name[i])
+            velocity.append(msg.velocity[i])
+            position.append(msg.position[i])
+
+        self.joint_states.name = name
+        self.joint_states.position = position
+        self.joint_states.velocity = velocity
 
     def preempt_goal_callback(self, msg: Empty):
         rospy.loginfo(f"goal preempted")

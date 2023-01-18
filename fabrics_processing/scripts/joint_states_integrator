@@ -20,7 +20,7 @@ class IntegratorNode(object):
             self.motion_stop_cb
         )
         self._joint_state_sub = rospy.Subscriber(
-            "/joint_states_filtered", 
+            "/joint_states", 
             JointState, 
             self.joint_state_cb
         )

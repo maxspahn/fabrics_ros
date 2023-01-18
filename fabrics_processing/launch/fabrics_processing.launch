@@ -7,11 +7,11 @@
     <rosparam file="$(find fabrics_processing)/config/joint_states_filter.yaml"/>
 
     <!-- start nodes -->
-    <group if="$(arg use_kf)">
-      <node pkg="fabrics_processing" type="joint_states_kf" name="joint_states_kf"/>
-    </group>
-    <group unless="$(arg use_kf)">
-      <node pkg="fabrics_processing" type="joint_states_filter" name="joint_states_filter"/>
-    </group>
+    <!-- <group if="$(arg use_kf)"> -->
+    <!--   <node pkg="fabrics_processing" type="joint_states_kf" name="joint_states_kf"/> -->
+    <!-- </group> -->
+    <!-- <group unless="$(arg use_kf)"> -->
+    <!--   <node pkg="fabrics_processing" type="joint_states_filter" name="joint_states_filter"/> -->
+    <!-- </group> -->
     <node pkg="fabrics_processing" type="joint_states_integrator" name="joint_states_integrator" output="screen"/>
 </launch>
