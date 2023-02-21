@@ -2,6 +2,7 @@
 numpy
 pykalman
 scipy
+motion-planning-scenes
 
 # fabrics dependencies
 # install private repo using ssh credentials

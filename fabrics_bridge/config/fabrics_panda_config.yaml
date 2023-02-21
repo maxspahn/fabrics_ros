@@ -11,7 +11,7 @@ root_link: "panda_link0"
 end_effector_link: "panda_vacuum"
 orientation_helper_link: "panda_hand"
 end_links: 
-  - "panda_link5_offset"
+  - "panda_link5"
   - "panda_vacuum"
   - "panda_vacuum_2"
   - "camera_link"
@@ -49,7 +49,6 @@ collision_bodies:
   radius_body_panda_link4: 0.1
   radius_body_panda_link5: 0.1
   radius_body_panda_link6: 0.09
-  radius_body_panda_link5_offset: 0.1
   radius_body_panda_link7: 0.1
   radius_body_panda_link8: 0.1
   radius_body_panda_vacuum: 0.02
@@ -68,7 +67,6 @@ self_collision_pairs:
     panda_hand: 
       - panda_link2
       - panda_link4
-      - panda_link5_offset
     panda_vacuum:
       - panda_link0
       - panda_link1

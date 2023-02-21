@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-    <arg name="rviz" default="true"/>
+    <arg name="rviz" default="false"/>
     <rosparam command="load" file="$(find fabrics_bridge)/config/fabrics_panda_config.yaml"/>
     <group ns="fabrics">
         <!-- start fabric node -->
