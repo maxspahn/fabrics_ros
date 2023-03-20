@@ -2,7 +2,7 @@ import rospy
 from fabrics_msgs.msg import FabricsGoal
 import numpy as np
 import tf
-from MotionPlanningGoal.goalComposition import GoalComposition
+from mpscenes.goals.goal_composition import GoalComposition
 from geometry_msgs.msg import Point, PoseStamped, Quaternion
 
 # Helpers
@@ -40,9 +40,8 @@ class FabricsGoalWrapper(object):
         if goal_msg.goal_type == "ee_pose":
             goal_dict = {
                 "position": {
-                    "m": 3,
-                    "w": goal_msg.weight_goal_0,
-                    "prime": True,
+                    "weight": goal_msg.weight_goal_0,
+                    "is_primary_goal": True,
                     "indices": [0, 1, 2],
                     "parent_link": "panda_link0",
                     "child_link": "panda_vacuum",
@@ -51,9 +50,8 @@ class FabricsGoalWrapper(object):
                     "type": "staticSubGoal",
                 },
                 "orientation": {
-                    "m": 2,
-                    "w": goal_msg.weight_goal_1,
-                    "prime": False,
+                    "weight": goal_msg.weight_goal_1,
+                    "is_primary_goal": False,
                     "indices": [0, 1],
                     "parent_link": "panda_hand",
                     "child_link": "panda_vacuum",
@@ -68,9 +66,8 @@ class FabricsGoalWrapper(object):
             dimension = len(joint_positions)
             goal_dict = {
                 "joint_position": {
-                    "m": dimension,
-                    "w": goal_msg.weight_goal_0,
-                    "prime": True,
+                    "weight": goal_msg.weight_goal_0,
+                    "is_primary_goal": True,
                     "indices": list(range(dimension)),
                     "desired_position": joint_positions,
                     "epsilon": 0.01,
@@ -80,7 +77,7 @@ class FabricsGoalWrapper(object):
         else:
             raise InvalidGoalError(f"Goal of type {goal_msg.goal_type} is not known")
 
-        return GoalComposition(name="goal", contentDict=goal_dict)
+        return GoalComposition(name="goal", content_dict=goal_dict)
 
     def compose_dummy_goal(self, goal_type: str):
         goal_msg = FabricsGoal()
@@ -92,7 +89,7 @@ class FabricsGoalWrapper(object):
 
     def compose_runtime_arguments(self, goal: GoalComposition) -> dict:
         goal_args = {}
-        for i, sub_goal in enumerate(goal.subGoals()):
+        for i, sub_goal in enumerate(goal.sub_goals()):
             goal_args[f'x_goal_{i}'] = np.array(sub_goal.position())
             goal_args[f'weight_goal_{i}'] = np.array([sub_goal.weight()])
             if hasattr(sub_goal, 'angle') and sub_goal.angle():

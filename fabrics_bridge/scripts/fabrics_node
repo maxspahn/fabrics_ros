@@ -15,7 +15,7 @@ from fabrics_msgs.msg import (
     FabricsObstacleArray,
 )
 
-from MotionPlanningGoal.goalComposition import GoalComposition
+from mpscenes.goals.goal_composition import GoalComposition
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
 from fabrics.planner.serialized_planner import SerializedFabricPlanner
 

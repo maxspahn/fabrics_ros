@@ -4,9 +4,6 @@
 
 This is a ROS wrapper for implementing [fabrics](https://github.com/maxspahn/fabrics)
 
-> ⚠️ `fabrics` is still a private repository at the moment 
-
-
 The list of packages:
 - fabrics_bridge: provides a one-way bridge to enable ROS to use fabrics planner for robot motion planning
 - fabrics_msgs: contains custom messages used in fabrics_ros
