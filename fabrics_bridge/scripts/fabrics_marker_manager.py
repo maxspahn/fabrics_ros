@@ -8,7 +8,8 @@ from fabrics_msgs.msg import (
 )
 def init_marker(a, r, g, b, frame_id, radius, identifier, type=2) -> Marker:
     marker = Marker()
-    marker.header.frame_id = "panda_link0"
+    marker.header.frame_id = rospy.get_param("/root_link")
+    marker.pose.orientation.w = 1.0
     marker.type = type
     marker.action = marker.ADD
     marker.color = ColorRGBA(a=a, r=r, g=g, b=b)
@@ -53,14 +54,14 @@ class FabricsMarkerManager(object):
 
     def init_markers(self):
 
-        self.goal_marker = init_marker(1, 0, 0, 1, "panda_link0", 0.0, 1, type=0)
+        self.goal_marker = init_marker(1, 0, 0, 1, rospy.get_param("/root_link"), 0.0, 1, type=0)
         self.goal_marker.points = [Point(x=0, y=0, z=0), Point(x=0, y=0, z=0.35)]
         self.goal_marker.id = 1
         self.goal_marker.scale = Vector3(0.02, 0.04, 0.04)
 
         self.obs_markers = MarkerArray()
         self.obs_markers.markers = [
-            init_marker(1, 1, 0, 0, "panda_link0", 0.0, i) for i in range(self.num_obstacles)
+            init_marker(1, 1, 0, 0, rospy.get_param("/root_link"), 0.0, i) for i in range(self.num_obstacles)
         ]
 
     def init_collision_markers(self):
@@ -97,8 +98,10 @@ class FabricsMarkerManager(object):
             self.obs_markers.markers[i].pose.orientation = Quaternion(
                 x=0, y=0, z=0, w=1
             )
+            self.obs_markers.markers[i].scale = Vector3(1, 1, 1)
             if i < len(obstacles):
                 o = obstacles[i]
+                self.obs_markers.markers[i].pose.orientation.w = 1.0
                 self.obs_markers.markers[i].pose.position = o.position
                 self.obs_markers.markers[i].scale = Vector3(
                     o.radius * 2, o.radius * 2, o.radius * 2
@@ -106,7 +109,7 @@ class FabricsMarkerManager(object):
                 self.obs_markers.markers[i].type = 2
                 self.obs_markers.markers[i].color = ColorRGBA(a=1, r=1, g=0, b=0)
             else:
-                self.obs_markers.markers[i] = init_marker(1, 0, 0, 1, "panda_link0", 0.0, i, type=0)
+                self.obs_markers.markers[i] = init_marker(0.01, 0, 0, 1, rospy.get_param("/root_link"), 0.01, i)
         self.obs_markers_publisher.publish(self.obs_markers)
         self.collision_links_markers_publisher.publish(self.collision_link_markers)
         for self_collision_link in self.self_collision_pairs.keys():

@@ -1,0 +1,66 @@
+#!/usr/bin/env python3
+
+# ros imports
+import rospy
+import optuna
+import joblib
+from fabrics_msgs.msg import FabricsGoal, FabricsObstacleArray, FabricsObstacle, FabricsState
+from sensor_msgs.msg import JointState
+from geometry_msgs.msg import Point
+
+from pynput.keyboard import Listener,KeyCode
+
+from fabrics_bridge.rectangle_spheres import *
+from fabrics_bridge.optuna_node import OptunaNode
+
+
+class JointPositionOptunaNode(OptunaNode):
+
+    def publish_goal(self, weight):
+        self.goal = FabricsGoal()
+        self.goal.goal_joint_state.header.stamp = rospy.Time.now()
+        self.goal.goal_joint_state.name = [f"panda_joint{i}" for i in range(7)]
+        self.goal.goal_joint_state.position = np.random.random(7) * (self._upper_limits - self._lower_limits) + self._lower_limits
+        self.goal.goal_type = "joint_space"
+        self.goal.weight_goal_0 = weight
+        self.goal.tolerance_goal_0 = 0.02
+        self._goal_reached = 0
+        for _ in range(10):
+            self._goal_publisher.publish(self.goal)
+
+
+
+    def objective(self, trial):
+        self.return_home()
+        params = self.sample_fabrics_params(trial)
+        weight = params['attractor_weight']
+        self._goal_reached = 0
+        self._manually_ended = False
+        self.publish_goal(weight)
+        # Initialize costs
+        initial_distance_to_goal = np.linalg.norm(self._home_goal.goal_joint_state.position - self.goal.goal_joint_state.position)
+        path_length = 0.0
+        distance_to_goal = 0.0
+        for number_steps in range(self._maximum_steps):
+            if number_steps % 10000 == 0:
+                rospy.loginfo(f"Ran {number_steps} steps")
+            self._rate.sleep()
+            distance_to_goal += np.linalg.norm(self._joint_positions - self.goal.goal_joint_state.position)/initial_distance_to_goal
+            path_length += np.linalg.norm(self._joint_positions - self._old_joint_positions)
+            self._old_joint_positions = self._joint_positions
+            if self._goal_reached > 100:
+                break
+            if self._manually_ended:
+                return 100
+        costs = {
+            "path_length": path_length/initial_distance_to_goal,
+            "time_to_goal": distance_to_goal/number_steps,
+        }
+        return self.total_costs(costs)
+
+if __name__ == "__main__":
+    optuna_node = JointPositionOptunaNode()
+    try:
+        optuna_node.run()
+    except rospy.ROSInterruptException:
+        pass

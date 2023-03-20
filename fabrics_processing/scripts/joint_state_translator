@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+
+import rospy
+import numpy as np
+
+from sensor_msgs.msg import JointState
+from std_msgs.msg import Float64MultiArray, Bool
+
+class TranslatorNode(object):
+    def __init__(self):
+        rospy.init_node("joint_states_translator", anonymous=True)
+        rate_int = rospy.get_param("/joint_states_integrator/rate")
+        #rate_int = 100
+        self._rate = rospy.Rate(rate_int)
+        self._n = 7
+        self._dt = 1.0/rate_int
+        self._vel_sub_panda = rospy.Subscriber(
+            '/panda_joint_velocity_controller/command',
+            Float64MultiArray,
+            self.vel_sub_callback,
+        )
+        self._joint_state_pub = rospy.Publisher(
+            '/desired_state',
+            JointState,
+            queue_size=10
+        )
+        self._qdot_des = np.zeros(self._n)
+        self._desired_state = JointState()
+        self._desired_state.name = [f'panda_joint{i}' for i in range(self._n)]
+
+    def vel_sub_callback(self, data):
+        self._qdot_des = data.data
+
+    def run(self):
+        self._rate.sleep()
+        print("Running translator Float64MultiArray -> JointState")
+        while not rospy.is_shutdown():
+            self._desired_state.header.stamp = rospy.Time.now()
+            self._desired_state.velocity = self._qdot_des
+            self._joint_state_pub.publish(self._desired_state)
+            self._rate.sleep()
+
+
+if __name__ == "__main__":
+    translator_node = TranslatorNode()
+    try:
+        translator_node.run()
+    except rospy.ROSInterruptException:
+        pass
+

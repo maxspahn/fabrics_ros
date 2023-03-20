@@ -30,6 +30,9 @@ class FabricsGoalEvaluator(object):
         self.default_angular_goal_tolerance = rospy.get_param("/angular_goal_tolerance")
 
     def evaluate(self, goal: FabricsGoal, joint_states: JointState) -> bool:
+        if rospy.get_param("/robot_type") == "boxer":
+            rospy.logwarn("Planning state evaluation not available for boxer robot")
+            return False
         if goal.tolerance_goal_0 == 0:
             self.positional_goal_tolerance = self.default_positional_goal_tolerance
         else:
@@ -59,12 +62,12 @@ class FabricsGoalEvaluator(object):
                     list(goal.goal_pose.pose.orientation),
                     rospy.Time.now(),
                     "/fabrics_goal",
-                    "/panda_link0",
+                    rospy.get_param("/root_link"),
                 )
 
             # evaluate positional_error
             trans, _ = self.tf_listener.lookupTransform(
-                "/panda_link0", "/panda_vacuum", rospy.Time(0)
+                rospy.get_param("/root_link"), rospy.get_param("/end_effector_link"), rospy.Time(0)
             )
             self.state.positional_error = np.linalg.norm(
                 np.array(trans) - list(goal.goal_pose.pose.position)
@@ -73,14 +76,15 @@ class FabricsGoalEvaluator(object):
             # evaluate angular_error
             # Note: this is done by taking the L2 norm between a point at z=0.5 along the '/panda_link8' frame and transforming it to the goal frame
             p1 = PoseStamped()
-            p1.header.frame_id = "/panda_vacuum"
+            p1.header.frame_id = rospy.get_param("/end_effector_link")
             p1.pose.position = Point(x=0, y=0, z=0.5)
             try:
                 p2 = self.tf_listener.transformPose("/fabrics_goal", p1)
                 self.state.angular_error = np.linalg.norm(
                     np.array(list(p1.pose.position)) - list(p2.pose.position)
                 )
-            except Exception as _:
+            except Exception as e:
+                rospy.loginfo(e)
                 rospy.loginfo("Waiting for tf to be on time.")
 
             # update state

@@ -17,6 +17,7 @@ from fabrics_msgs.msg import (
 
 from mpscenes.goals.goal_composition import GoalComposition
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
+from fabrics.planner.non_holonomic_parameterized_planner import NonHolonomicParameterizedFabricPlanner
 from fabrics.planner.serialized_planner import SerializedFabricPlanner
 
 from fabrics_marker_manager import FabricsMarkerManager
@@ -24,7 +25,7 @@ from fabrics_goal_evaluator import FabricsGoalEvaluator
 from fabrics_goal_wrapper import FabricsGoalWrapper
 from visualization_msgs.msg import Marker, MarkerArray
 
-def create_planner(urdf):
+def create_planner(urdf, planner_type: str):
     base_energy: str = (
         "0.5 * 0.2 * ca.dot(xdot, xdot)"
     )
@@ -52,20 +53,41 @@ def create_planner(urdf):
     attractor_metric: str = (
         "((2.0 - 0.3) * ca.exp(-1 * (0.75 * ca.norm_2(x))**2) + 0.3) * ca.SX(np.identity(x.size()[0]))"
     )
-    robot_type = "panda"
-    degrees_of_freedom = 7
-    return ParameterizedFabricPlanner(
-        degrees_of_freedom,
-        robot_type,
-        urdf=urdf,
-        root_link="panda_link0",
-        end_link=["panda_vacuum_2", "panda_vacuum"],
-        collision_geometry=collision_geometry,
-        collision_finsler=collision_finsler,
-        self_collision_finsler=self_collision_finsler,
-        limit_geometry=limit_geometry,
-        limit_finsler=limit_finsler,
-    )
+    robot_type = rospy.get_param("/robot_type")
+    degrees_of_freedom = rospy.get_param("/degrees_of_freedom")
+    if planner_type == "holonomic":
+        return ParameterizedFabricPlanner(
+            degrees_of_freedom,
+            robot_type,
+            urdf=urdf,
+            root_link=rospy.get_param("/root_link"),
+            end_link=rospy.get_param("/end_links"),
+            collision_geometry=collision_geometry,
+            collision_finsler=collision_finsler,
+            self_collision_finsler=self_collision_finsler,
+            limit_geometry=limit_geometry,
+            limit_finsler=limit_finsler,
+        )
+    if planner_type == "nonholonomic":
+        collision_geometry: str = (
+            "-sym('k_geo_col') / (x ** 1) * xdot ** 2"
+        )
+        collision_finsler: str = (
+            "sym('k_fin_col')/(x**1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
+        )
+        return NonHolonomicParameterizedFabricPlanner(
+            degrees_of_freedom,
+            robot_type,
+            urdf=urdf,
+            root_link=rospy.get_param("/root_link"),
+            end_link=rospy.get_param("/end_links"),
+            collision_geometry=collision_geometry,
+            collision_finsler=collision_finsler,
+            self_collision_finsler=self_collision_finsler,
+            limit_geometry=limit_geometry,
+            limit_finsler=limit_finsler,
+            l_offset=rospy.get_param("/l_offset"),
+        )
 
 # Helpers
 def _it(self):
@@ -102,19 +124,15 @@ class FabricsNode(object):
         self.changed_planner = True
         self.stop_acc_bool = True
         self.planners = {}
+        self._runtime_arguments = {}
         self.goal_wrapper = FabricsGoalWrapper()
         self.rate = rospy.Rate(100)
         self.load_parameters()
-        # TODO get the joints list from ListControllers srv
-        self.list_joints = [
-            "panda_joint1",
-            "panda_joint2",
-            "panda_joint3",
-            "panda_joint4",
-            "panda_joint5",
-            "panda_joint6",
-            "panda_joint7",
-        ]
+        self.joint_names = rospy.get_param("/joint_names")
+        self._index_list = rospy.get_param("/index_list")
+        self._planner_type = rospy.get_param("/planner_type")
+        if self._planner_type == "nonholonomic":
+            self._index_list_qudot = rospy.get_param("/index_list_qudot")
         self.init_publishers()
         self.init_subscribers()
         self.state_evaluator = FabricsGoalEvaluator()
@@ -123,15 +141,40 @@ class FabricsNode(object):
         self.init_planner("joint_space")
         self.init_planner("ee_pose")
         self.stop_acc_bool = False
-        self._obstacle_runtime_arguments = self.compose_runtime_obstacles_argument()
+        self.init_runtime_arguments()
+        self.compose_runtime_obstacles_argument()
+
+    def init_runtime_arguments(self):
+        if self._planner_type == 'nonholonomic':
+            self._runtime_arguments.update({
+                "m_arm": np.array([rospy.get_param("/m_arm")]),
+                "m_base_x": np.array([rospy.get_param("/m_base")]),
+                "m_base_y": np.array([rospy.get_param("/m_base")]),
+                "m_rot": np.array([rospy.get_param("/m_rot")])
+            })
+            parameters = {}
+            k_fin_col = np.array([rospy.get_param("/k_fin_col")])
+            k_geo_col = np.array([rospy.get_param("/k_geo_col")])
+            for i in range(self.num_obstacles):
+                for collision_link in self.collision_links:
+                    parameters[f'k_fin_col_obst_{i}_{collision_link}_leaf'] = k_fin_col
+                    parameters[f'k_geo_col_obst_{i}_{collision_link}_leaf'] = k_geo_col
+            self._runtime_arguments.update(parameters)
+        else:
+            self._runtime_arguments = {}
 
 
     def load_parameters(self):
         self.num_obstacles = rospy.get_param("/num_obs")
         # robot_description should be global because it's not part of fabrics ns
-        self.urdf = rospy.get_param("/robot_description")
+        self.urdf = rospy.get_param(rospy.get_param("/urdf_source"))
         self.collision_links = rospy.get_param("/collision_links")
-        self.self_collision_pairs = rospy.get_param("/self_collision_pairs")
+        try:
+            self.self_collision_pairs = rospy.get_param("/self_collision_pairs")
+            if self.self_collision_pairs == "None":
+                self.self_collision_pairs = {}
+        except KeyError as e:
+            self.self_collision_pairs = {}
         self.collision_bodies = rospy.get_param("/collision_bodies")
         # TODO: Currently, fabrics require inputs to be np.arrays. This should be chaged to also allow floats.
         for name, radius in self.collision_bodies.items():
@@ -154,12 +197,14 @@ class FabricsNode(object):
             self.stop_acc_bool = True
 
     def hash_planner_configuration(self, goal_type: str):
+        hash_robot_type = rospy.get_param("/robot_type")
         hash_obstacle = hashlib.md5(str(self.num_obstacles).encode("utf-8")).hexdigest()
         hash_self_collision_pairs = list_to_unique_hash(self.self_collision_pairs)
         hash_collision_links = list_to_unique_hash(self.collision_links)
         hash_goal_type = hashlib.md5(goal_type.encode("utf-8")).hexdigest()
         return (
-            hash_obstacle
+            hash_robot_type
+            + hash_obstacle
             + hash_self_collision_pairs
             + hash_collision_links
             + hash_goal_type
@@ -176,11 +221,12 @@ class FabricsNode(object):
             self.planners[serialize_file] = SerializedFabricPlanner(serialize_file)
             return
 
-        planner = create_planner(self.urdf)
+        rospy.loginfo(f"Creating the planner for goal_type:  {goal_type}")
+        planner = create_planner(self.urdf, self._planner_type)
         # get the joint limits for each joint
-        self.robot = URDF.from_parameter_server("/robot_description")
+        self.robot = URDF.from_parameter_server(rospy.get_param("/urdf_source"))
         joint_limits = []
-        for i in self.list_joints:
+        for i in self.joint_names:
             joint_limits.append(
                 [
                     self.robot.joint_map[i].limit.lower,
@@ -258,9 +304,11 @@ class FabricsNode(object):
 
     def joint_states_callback(self, msg: JointState):
         # TODO: better way of extracting just the panda joint states
-        self.joint_states.name = msg.name[5:]
-        self.joint_states.position = msg.position[5:]
-        self.joint_states.velocity = msg.velocity[5:]
+        self.joint_states.name = np.array(msg.name)[self._index_list]
+        self.joint_states.position = np.array(msg.position)[self._index_list]
+        self.joint_states.velocity = np.array(msg.velocity)[self._index_list]
+        if self._planner_type == "nonholonomic":
+            self._qudot = np.array(msg.velocity)[self._index_list_qudot]
 
     def preempt_goal_callback(self, msg: Empty):
         rospy.loginfo(f"goal preempted")
@@ -280,26 +328,25 @@ class FabricsNode(object):
                 break
             x_obst[i, :] = list(o.position)
             radius_obst[i] = o.radius
-        obstacle_runtime_arguments = self.collision_bodies
-        obstacle_runtime_arguments.update({'x_obst': x_obst, 'radius_obst': radius_obst})
-        return obstacle_runtime_arguments
+        self._runtime_arguments.update(self.collision_bodies)
+        self._runtime_arguments.update({'x_obst': x_obst, 'radius_obst': radius_obst})
 
 
     def compute_action(self):
-        goal_runtime_arguments = self.goal_wrapper.compose_runtime_arguments(self._goal)
-        # Ensure right number of obstacles, if less are received fill with [100, 100, 100], if more received naively take the first ones.
-        runtime_arguments = {}
-        state_runtime_arguments = {'q': list(self.joint_states.position), 'qdot': list(self.joint_states.velocity)}
-        runtime_arguments.update(goal_runtime_arguments)
-        runtime_arguments.update(self._obstacle_runtime_arguments)
-        runtime_arguments.update(state_runtime_arguments)
+        self.goal_wrapper.compose_runtime_arguments(self._goal, self._runtime_arguments)
+        self._runtime_arguments['q'] = list(self.joint_states.position)
+        self._runtime_arguments['qdot'] = list(self.joint_states.velocity)
+        if self._planner_type == "nonholonomic":
+            self._runtime_arguments['qudot'] =  list(self._qudot)
         return self._planner.compute_action(
-            **runtime_arguments,
+            **self._runtime_arguments,
         )
 
     def act(self):
         try:
-            self.action_message.data = [0, 0] + list(self.compute_action())
+            action = np.zeros(9)
+            action[rospy.get_param("/published_indices")] = self.compute_action()
+            self.action_message.data = list(action)
             self.action_publisher.publish(self.action_message)
         except Exception as e:
             rospy.loginfo(f"Not planning due to error {e}")
