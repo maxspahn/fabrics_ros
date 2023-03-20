@@ -19,9 +19,8 @@ jobs:
     container:
       image: ${{ matrix.docker_image }}
     steps:
-       - name: install non ros dependencies using requirments.txt (used when fabrics is not private anymore)
-         run: |
-           pip3 install -r requirements.txt
+      - name: install non ros dependencies using requirments.txt (used when fabrics is not private anymore)
+        run: pip3 install -r requirements.txt
       - name: setup directories
         run: mkdir -p karen_ws/src
       - name: checkout
