@@ -19,11 +19,6 @@ jobs:
     container:
       image: ${{ matrix.docker_image }}
     steps:
-      - name: checkout fabrics
-        uses: actions/checkout@v3
-        with:
-          repository: maxspahn/fabrics
-          token: ${{ secrets.ACCESS_TOKEN }}
       - name: install fabrics and non ros dependencies
         run: |
           pip3 install . --ignore-installed PyYAML
