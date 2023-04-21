@@ -236,9 +236,9 @@ class FabricsNode(object):
         # The planner hides all the logic behind the function set_components.
         dummy_goal = self.goal_wrapper.compose_dummy_goal(goal_type)
         planner.set_components(
-            self.collision_links,
-            self.self_collision_pairs,
-            dummy_goal,
+            collision_links=self.collision_links,
+            self_collision_pairs=self.self_collision_pairs,
+            goal=dummy_goal,
             limits=joint_limits,
             number_obstacles=self.num_obstacles,
         )
