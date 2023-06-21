@@ -42,7 +42,7 @@ class FabricsGoalWrapper(object):
             goal_position = [list(goal_msg.goal_pose.pose.position)[i] for i in indices]
             goal_dict = {
                 "position": {
-                    "w": goal_msg.weight_goal_0,
+                    "weight": goal_msg.weight_goal_0,
                     "is_primary_goal": True,
                     "indices": indices, 
                     "parent_link": rospy.get_param("/root_link"),

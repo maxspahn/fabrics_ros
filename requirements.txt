@@ -2,4 +2,4 @@
 numpy
 pykalman
 scipy
-fabrics
+fabrics==0.7.3
