@@ -2,10 +2,7 @@
 
 [![fabrics_ros test](https://github.com/maxspahn/fabrics_ros/actions/workflows/fabrics_ros_test.yml/badge.svg?branch=ft-ci)](https://github.com/maxspahn/fabrics_ros/actions/workflows/fabrics_ros_test.yml)
 
-This is a ROS wrapper for implementing [fabrics](https://github.com/maxspahn/fabrics)
-
-> ⚠️ `fabrics` is still a private repository at the moment 
-
+This is a ROS wrapper for implementing [fabrics](https://github.com/tud-amr/fabrics)
 
 The list of packages:
 - fabrics_bridge: provides a one-way bridge to enable ROS to use fabrics planner for robot motion planning
@@ -25,7 +22,10 @@ catkin build
 
 ### Install fabrics dependencies
 
-Since there are some python packages not mapped to ROS dependencies, i.g. `python3-pykalman`, non-ROS Python packages will be installed using `pip3`. See [rosdep/python.yaml](https://github.com/ros/rosdistro/blob/master/rosdep/python.yaml) for the entire list.
+Since there are some python packages not mapped to ROS dependencies, i.g.
+`python3-pykalman`, non-ROS Python packages will be installed using `pip3`. See
+[rosdep/python.yaml](https://github.com/ros/rosdistro/blob/master/rosdep/python.yaml)
+for the entire list.
 
 
 ```bash
