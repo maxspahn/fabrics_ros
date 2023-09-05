@@ -1,8 +1,4 @@
 # python dependencies
-numpy
+fabrics>0.8
 pykalman
 scipy
-
-# fabrics dependencies
-# install private repo using ssh credentials
-git+ssh://git@github.com/maxspahn/fabrics.git@develop

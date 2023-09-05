@@ -11,6 +11,7 @@ class IntegratorNode(object):
     def __init__(self):
         rospy.init_node("joint_states_integrator", anonymous=True)
         rate_int = rospy.get_param("/joint_states_integrator/rate")
+        self.robot_type = rospy.get_param("/robot_type")
         self._rate = rospy.Rate(rate_int)
         self._n = 9
         self._dt = 1.0/rate_int
@@ -104,7 +105,8 @@ class IntegratorNode(object):
             self._vel_msg_boxer.linear.x = self._qdot_int[0]
             self._vel_msg_boxer.angular.z = self._qdot_int[1]
             self._vel_pub_panda.publish(self._vel_msg_panda)
-            self._vel_pub_boxer.publish(self._vel_msg_boxer)
+            if self.robot_type in ['boxer', 'albert']:
+                self._vel_pub_boxer.publish(self._vel_msg_boxer)
             self._rate.sleep()
         return []
 

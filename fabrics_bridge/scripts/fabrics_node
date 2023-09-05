@@ -14,8 +14,11 @@ from fabrics_msgs.msg import (
     FabricsGoal,
     FabricsObstacleArray,
 )
+from geometry_msgs.msg import Twist
 
-from MotionPlanningGoal.goalComposition import GoalComposition
+from mpscenes.goals.goal_composition import GoalComposition
+from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
+
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
 from fabrics.planner.non_holonomic_parameterized_planner import NonHolonomicParameterizedFabricPlanner
 from fabrics.planner.serialized_planner import SerializedFabricPlanner
@@ -25,7 +28,7 @@ from fabrics_goal_evaluator import FabricsGoalEvaluator
 from fabrics_goal_wrapper import FabricsGoalWrapper
 from visualization_msgs.msg import Marker, MarkerArray
 
-def create_planner(urdf, planner_type: str):
+def create_planner(urdf, planner_type: str) -> ParameterizedFabricPlanner:
     base_energy: str = (
         "0.5 * 0.2 * ca.dot(xdot, xdot)"
     )
@@ -55,13 +58,15 @@ def create_planner(urdf, planner_type: str):
     )
     robot_type = rospy.get_param("/robot_type")
     degrees_of_freedom = rospy.get_param("/degrees_of_freedom")
+    forward_kinematics = GenericURDFFk(
+        urdf,
+        rootLink=rospy.get_param("/root_link"),
+        end_link=rospy.get_param("/end_links"),
+    )
     if planner_type == "holonomic":
         return ParameterizedFabricPlanner(
             degrees_of_freedom,
-            robot_type,
-            urdf=urdf,
-            root_link=rospy.get_param("/root_link"),
-            end_link=rospy.get_param("/end_links"),
+            forward_kinematics,
             collision_geometry=collision_geometry,
             collision_finsler=collision_finsler,
             self_collision_finsler=self_collision_finsler,
@@ -118,6 +123,9 @@ Quaternion.__iter__ = _it
 
 
 class FabricsNode(object):
+
+    _planner : ParameterizedFabricPlanner
+
     def __init__(self):
         rospy.init_node("fabrics_node")
         self._goal_type = ""
@@ -143,6 +151,7 @@ class FabricsNode(object):
         self.stop_acc_bool = False
         self.init_runtime_arguments()
         self.compose_runtime_obstacles_argument()
+        self._action = np.zeros(9)
 
     def init_runtime_arguments(self):
         if self._planner_type == 'nonholonomic':
@@ -163,8 +172,10 @@ class FabricsNode(object):
         else:
             self._runtime_arguments = {}
 
-
     def load_parameters(self):
+        scaling_factor = rospy.get_param('/velocity_scaling')
+        self._max_vel = np.array(rospy.get_param("/velocity_limits/upper")) * scaling_factor
+        self._min_vel = np.array(rospy.get_param("/velocity_limits/lower")) * scaling_factor
         self.num_obstacles = rospy.get_param("/num_obs")
         # robot_description should be global because it's not part of fabrics ns
         self.urdf = rospy.get_param(rospy.get_param("/urdf_source"))
@@ -236,13 +247,13 @@ class FabricsNode(object):
         # The planner hides all the logic behind the function set_components.
         dummy_goal = self.goal_wrapper.compose_dummy_goal(goal_type)
         planner.set_components(
-            self.collision_links,
-            self.self_collision_pairs,
-            dummy_goal,
+            collision_links=self.collision_links,
+            self_collision_pairs=self.self_collision_pairs,
+            goal=dummy_goal,
             limits=joint_limits,
             number_obstacles=self.num_obstacles,
         )
-        planner.concretize()
+        planner.concretize(mode='vel', time_step = 1/100)
         # serializing the planner
         rospy.loginfo(f"Serializing the planner for goal_type:  {goal_type}")
         planner.serialize(serialize_file)
@@ -267,10 +278,22 @@ class FabricsNode(object):
             self.rate.sleep()
 
     def init_publishers(self):
-        self.action_message = Float64MultiArray(data=np.zeros(9))
-        self.action_publisher = rospy.Publisher(
-            "/joint_acc_des", Float64MultiArray, queue_size=10
+        self._vel_pub_panda = rospy.Publisher(
+            '/panda_joint_velocity_controller/command',
+            Float64MultiArray,
+            queue_size=10
         )
+        self._vel_pub_boxer = rospy.Publisher(
+            '/cmd_vel',
+            Twist,
+            queue_size=10
+        )
+        """ panda specifics """
+        self._vel_msg_panda = Float64MultiArray()
+        self._panda_indices = [2, 3, 4, 5, 6, 7, 8]
+        """ boxer specifics """
+        self._vel_msg_boxer = Twist()
+        self._boxer_indices = [0, 1]
 
     def init_subscribers(self):
         self.obs_subscriber = rospy.Subscriber(
@@ -344,10 +367,13 @@ class FabricsNode(object):
 
     def act(self):
         try:
-            action = np.zeros(9)
-            action[rospy.get_param("/published_indices")] = self.compute_action()
-            self.action_message.data = list(action)
-            self.action_publisher.publish(self.action_message)
+            self._action[rospy.get_param("/published_indices")] = self.compute_action()
+            self._action = np.clip(self._action, self._min_vel, self._max_vel)
+            self._vel_msg_panda.data = self._action.tolist()[2:]
+            self._vel_msg_boxer.linear.x = self._action[0]
+            self._vel_msg_boxer.angular.z = self._action[1]
+            self._vel_pub_panda.publish(self._vel_msg_panda)
+            self._vel_pub_boxer.publish(self._vel_msg_boxer)
         except Exception as e:
             rospy.loginfo(f"Not planning due to error {e}")
             rospy.loginfo("Waiting for correct planner to be loaded.")
