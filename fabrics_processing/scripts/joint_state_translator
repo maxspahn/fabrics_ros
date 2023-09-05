@@ -9,8 +9,7 @@ from std_msgs.msg import Float64MultiArray, Bool
 class TranslatorNode(object):
     def __init__(self):
         rospy.init_node("joint_states_translator", anonymous=True)
-        rate_int = rospy.get_param("/joint_states_integrator/rate")
-        #rate_int = 100
+        rate_int = 10
         self._rate = rospy.Rate(rate_int)
         self._n = 7
         self._dt = 1.0/rate_int
@@ -22,14 +21,15 @@ class TranslatorNode(object):
         self._joint_state_pub = rospy.Publisher(
             '/desired_state',
             JointState,
-            queue_size=10
+            queue_size=1
         )
         self._qdot_des = np.zeros(self._n)
         self._desired_state = JointState()
         self._desired_state.name = [f'panda_joint{i}' for i in range(self._n)]
 
     def vel_sub_callback(self, data):
-        self._qdot_des = data.data
+        self._qdot_des = np.array(data.data)
+        self._qdot_des[-1] = 0.0
 
     def run(self):
         self._rate.sleep()

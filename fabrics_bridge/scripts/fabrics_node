@@ -134,7 +134,7 @@ class FabricsNode(object):
         self.planners = {}
         self._runtime_arguments = {}
         self.goal_wrapper = FabricsGoalWrapper()
-        self.rate = rospy.Rate(100)
+        self.rate = rospy.Rate(10)
         self.load_parameters()
         self.joint_names = rospy.get_param("/joint_names")
         self._index_list = rospy.get_param("/index_list")
@@ -253,7 +253,7 @@ class FabricsNode(object):
             limits=joint_limits,
             number_obstacles=self.num_obstacles,
         )
-        planner.concretize(mode='vel', time_step = 1/100)
+        planner.concretize(mode='vel', time_step = 1/10)
         # serializing the planner
         rospy.loginfo(f"Serializing the planner for goal_type:  {goal_type}")
         planner.serialize(serialize_file)
