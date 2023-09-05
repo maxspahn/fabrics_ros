@@ -63,3 +63,25 @@ self_collision_pairs:
       - panda_link1
       - panda_link2
       - panda_link3
+velocity_scaling: 1.0
+velocity_limits:
+        upper:
+              - 1.0
+              - 1.0
+              - 2.1750
+              - 2.1750 
+              - 2.1750
+              - 2.1750
+              - 2.6100 
+              - 2.6100 
+              - 2.6100
+        lower:
+              - -1.0
+              - -1.0
+              - -2.1750
+              - -2.1750 
+              - -2.1750
+              - -2.1750
+              - -2.6100 
+              - -2.6100 
+              - -2.6100

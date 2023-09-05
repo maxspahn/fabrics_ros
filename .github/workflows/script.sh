@@ -2,6 +2,7 @@
 sudo apt-get install -y python3-catkin-tools git-lfs #install catkin_tools
 source /opt/ros/noetic/setup.bash
 cd karen_ws
+ls
 cd src/fabrics_ros
 pip3 install -r requirements
 cd ..
