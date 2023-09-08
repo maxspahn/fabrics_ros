@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+import sys
+import rospy
+import tf2_ros
+import actionlib
+import pickle
+from geometry_msgs.msg import PoseStamped
+import panda_py as papy
+
+class Recording():
+    def __init__(self, ee_name, name):
+        self._data = []
+        self._ee_name = ee_name
+        self._name = name
+
+    def append_waypoint(self, waypoint: list) -> None:
+        self._data.append(waypoint)
+
+    def waypoints(self) -> list:
+        return self._data
+
+    def save(self):
+        with open(f"{self._name}.pickle", "wb") as f:
+            pickle.dump(self, f)
+        rospy.loginfo(f"Saved {len(self._data)} poses to {self._name}.pickle")
+
+
+
+
+class RecordSkillNode:
+    def __init__(self, skill_name, target_frame, ee_frame):
+        rospy.init_node("record_skill")
+        rospy.loginfo("Starting RecordSkillNode as record_skill.")
+
+        self._skill_name = skill_name
+        self._ee_frame = ee_frame
+        self._target_frame = target_frame
+
+        self._currently_recording = False
+        self._desk = papy.Desk('172.16.0.2', 'admin', '0123456789')
+        self._desk.listen(self.panda_button_cb)
+        self._record_counter = 0
+        
+        self.tf_buffer = tf2_ros.Buffer()
+        self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
+
+    def panda_button_cb(self, event):
+        print(event)
+        if 'circle' in event and event['circle'] == True :
+            self._currently_recording = True
+            if not hasattr(self, '_recording'):
+                self._record_counter += 1
+                skill_name = self._skill_name + "_" + str(self._record_counter)
+                self._recording = Recording(self._ee_frame, skill_name)
+                rospy.loginfo(f"Recording skill {skill_name}")
+        if 'cross' in event and event['cross'] == True:
+            self._currently_recording = False
+            if hasattr(self, '_recording'):
+                self.save_poses()
+            
+            
+
+
+    def save_poses(self):
+        self._recording.save()
+        del self._recording
+
+    def run(self):
+        r = rospy.Rate(20)
+        rospy.sleep(1)
+
+        while not rospy.is_shutdown():
+            try:
+                trans = self.tf_buffer.lookup_transform(
+                    self._target_frame, self._ee_frame, rospy.Time()
+                )
+            except (
+                tf2_ros.LookupException,
+                tf2_ros.ConnectivityException,
+                tf2_ros.ExtrapolationException,
+            ):
+                rospy.logwarn("Could not get transform")
+                continue
+
+            # Convert the transform to a PoseStamped message and add it to the list
+            pose = PoseStamped()
+            pose.header = trans.header
+            pose.pose.position = trans.transform.translation
+            pose.pose.orientation = trans.transform.rotation
+
+            # Add the pose to the list
+            if self._currently_recording:
+                self._recording.append_waypoint(pose)
+                rospy.loginfo("Currently Recording")
+
+            else:
+                rospy.loginfo("Not recording. Press circle on panda to start, cross to stop.")
+            r.sleep()
+
+
+if __name__ == "__main__":
+    record_skill = RecordSkillNode(
+        skill_name=sys.argv[1],
+        target_frame="panda_link0",
+        ee_frame="panda_vacuum",
+    )
+    record_skill.run()
