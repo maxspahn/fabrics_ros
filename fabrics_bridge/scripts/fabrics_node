@@ -145,7 +145,7 @@ class FabricsNode(object):
         self.init_publishers()
         self.init_subscribers()
         self.state_evaluator = FabricsGoalEvaluator()
-        self.marker_manager = FabricsMarkerManager(self.num_obstacles, self.collision_bodies, self.collision_links, self.self_collision_pairs)
+        self.marker_manager = FabricsMarkerManager(self.num_sphere_obstacles, self.collision_bodies, self.collision_links, self.self_collision_pairs)
 
         self.init_planner("joint_space")
         self.init_planner("ee_pose")
@@ -165,7 +165,7 @@ class FabricsNode(object):
             parameters = {}
             k_fin_col = np.array([rospy.get_param("/k_fin_col")])
             k_geo_col = np.array([rospy.get_param("/k_geo_col")])
-            for i in range(self.num_obstacles):
+            for i in range(self.num_sphere_obstacles):
                 for collision_link in self.collision_links:
                     parameters[f'k_fin_col_obst_{i}_{collision_link}_leaf'] = k_fin_col
                     parameters[f'k_geo_col_obst_{i}_{collision_link}_leaf'] = k_geo_col
@@ -177,7 +177,8 @@ class FabricsNode(object):
         scaling_factor = rospy.get_param('/velocity_scaling')
         self._max_vel = np.array(rospy.get_param("/velocity_limits/upper")) * scaling_factor
         self._min_vel = np.array(rospy.get_param("/velocity_limits/lower")) * scaling_factor
-        self.num_obstacles = rospy.get_param("/num_obs")
+        self.num_sphere_obstacles = rospy.get_param("/num_sphere_obs")
+        self.num_box_obstacles = rospy.get_param("/num_box_obs")
         # robot_description should be global because it's not part of fabrics ns
         self.urdf = rospy.get_param(rospy.get_param("/urdf_source"))
         self.collision_links = rospy.get_param("/collision_links")
@@ -210,13 +211,15 @@ class FabricsNode(object):
 
     def hash_planner_configuration(self, goal_type: str):
         hash_robot_type = rospy.get_param("/robot_type")
-        hash_obstacle = hashlib.md5(str(self.num_obstacles).encode("utf-8")).hexdigest()
+        hash_sphere_obstacle = hashlib.md5(str(self.num_sphere_obstacles).encode("utf-8")).hexdigest()
+        hash_box_obstacle = hashlib.md5(str(self.num_box_obstacles).encode("utf-8")).hexdigest()
         hash_self_collision_pairs = list_to_unique_hash(self.self_collision_pairs)
         hash_collision_links = list_to_unique_hash(self.collision_links)
         hash_goal_type = hashlib.md5(goal_type.encode("utf-8")).hexdigest()
         return (
             hash_robot_type
-            + hash_obstacle
+            + hash_sphere_obstacle
+            + hash_box_obstacle
             + hash_self_collision_pairs
             + hash_collision_links
             + hash_goal_type
@@ -252,7 +255,8 @@ class FabricsNode(object):
             self_collision_pairs=self.self_collision_pairs,
             goal=dummy_goal,
             limits=joint_limits,
-            number_obstacles=self.num_obstacles,
+            number_obstacles=self.num_sphere_obstacles,
+            number_obstacles_cuboid=self.num_box_obstacles,
         )
         planner.concretize(mode='vel', time_step = 1/100)
         # serializing the planner
@@ -342,18 +346,35 @@ class FabricsNode(object):
         self._goal, changed_planner = self.goal_wrapper.wrap(self._goal_msg)
 
     def compose_runtime_obstacles_argument(self):
-        x_obst = np.full((self.num_obstacles, 3), [100.0] * 3)
-        radius_obst = np.full((self.num_obstacles, 1), 0.05)
+        x_obst_sphere = np.full((self.num_sphere_obstacles, 3), [100.0] * 3)
+        radius_obst = np.full((self.num_sphere_obstacles, 1), 0.05)
+        x_obsts_cuboid = np.full((self.num_box_obstacles, 3), [100.0] * 3)
+        size_obsts_cuboid = np.full((self.num_box_obstacles, 3), 0.05)
+
         for i, o in enumerate(self.obstacles):
-            if i >= self.num_obstacles:
-                rospy.logwarn(
-                    f"Fabrics planner received more obstacles that it can process by the client: received {len(self.obstacles)} but can only handle {self.num_obstacles}.Consider increasing the rosparameter num_obstacles."
-                )
-                break
-            x_obst[i, :] = list(o.position)
-            radius_obst[i] = o.radius
+            if o.type == "sphere":
+                if i >= self.num_sphere_obstacles:
+                    rospy.logwarn(
+                        f"Fabrics planner received more sphere obstacles than it can process: can only handle {self.num_sphere_obstacles}. Consider increasing the rosparameter num_sphere_obstacles."
+                    )
+                    break
+                x_obst_sphere[i, :] = list(o.position)
+                radius_obst[i] = o.radius
+            elif o.type == "box":
+                if i >= self.num_box_obstacles:
+                    rospy.logwarn(
+                        f"Fabrics planner received more box obstacles than it can process: can only handle {self.num_box_obstacles}. Consider increasing the rosparameter num_box_obstacles."
+                    )
+                    break
+                x_obsts_cuboid[i, :] = list(o.position)
+                size_obsts_cuboid[i] = list(o.size)
         self._runtime_arguments.update(self.collision_bodies)
-        self._runtime_arguments.update({'x_obst': x_obst, 'radius_obst': radius_obst})
+        self._runtime_arguments.update({
+            'x_obst': x_obst_sphere, 
+            'radius_obst': radius_obst,
+            'x_obsts_cuboid': x_obsts_cuboid,
+            'size_obsts_cuboid': size_obsts_cuboid,
+        })
 
 
     def compute_action(self):

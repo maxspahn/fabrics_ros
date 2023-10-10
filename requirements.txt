@@ -1,4 +1,4 @@
 # python dependencies
-fabrics>0.8
+fabrics>=0.8.7
 pykalman
 scipy
