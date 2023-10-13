@@ -47,7 +47,7 @@ class ClientNode(object):
         # radius of shelf (suppose it's a circular shelf)
         self.r_shelf = 0.30
         # diameter of a sphere
-        self.r_obs = 0.15
+        self.r_obs = 0.05
         self.obs = FabricsObstacleArray()
 
     def init_publishers(self):
@@ -127,7 +127,7 @@ class ClientNode(object):
     def run(self):
         while not rospy.is_shutdown():
             self.publish_goal(
-                0.8, 0.2, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475, 20, 10
+                0.8, 0.2, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475, 1, 2
             )
             self.publish_obs()
             self._rate.sleep()
