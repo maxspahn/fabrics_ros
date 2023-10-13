@@ -352,7 +352,7 @@ class FabricsNode(object):
         size_obsts_cuboid = np.full((self.num_box_obstacles, 3), 0.05)
 
         for i, o in enumerate(self.obstacles):
-            if o.type == "sphere":
+            if o.obstacle_type == "sphere":
                 if i >= self.num_sphere_obstacles:
                     rospy.logwarn(
                         f"Fabrics planner received more sphere obstacles than it can process: can only handle {self.num_sphere_obstacles}. Consider increasing the rosparameter num_sphere_obstacles."
@@ -360,14 +360,19 @@ class FabricsNode(object):
                     break
                 x_obst_sphere[i, :] = list(o.position)
                 radius_obst[i] = o.radius
-            elif o.type == "box":
+            elif o.obstacle_type == "box":
                 if i >= self.num_box_obstacles:
                     rospy.logwarn(
                         f"Fabrics planner received more box obstacles than it can process: can only handle {self.num_box_obstacles}. Consider increasing the rosparameter num_box_obstacles."
                     )
                     break
                 x_obsts_cuboid[i, :] = list(o.position)
-                size_obsts_cuboid[i] = list(o.size)
+                if i == 0:
+                    size_obsts_cuboid[0] = o.size.x
+                elif i == 1:
+                    size_obsts_cuboid[1] = o.size.y
+                else: 
+                    size_obsts_cuboid[2] = o.size.z
         self._runtime_arguments.update(self.collision_bodies)
         self._runtime_arguments.update({
             'x_obst': x_obst_sphere, 

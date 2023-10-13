@@ -55,7 +55,7 @@ roslaunch fabrics_bridge fabrics_interactive_marker.launch
 If you have a module which can publish data to `/planning_goal` and `/planning_obs`, run:
 
 ```bash
-roslaunch fabrics_bridge fabrics_node.launch
+roslaunch fabrics_bridge fabrics_panda_node.launch
 ```
 An example client node that can publish `/planning_goal` and `/planning_obs`:
 

@@ -103,10 +103,16 @@ class FabricsMarkerManager(object):
                 o = obstacles[i]
                 self.obs_markers.markers[i].pose.orientation.w = 1.0
                 self.obs_markers.markers[i].pose.position = o.position
-                self.obs_markers.markers[i].scale = Vector3(
+                if o.obstacle_type == "box":
+                    self.obs_markers.markers[i].scale = Vector3(
+                    o.size.x * 2, o.size.y * 2, o.size.z * 2
+                    )
+                    self.obs_markers.markers[i].type = 1
+                else:
+                    self.obs_markers.markers[i].scale = Vector3(
                     o.radius * 2, o.radius * 2, o.radius * 2
-                )
-                self.obs_markers.markers[i].type = 2
+                    )
+                    self.obs_markers.markers[i].type = 2
                 self.obs_markers.markers[i].color = ColorRGBA(a=1, r=1, g=0, b=0)
             else:
                 self.obs_markers.markers[i] = init_marker(0.01, 0, 0, 1, rospy.get_param("/root_link"), 0.01, i)
