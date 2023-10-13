@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import os
 import sys
 import rospy
 import actionlib
@@ -6,6 +7,7 @@ import numpy as np
 import pickle
 import tf
 import tf2_ros
+from pynput import keyboard
 from itertools import cycle
 
 from fabrics_msgs.msg import (
@@ -14,25 +16,11 @@ from fabrics_msgs.msg import (
     FabricsObstacle,
     FabricsGoal,
 )
-from geometry_msgs.msg import PoseStamped, Point, Quaternion, Pose
-from std_msgs.msg import Bool, Header
+from geometry_msgs.msg import Point, Quaternion
+from std_msgs.msg import Float64MultiArray
 
-class Recording():
-    def __init__(self, ee_name, name):
-        self._data = []
-        self._ee_name = ee_name
-        self._name = name
+from record import Recording
 
-    def append_waypoint(self, waypoint: list) -> None:
-        self._data.append(waypoint)
-
-    def waypoints(self) -> list:
-        return self._data
-
-    def save(self):
-        with open(f"{self._name}.pickle", "wb") as f:
-            pickle.dump(self, f)
-        rospy.loginfo(f"Saved {len(self._data)} poses to {self._name}.pickle")
 
 # Helpers
 def _it(self):
@@ -55,36 +43,60 @@ Quaternion.__iter__ = _it
 
 
 class PlaybackWaypoints(object):
-    def __init__(self, name: str, base_frame: str) -> None:
+    def __init__(self, recording: Recording, base_frame: str) -> None:
         # Initialize action server
         self._rate = rospy.Rate(20)
 
-        # Start listener
-        self.tf_listener = tf.TransformListener()
-        self.tf2_buffer = tf2_ros.Buffer()
-        self.tf2_listener = tf2_ros.TransformListener(self.tf2_buffer)
-        self.tf2_broadcaster = tf2_ros.StaticTransformBroadcaster()
-        rospy.sleep(1.0)
+        self.establish_ros_connections()
+        self._recording = recording
 
-        # Initialize publishers/subscribers/clients
-        self.init_publishers()
-        self.init_subscribers()
 
         # initialize goal
         # it's a goal wrt panda_link0
         self.goal = FabricsGoal(goal_type="ee_pose")
         self._base_frame = base_frame
         self.goal.goal_pose.header.frame_id = base_frame
-        self.goal.weight_goal_0 = 0.5
-        self.goal.weight_goal_1 = 1.0
         self.goal.tolerance_goal_0 = 0.03
-        self.goal.tolerance_goal_1 = 5*(3.14/180)
+        self.goal.tolerance_goal_1 = 10*(3.14/180)
+        self.set_controller()
+        self._listener = keyboard.Listener(
+                on_press=self.keyboard_cb,
+        )
+        self._listener.start()
+        self._weight_factor = 1
+
+    def keyboard_cb(self, event):
+        if event == keyboard.KeyCode.from_char("w"):
+            self._weight_factor *= 1.1
+        if event == keyboard.KeyCode.from_char("v"):
+            self._weight_factor *= 0.99
+        print(self._weight_factor)
+
+    def establish_ros_connections(self):
+        # Start listener
+        self.tf_listener = tf.TransformListener()
+        self.tf2_buffer = tf2_ros.Buffer()
+        self.tf2_listener = tf2_ros.TransformListener(self.tf2_buffer)
+        self.tf2_broadcaster = tf2_ros.StaticTransformBroadcaster()
+        # Initialize publishers/subscribers/clients
+        self.init_publishers()
+        self.init_subscribers()
+        rospy.sleep(1.0)
 
     def init_publishers(self):
         self.fabrics_goal_pub = rospy.Publisher(
             "/fabrics/planning_goal", FabricsGoal, queue_size=10
         )
-
+        self._ki_publisher = rospy.Publisher(
+            "/compliant_joint_velocity_controller/controller_ki",
+            Float64MultiArray,
+            queue_size=1
+        )
+        self._kp_publisher = rospy.Publisher(
+            "/compliant_joint_velocity_controller/controller_kp",
+            Float64MultiArray,
+            queue_size=1
+        )
     def init_subscribers(self):
         self.fabrics_state_sub = rospy.Subscriber(
             "/fabrics/state", FabricsState, self.fabrics_state_cb
@@ -95,7 +107,11 @@ class PlaybackWaypoints(object):
     def fabrics_state_cb(self, msg):
         self.fabrics_state = msg
 
-    def reach_waypoint(self, pose, check_present=False) -> bool:
+    def reach_waypoint(self, waypoint_index: int, check_present=False) -> bool:
+        rospy.loginfo(waypoint_index)
+        waypoint = self._recording.waypoints()[waypoint_index]
+        pose = waypoint[0]
+        weight_1 = waypoint[2]
         pose.header.stamp = rospy.Time(0)
         goal_pose = self.tf_listener.transformPose(
             self._base_frame, pose
@@ -103,27 +119,45 @@ class PlaybackWaypoints(object):
         self.goal.goal_pose.pose = goal_pose.pose
 
         start = rospy.Time().now()
-        min_time_passed = lambda: rospy.Time().now() - start > rospy.Duration(0.01)
+        min_time_passed = lambda: rospy.Time().now() - start > rospy.Duration(0.005)
         max_time_passed = lambda: rospy.Time().now() - start > rospy.Duration(20)
 
         self.fabrics_goal_pub.publish(self.goal)
         while not self.fabrics_state.goal_reached or not min_time_passed():
+            weight_0 = waypoint[1] * self._weight_factor
+            weight_1 = waypoint[1] * self._weight_factor
+            self.goal.weight_goal_0 = weight_0
+            self.goal.weight_goal_1 = weight_1
             self.fabrics_goal_pub.publish(self.goal)
             self._rate.sleep()
+        self._recording.change_weight_at_waypoint(waypoint_index, weight_0)
         return True
 
+    def set_controller(self):
+        kp = np.array([10.0, 10.0, 10.0, 10.0, 7.5, 7.5, 5.0]) * 2.0
+        ki = np.array([1.0, 1.0, 1.0, 1.0, 0.4, 1.0, 0.4]) * 1
+        ki_msg = Float64MultiArray(data=ki)
+        kp_msg = Float64MultiArray(data=kp)
+        rospy.loginfo("Setting low controller gains.")
+        for i in range(10):
+            self._ki_publisher.publish(ki_msg)
+            self._kp_publisher.publish(kp_msg)
 
-    def run(self, waypoints):
-        for pose in cycle(waypoints):
+
+    def run(self):
+        waypoints = self._recording.waypoints()
+        #for pose in cycle(waypoints):
+        for waypoint_index in range(len(waypoints)):
             #pose.header.frame_id="tag_2_filtered"
-            self.reach_waypoint(pose)
+            self.reach_waypoint(waypoint_index)
+        self._recording.name(f"{self._recording._name}_improved")
+        self._recording.save()
 
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
         recording: Recording = pickle.load(f)
 
-    waypoints = recording.waypoints()
 
     rospy.init_node("playback_waypoints")
-    node = PlaybackWaypoints(rospy.get_name(), base_frame='/panda_link0')
-    node.run(waypoints)
+    node = PlaybackWaypoints(recording=recording, base_frame='/panda_link0')
+    node.run()
