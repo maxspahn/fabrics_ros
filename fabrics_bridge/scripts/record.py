@@ -6,36 +6,99 @@ import tf2_ros
 import actionlib
 import pickle
 from std_msgs.msg import Bool, Float64MultiArray
-from geometry_msgs.msg import PoseStamped
+from geometry_msgs.msg import PoseStamped, Vector3
+from geometry_msgs.msg import Point, Quaternion
 
 import panda_py as papy
 from pynput import keyboard
 
+# Helpers
+def _it(self):
+    yield self.x
+    yield self.y
+    yield self.z
+
+
+Point.__iter__ = _it
+Vector3.__iter__ = _it
+
+
+def _it(self):
+    yield self.x
+    yield self.y
+    yield self.z
+    yield self.w
+
+
+Quaternion.__iter__ = _it
+
 class WrongInteractionDevice(Exception):
     pass
+
+def moving_average(data, window_size):
+    return np.convolve(data, np.ones((window_size, 3))/window_size, mode='valid')
 
 class Recording():
     def __init__(self, ee_name, name):
         self._data = []
         self._ee_name = ee_name
         self._name = name
+        self._indices = {
+            'position': [0, 3],
+            'orientation': [3, 7],
+            'header': 7,
+            'weight_0': 8,
+            'weight_1': 9,
+            'tolerance_0': 10,
+            'tolerance_1': 11,
+        }
+        self._record_threshold = 0.0005
+            
 
     def name(self, name: str) -> None:
         self._name = name
 
     def append_waypoint(self, waypoint: list) -> None:
-        self._data.append(waypoint)
+        if len(self._data) < 1:
+            distance = 1
+        else:
+            distance = np.linalg.norm(
+                np.array(waypoint[0:3]) - np.array(self._data[-1][0:3])
+            )
+        if distance >= self._record_threshold:
+            self._data.append(waypoint)
+        else:
+            print("Waypoint discarded because it is too close to the old one.")
 
     def remove_waypoint(self, index: int) -> None:
         self._data.pop(index)
 
-    def change_weight_at_waypoint(self, index, new_weight) -> None:
-        self._data[index][1] = new_weight
+    def change_value_at_waypoint(self, index, data_name, new_value) -> None:
+        try:
+            self._data[index][self._indices[data_name]] = new_value
+        except KeyError as _:
+            print(f"Could not find data field with name {data_name}")
 
     def waypoints(self) -> list:
         return self._data
 
-    def save(self):
+
+    def smoothen_trajectory(self):
+        window_size = 20
+
+        positions = np.array([d[0:3] for d in self._data])
+        smooth_positions = np.zeros_like(positions)
+        positions = np.pad(positions, [[window_size//2, window_size//2-1], [0, 0]], mode='edge')
+
+        for i in range(3):
+            smooth_positions[:, i] = np.convolve(positions[:, i], np.ones(window_size)/window_size, mode='valid')
+
+        for i in range(len(self._data)):
+            self._data[i][0:3] = smooth_positions[i, 0:3].tolist()
+
+    def save(self, smoothen: bool = False):
+        if smoothen:
+            self.smoothen_trajectory()
         with open(f"{self._name}.pickle", "wb") as f:
             pickle.dump(self, f)
         rospy.loginfo(f"Saved {len(self._data)} poses to {self._name}.pickle")
@@ -155,7 +218,7 @@ class RecordSkillNode:
 
 
     def save_poses(self):
-        self._recording.save()
+        self._recording.save(smoothen=True)
         del self._recording
 
     def run(self):
@@ -163,6 +226,7 @@ class RecordSkillNode:
         rospy.sleep(1)
         weight_0 = 1.0
         weight_1 = 1.0
+        threshold_0 = 0.03
 
         while not rospy.is_shutdown():
             try:
@@ -185,7 +249,14 @@ class RecordSkillNode:
 
             # Add the pose to the list
             if self._currently_recording:
-                self._recording.append_waypoint([pose, weight_0, weight_1])
+                self._recording.append_waypoint([
+                    *list(pose.pose.position),
+                    *list(pose.pose.orientation),
+                    pose.header,
+                    weight_0,
+                    weight_1,
+                    threshold_0
+                ])
                 rospy.loginfo("Currently Recording")
 
             else:

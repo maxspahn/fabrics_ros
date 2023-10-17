@@ -16,7 +16,7 @@ from fabrics_msgs.msg import (
     FabricsObstacle,
     FabricsGoal,
 )
-from geometry_msgs.msg import Point, Quaternion
+from geometry_msgs.msg import Point, Quaternion, PoseStamped
 from std_msgs.msg import Float64MultiArray
 
 from record import Recording
@@ -45,7 +45,9 @@ Quaternion.__iter__ = _it
 class PlaybackWaypoints(object):
     def __init__(self, recording: Recording, base_frame: str) -> None:
         # Initialize action server
-        self._rate = rospy.Rate(20)
+        self._rate = rospy.Rate(10)
+        self._target_frame = "panda_link0"
+        self._ee_frame = "panda_vacuum"
 
         self.establish_ros_connections()
         self._recording = recording
@@ -56,7 +58,7 @@ class PlaybackWaypoints(object):
         self.goal = FabricsGoal(goal_type="ee_pose")
         self._base_frame = base_frame
         self.goal.goal_pose.header.frame_id = base_frame
-        self.goal.tolerance_goal_0 = 0.03
+        self.goal.tolerance_goal_0 = 0.05
         self.goal.tolerance_goal_1 = 10*(3.14/180)
         self.set_controller()
         self._listener = keyboard.Listener(
@@ -64,13 +66,20 @@ class PlaybackWaypoints(object):
         )
         self._listener.start()
         self._weight_factor = 1
+        self._threshold_factor = 1
+        self._remove_point = False
 
     def keyboard_cb(self, event):
         if event == keyboard.KeyCode.from_char("w"):
             self._weight_factor *= 1.1
         if event == keyboard.KeyCode.from_char("v"):
             self._weight_factor *= 0.99
-        print(self._weight_factor)
+        if event == keyboard.KeyCode.from_char("t"):
+            self._threshold_factor *= 1.1
+        if event == keyboard.KeyCode.from_char("s"):
+            self._threshold_factor *= 0.99
+        if event == keyboard.KeyCode.from_char("r"):
+            self._remove_point = True
 
     def establish_ros_connections(self):
         # Start listener
@@ -107,11 +116,83 @@ class PlaybackWaypoints(object):
     def fabrics_state_cb(self, msg):
         self.fabrics_state = msg
 
-    def reach_waypoint(self, waypoint_index: int, check_present=False) -> bool:
-        rospy.loginfo(waypoint_index)
+    def index(self, name):
+        return self._recording._indices[name]
+
+    def publish_waypoint_goal(self, waypoint_index):
+        if self._remove_point:
+            rospy.loginfo(f"Removing waypoint {waypoint_index}")
+            self._recording.remove_waypoint(waypoint_index)
+            self._remove_point = False
         waypoint = self._recording.waypoints()[waypoint_index]
-        pose = waypoint[0]
-        weight_1 = waypoint[2]
+
+        position = waypoint[self.index('position')[0]: self.index('position')[1]]
+        orientation = waypoint[self.index('orientation')[0]: self.index('orientation')[1]]
+        pose = PoseStamped()
+        pose.pose.position.x = position[0]
+        pose.pose.position.y = position[1]
+        pose.pose.position.z = position[2]
+        pose.pose.orientation.x = orientation[0]
+        pose.pose.orientation.y = orientation[1]
+        pose.pose.orientation.z = orientation[2]
+        pose.pose.orientation.w = orientation[3]
+        pose.header = waypoint[self.index('header')]
+        pose.header.stamp = rospy.Time(0)
+        goal_pose = self.tf_listener.transformPose(
+            self._base_frame, pose
+        )
+        self.goal.goal_pose.pose = goal_pose.pose
+        weight_0 = waypoint[self.index('weight_0')] * self._weight_factor
+        weight_1 = waypoint[self.index('weight_0')] * self._weight_factor
+        threshold_0 = waypoint[self.index('tolerance_0')] * self._threshold_factor
+        self.goal.weight_goal_0 = weight_0
+        self.goal.weight_goal_1 = weight_1
+        self.goal.tolerance_goal_0 = threshold_0
+
+
+        rospy.loginfo(f"Publishing goal for waypoint {waypoint_index} with weight {weight_0} and tolerance {threshold_0}")
+        self.fabrics_goal_pub.publish(self.goal)
+
+
+    def execute_trajectory(self, step_size: int):
+        waypoint_index = 0
+        while waypoint_index < len(self._recording.waypoints()):
+            self.publish_waypoint_goal(waypoint_index)
+            self._rate.sleep()
+            if self.fabrics_state.goal_reached:
+                closest_waypoint = waypoint_index
+            else:
+                closest_waypoint = self.get_closest_waypoint_index()
+
+            closest_waypoint = max(closest_waypoint, waypoint_index)
+            closest_waypoint = min(closest_waypoint + step_size, waypoint_index)
+            waypoint_index = min(len(self._recording.waypoints()), closest_waypoint + step_size)
+            """
+            closest_waypoint = max(closest_waypoint, waypoint_index)
+            distances = np.linalg.norm(self._positions[closest_waypoint, :] -
+                                       self._positions[closest_waypoint+1:, :],
+                                       axis = 1)
+            rospy.loginfo(distances.shape)
+            try:
+                waypoint_index = np.where(distances > step_size)[0][0] + closest_waypoint
+            except IndexError:
+                waypoint_index = len(self._recording.waypoints())
+            """
+
+
+    def reach_waypoint(self, waypoint_index: int, check_present=False) -> bool:
+        waypoint = self._recording.waypoints()[waypoint_index]
+        position = waypoint[self.index('position')[0]: self.index('position')[1]]
+        orientation = waypoint[self.index('orientation')[0]: self.index('orientation')[1]]
+        pose = PoseStamped()
+        pose.pose.position.x = position[0]
+        pose.pose.position.y = position[1]
+        pose.pose.position.z = position[2]
+        pose.pose.orientation.x = orientation[0]
+        pose.pose.orientation.y = orientation[1]
+        pose.pose.orientation.z = orientation[2]
+        pose.pose.orientation.w = orientation[3]
+        pose.header = waypoint[self.index('header')]
         pose.header.stamp = rospy.Time(0)
         goal_pose = self.tf_listener.transformPose(
             self._base_frame, pose
@@ -123,19 +204,50 @@ class PlaybackWaypoints(object):
         max_time_passed = lambda: rospy.Time().now() - start > rospy.Duration(20)
 
         self.fabrics_goal_pub.publish(self.goal)
+        weight_0 = waypoint[self.index('weight_0')] * self._weight_factor
+        weight_1 = waypoint[self.index('weight_0')] * self._weight_factor
+        threshold_0 = waypoint[self.index('tolerance_0')] * self._threshold_factor
         while not self.fabrics_state.goal_reached or not min_time_passed():
-            weight_0 = waypoint[1] * self._weight_factor
-            weight_1 = waypoint[1] * self._weight_factor
+            weight_0 = waypoint[self.index('weight_0')] * self._weight_factor
+            weight_1 = waypoint[self.index('weight_0')] * self._weight_factor
+            threshold_0 = waypoint[self.index('tolerance_0')] * self._threshold_factor
             self.goal.weight_goal_0 = weight_0
             self.goal.weight_goal_1 = weight_1
+            self.goal.tolerance_goal_0 = threshold_0
+            #rospy.loginfo(f"{self.goal.tolerance_goal_0}, {self.goal.weight_goal_0}")
             self.fabrics_goal_pub.publish(self.goal)
             self._rate.sleep()
-        self._recording.change_weight_at_waypoint(waypoint_index, weight_0)
+        self._recording.change_value_at_waypoint(waypoint_index, 'weight_0', weight_0)
+        self._recording.change_value_at_waypoint(waypoint_index, 'tolerance_0', threshold_0)
         return True
 
+    def get_closest_waypoint_index(self) -> int:
+        position_found = False
+        while not position_found:
+            try:
+                trans = self.tf2_buffer.lookup_transform(
+                    self._target_frame, self._ee_frame, rospy.Time()
+                )
+                position_found = True
+            except (
+                tf2_ros.LookupException,
+                tf2_ros.ConnectivityException,
+                tf2_ros.ExtrapolationException,
+            ):
+                rospy.logwarn("Could not get transform")
+                continue
+
+        # Convert the transform to a PoseStamped message and add it to the list
+        cur_position = trans.transform.translation
+        position = np.array([cur_position.x, cur_position.y, cur_position.z])
+        positions = np.array([d[0:3] for d in self._recording._data])
+        distances = np.linalg.norm(position - positions, axis=1)
+        return np.argmin(distances)
+
+
     def set_controller(self):
-        kp = np.array([10.0, 10.0, 10.0, 10.0, 7.5, 7.5, 5.0]) * 2.0
-        ki = np.array([1.0, 1.0, 1.0, 1.0, 0.4, 1.0, 0.4]) * 1
+        kp = [10, 20, 30, 40, 10, 10, 5]
+        ki = [2, 2, 2, 2, 0.5, 1, 0.5]
         ki_msg = Float64MultiArray(data=ki)
         kp_msg = Float64MultiArray(data=kp)
         rospy.loginfo("Setting low controller gains.")
@@ -145,14 +257,21 @@ class PlaybackWaypoints(object):
 
 
     def run(self):
+        start = rospy.Time().now()
         waypoints = self._recording.waypoints()
+        self.execute_trajectory(1)
         #for pose in cycle(waypoints):
+        """
         for waypoint_index in range(len(waypoints)):
             #pose.header.frame_id="tag_2_filtered"
             self.reach_waypoint(waypoint_index)
+        """
         self._recording.name(f"{self._recording._name}_improved")
         self._recording.save()
 
+        end = rospy.Time().now()
+        duration = end - start
+        rospy.loginfo(duration.to_sec())
 if __name__ == "__main__":
     with open(sys.argv[1], 'rb') as f:
         recording: Recording = pickle.load(f)

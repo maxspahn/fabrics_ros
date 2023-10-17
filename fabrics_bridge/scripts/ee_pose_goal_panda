@@ -127,7 +127,7 @@ class ClientNode(object):
     def run(self):
         while not rospy.is_shutdown():
             self.publish_goal(
-                0.8, 0.2, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475, 20, 10
+                0.8, 0.2, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475, 10, 5
             )
             self.publish_obs()
             self._rate.sleep()
