@@ -8,6 +8,7 @@ import pickle
 from std_msgs.msg import Bool, Float64MultiArray
 from geometry_msgs.msg import PoseStamped, Vector3
 from geometry_msgs.msg import Point, Quaternion
+from albert_vacuum_gripper.msg import DropOffActionGoal, VacuumActionGoal
 
 import panda_py as papy
 from pynput import keyboard
@@ -50,7 +51,7 @@ class Recording():
             'weight_0': 8,
             'weight_1': 9,
             'tolerance_0': 10,
-            'tolerance_1': 11,
+            'vacuum': 11,
         }
         self._record_threshold = 0.0005
             
@@ -65,7 +66,8 @@ class Recording():
             distance = np.linalg.norm(
                 np.array(waypoint[0:3]) - np.array(self._data[-1][0:3])
             )
-        if distance >= self._record_threshold:
+            vacuum_changed = self._data[-1][self._indices['vacuum']] == waypoint[self._indices['vacuum']]
+        if (distance >= self._record_threshold) or vacuum_changed:
             self._data.append(waypoint)
         else:
             print("Waypoint discarded because it is too close to the old one.")
@@ -123,6 +125,7 @@ class RecordSkillNode:
         rospy.loginfo("Starting RecordSkillNode as record_skill.")
 
         self._skill_name = skill_name
+        self._vacuum = False
         self._ee_frame = ee_frame
         self._target_frame = target_frame
 
@@ -146,6 +149,17 @@ class RecordSkillNode:
             Float64MultiArray,
             queue_size=1
         )
+        self._suck_publisher = rospy.Publisher("/franka_vacuum_gripper/vacuum/goal", VacuumActionGoal, queue_size=1)
+        self._unsuck_publisher = rospy.Publisher("/franka_vacuum_gripper/dropoff/goal", DropOffActionGoal, queue_size=1)
+
+    def suck(self):
+        goal_msg = VacuumActionGoal()
+        goal_msg.goal.vacuum = 1
+        self._suck_publisher.publish(goal_msg)
+
+    def unsuck(self):
+        goal_msg = DropOffActionGoal()
+        self._unsuck_publisher.publish(goal_msg)
 
     def set_controller(self):
         ki = [0.0, ] * 7
@@ -163,6 +177,7 @@ class RecordSkillNode:
             self._desk.listen(self.panda_button_cb)
         elif interaction_device == 'keyboard':
             rospy.loginfo("Press r to start recording and e to end recording")
+            rospy.loginfo("Press v and n to activate and deactive the suction.")
             self._listener = keyboard.Listener(
                     on_press=self.keyboard_cb,
             )
@@ -199,6 +214,7 @@ class RecordSkillNode:
             self._currently_recording = False
             if hasattr(self, '_recording'):
                 self.save_poses()
+                self.unsuck()
 
     def panda_button_cb(self, event):
         print(event)
@@ -212,6 +228,12 @@ class RecordSkillNode:
             self.start_recording()
         if event == keyboard.KeyCode.from_char("e"):
             self.stop_recording()
+        if event == keyboard.KeyCode.from_char("v"):
+            self.suck()
+            self._vacuum = True
+        if event == keyboard.KeyCode.from_char("n"):
+            self.unsuck()
+            self._vacuum = False
 
             
             
@@ -225,7 +247,7 @@ class RecordSkillNode:
         r = rospy.Rate(20)
         rospy.sleep(1)
         weight_0 = 1.0
-        weight_1 = 1.0
+        weight_1 = 6.0
         threshold_0 = 0.03
 
         while not rospy.is_shutdown():
@@ -255,7 +277,8 @@ class RecordSkillNode:
                     pose.header,
                     weight_0,
                     weight_1,
-                    threshold_0
+                    threshold_0,
+                    self._vacuum,
                 ])
                 rospy.loginfo("Currently Recording")
 

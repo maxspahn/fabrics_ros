@@ -18,6 +18,7 @@ from fabrics_msgs.msg import (
 )
 from geometry_msgs.msg import Point, Quaternion, PoseStamped
 from std_msgs.msg import Float64MultiArray
+from albert_vacuum_gripper.msg import DropOffActionGoal, VacuumActionGoal
 
 from record import Recording
 
@@ -48,6 +49,7 @@ class PlaybackWaypoints(object):
         self._rate = rospy.Rate(10)
         self._target_frame = "panda_link0"
         self._ee_frame = "panda_vacuum"
+        self._vacuum = False
 
         self.establish_ros_connections()
         self._recording = recording
@@ -106,11 +108,23 @@ class PlaybackWaypoints(object):
             Float64MultiArray,
             queue_size=1
         )
+        self._suck_publisher = rospy.Publisher("/franka_vacuum_gripper/vacuum/goal", VacuumActionGoal, queue_size=1)
+        self._unsuck_publisher = rospy.Publisher("/franka_vacuum_gripper/dropoff/goal", DropOffActionGoal, queue_size=1)
+
     def init_subscribers(self):
         self.fabrics_state_sub = rospy.Subscriber(
             "/fabrics/state", FabricsState, self.fabrics_state_cb
         )
         self.fabrics_state = FabricsState(goal_reached=False, positional_error=100.0)
+
+    def suck(self):
+        goal_msg = VacuumActionGoal()
+        goal_msg.goal.vacuum = 1
+        self._suck_publisher.publish(goal_msg)
+
+    def unsuck(self):
+        goal_msg = DropOffActionGoal()
+        self._unsuck_publisher.publish(goal_msg)
 
 
     def fabrics_state_cb(self, msg):
@@ -143,15 +157,25 @@ class PlaybackWaypoints(object):
         )
         self.goal.goal_pose.pose = goal_pose.pose
         weight_0 = waypoint[self.index('weight_0')] * self._weight_factor
-        weight_1 = waypoint[self.index('weight_0')] * self._weight_factor
+        weight_1 = waypoint[self.index('weight_1')] * self._weight_factor
         threshold_0 = waypoint[self.index('tolerance_0')] * self._threshold_factor
         self.goal.weight_goal_0 = weight_0
         self.goal.weight_goal_1 = weight_1
         self.goal.tolerance_goal_0 = threshold_0
+        rospy.loginfo(waypoint[self.index('vacuum')])
+        if self._vacuum != waypoint[self.index('vacuum')]:
+            if waypoint[self.index('vacuum')]:
+                self._vacuum = True
+                self.suck()
+            else:
+                self._vacuum = False
+                self.unsuck()
 
 
         rospy.loginfo(f"Publishing goal for waypoint {waypoint_index} with weight {weight_0} and tolerance {threshold_0}")
         self.fabrics_goal_pub.publish(self.goal)
+        self._recording.change_value_at_waypoint(waypoint_index, 'weight_0', weight_0)
+        self._recording.change_value_at_waypoint(waypoint_index, 'tolerance_0', threshold_0)
 
 
     def execute_trajectory(self, step_size: int):
