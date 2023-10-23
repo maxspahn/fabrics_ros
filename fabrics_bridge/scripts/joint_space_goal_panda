@@ -50,7 +50,7 @@ class JointSpaceExampleClient(object):
         goal.goal_joint_state.position = [0.0, -1.0, 0.0, -1.501, 0.0, 1.8675, 0.0]
         #goal.goal_joint_state.position = [-1.7, -0.2, -1.4, -1.501, 0.0, 1.2675, 0.0]
         goal.goal_type = "joint_space"
-        goal.weight_goal_0 = 3.0
+        goal.weight_goal_0 = 10.0
         goal.tolerance_goal_0 = 0.02
         self._goal_publisher.publish(goal)
 

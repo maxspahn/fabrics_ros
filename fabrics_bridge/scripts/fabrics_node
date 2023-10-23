@@ -134,7 +134,8 @@ class FabricsNode(object):
         self.planners = {}
         self._runtime_arguments = {}
         self.goal_wrapper = FabricsGoalWrapper()
-        self.rate = rospy.Rate(100)
+        self.frequency = 20
+        self.rate = rospy.Rate(self.frequency)
         self.load_parameters()
         self.joint_names = rospy.get_param("/joint_names")
         self._index_list = rospy.get_param("/index_list")
@@ -152,6 +153,8 @@ class FabricsNode(object):
         self.init_runtime_arguments()
         self.compose_runtime_obstacles_argument()
         self._action = np.zeros(9)
+        self.rollout_idx = 2001
+        self.rollout_N = 5
 
     def init_runtime_arguments(self):
         if self._planner_type == 'nonholonomic':
@@ -253,7 +256,7 @@ class FabricsNode(object):
             limits=joint_limits,
             number_obstacles=self.num_obstacles,
         )
-        planner.concretize(mode='vel', time_step = 1/100)
+        planner.concretize(mode='pos_vel', time_step = 1/self.frequency)
         # serializing the planner
         rospy.loginfo(f"Serializing the planner for goal_type:  {goal_type}")
         planner.serialize(serialize_file)
@@ -272,12 +275,17 @@ class FabricsNode(object):
                 goal_is_reached = self.state_evaluator.evaluate(
                     self._goal_msg, self.joint_states
                 )
-                self.marker_manager.update_markers(
-                    self._goal_msg, self.obstacles, goal_is_reached
-                )
+                # self.marker_manager.update_markers(
+                #     self._goal_msg, self.obstacles, goal_is_reached
+                # )
             self.rate.sleep()
 
     def init_publishers(self):
+        self._pos_vel_pub_panda = rospy.Publisher(
+            '/compliant_joint_position_controller/command',
+            JointState,
+            queue_size=10
+        )
         self._vel_pub_panda = rospy.Publisher(
             '/panda_joint_velocity_controller/command',
             Float64MultiArray,
@@ -290,6 +298,7 @@ class FabricsNode(object):
         )
         """ panda specifics """
         self._vel_msg_panda = Float64MultiArray()
+        self._pos_vel_msg_panda = JointState()
         self._panda_indices = [2, 3, 4, 5, 6, 7, 8]
         """ boxer specifics """
         self._vel_msg_boxer = Twist()
@@ -356,9 +365,27 @@ class FabricsNode(object):
 
 
     def compute_action(self):
+        # Rollout fabrics for N steps (Update joint state based on command)
         self.goal_wrapper.compose_runtime_arguments(self._goal, self._runtime_arguments)
+
         self._runtime_arguments['q'] = list(self.joint_states.position)
-        self._runtime_arguments['qdot'] = list(self.joint_states.velocity)
+        factor = 0.9
+
+        if hasattr(self, "vel_action"):
+            self._runtime_arguments['qdot'] = list(np.array(self.vel_action) * factor + np.array(self.joint_states.velocity) * (1-factor))
+        else:
+            self._runtime_arguments['qdot'] = list(self.joint_states.velocity)
+
+        # if self.rollout_idx < self.rollout_N and hasattr(self, "pos_action"):
+        #     self._runtime_arguments['q'] = self.pos_action
+        #     self._runtime_arguments['qdot'] = self.vel_action
+        # else:
+        #     self._runtime_arguments['q'] = list(self.joint_states.position)
+        #     self._runtime_arguments['qdot'] = self.vel_action if hasattr(self, "vel_action") else [0]*7
+        #     self.rollout_idx = 0
+
+        # self.rollout_idx += 1
+
         if self._planner_type == "nonholonomic":
             self._runtime_arguments['qudot'] =  list(self._qudot)
         return self._planner.compute_action(
@@ -367,13 +394,20 @@ class FabricsNode(object):
 
     def act(self):
         try:
-            self._action[rospy.get_param("/published_indices")] = self.compute_action()
-            self._action = np.clip(self._action, self._min_vel, self._max_vel)
-            self._vel_msg_panda.data = self._action.tolist()[2:]
-            self._vel_msg_boxer.linear.x = self._action[0]
-            self._vel_msg_boxer.angular.z = self._action[1]
-            self._vel_pub_panda.publish(self._vel_msg_panda)
-            self._vel_pub_boxer.publish(self._vel_msg_boxer)
+            self.pos_action, self.vel_action = self.compute_action()
+
+            # self._action[rospy.get_param("/published_indices")] = self.compute_action()
+            # vel_action = np.clip(vel_action, self._min_vel, self._max_vel)
+
+            self._pos_vel_msg_panda.velocity = self.vel_action.tolist()
+            self._pos_vel_msg_panda.position = self.pos_action.tolist()
+            self._pos_vel_pub_panda.publish(self._pos_vel_msg_panda)
+
+            # self._vel_msg_panda.data = self._action.tolist()[2:]
+            # self._vel_msg_boxer.linear.x = self._action[0]
+            # self._vel_msg_boxer.angular.z = self._action[1]
+            # self._vel_pub_panda.publish(self._vel_msg_panda)
+            # self._vel_pub_boxer.publish(self._vel_msg_boxer)
         except Exception as e:
             rospy.loginfo(f"Not planning due to error {e}")
             rospy.loginfo("Waiting for correct planner to be loaded.")
