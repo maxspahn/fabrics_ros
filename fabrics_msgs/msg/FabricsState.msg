@@ -1,6 +1,4 @@
 std_msgs/Header header
 bool goal_reached
-float32 positional_error
-float32 angular_error
-float32 tolerance_goal_0
-float32 tolerance_goal_1
+float32[] errors
+float32[] tolerances

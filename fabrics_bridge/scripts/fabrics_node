@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+from typing import List, Union
+import time
+from mpscenes.goals.sub_goal import SubGoal
 import numpy as np
 import rospy
 import rospkg
@@ -10,8 +13,9 @@ from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Point, PoseStamped, Quaternion
 from urdf_parser_py.urdf import URDF
 from fabrics_msgs.msg import (
-    FabricsState,
-    FabricsGoal,
+    FabricsJointSpaceGoal,
+    FabricsPoseGoal,
+    FabricsConstraintsGoal,
     FabricsObstacleArray,
 )
 from geometry_msgs.msg import Twist
@@ -125,10 +129,11 @@ Quaternion.__iter__ = _it
 class FabricsNode(object):
 
     _planner : ParameterizedFabricPlanner
+    _goal: Union[GoalComposition, None]
 
     def __init__(self):
         rospy.init_node("fabrics_node")
-        self._goal_type = ""
+        self._goal = None
         self._robot_type = rospy.get_param('/robot_type') 
         self.changed_planner = True
         self.stop_acc_bool = True
@@ -147,8 +152,8 @@ class FabricsNode(object):
         self.state_evaluator = FabricsGoalEvaluator()
         self.marker_manager = FabricsMarkerManager(self.num_sphere_obstacles, self.collision_bodies, self.collision_links, self.self_collision_pairs)
 
-        self.init_planner("joint_space")
-        self.init_planner("ee_pose")
+        #self.init_planner("FabricsJointSpaceGoal")
+        #self.init_planner("FabricsPoseGoal")
         self.stop_acc_bool = False
         self.init_runtime_arguments()
         self.compose_runtime_obstacles_argument()
@@ -193,50 +198,57 @@ class FabricsNode(object):
         for name, radius in self.collision_bodies.items():
             self.collision_bodies[name] = np.array([radius])
 
-    def load_planner(self, goal_type):
+    def load_planner(self, goal):
         self.stop_acc_bool = True
+        if goal is None:
+            return
         rospack = rospkg.RosPack()
-        file_hash = self.hash_planner_configuration(goal_type)
+        file_hash = self.hash_planner_configuration(goal)
+        goal_string = self.goal_wrapper.goal_string(goal)
         serialize_file = rospack.get_path("fabrics_bridge") + "/planner/" + file_hash
         # If the planner is not serialized yet, this node has to wait for the serialization to finish.
         try:
-            rospy.loginfo(f"Loading planner for goal type : {goal_type}")
+            rospy.loginfo(f"Loading planner for goal type : {goal_string}")
             self._planner = self.planners[serialize_file]
+            rospy.loginfo(self._planner)
             self.stop_acc_bool = False
         except Exception as e:
             rospy.logwarn(e)
             rospy.loginfo("Planner not found: Waiting...")
-            self._goal_type = ""
-            self.stop_acc_bool = True
+            self.init_planner(goal)
+            self.stop_acc_bool = False
 
-    def hash_planner_configuration(self, goal_type: str):
-        hash_robot_type = rospy.get_param("/robot_type")
+    def hash_planner_configuration(self, goal: GoalComposition):
+        hash_robot_type: str = rospy.get_param("/robot_type")
         hash_sphere_obstacle = hashlib.md5(str(self.num_sphere_obstacles).encode("utf-8")).hexdigest()
         hash_box_obstacle = hashlib.md5(str(self.num_box_obstacles).encode("utf-8")).hexdigest()
         hash_self_collision_pairs = list_to_unique_hash(self.self_collision_pairs)
         hash_collision_links = list_to_unique_hash(self.collision_links)
-        hash_goal_type = hashlib.md5(goal_type.encode("utf-8")).hexdigest()
+        hash_goal = self.goal_wrapper.hash_goal(goal)
         return (
             hash_robot_type
             + hash_sphere_obstacle
             + hash_box_obstacle
             + hash_self_collision_pairs
             + hash_collision_links
-            + hash_goal_type
+            + hash_goal
         )
 
-    def init_planner(self, goal_type: str):
+    def init_planner(self, goal: GoalComposition):
         # TODO: Add full body control robot type as an option
 
         rospack = rospkg.RosPack()
-        file_hash = self.hash_planner_configuration(goal_type)
+        file_hash = self.hash_planner_configuration(goal)
         serialize_file = rospack.get_path("fabrics_bridge") + "/planner/" + file_hash
         if os.path.exists(serialize_file):
             rospy.loginfo(f"Planner is already serialized in {serialize_file}")
             self.planners[serialize_file] = SerializedFabricPlanner(serialize_file)
             return
 
-        rospy.loginfo(f"Creating the planner for goal_type:  {goal_type}")
+
+        goal_string = self.goal_wrapper.goal_string(goal)
+        rospy.loginfo(f"Creating the planner for goal:  {goal_string}")
+        t0 = time.perf_counter()
         planner = create_planner(self.urdf, self._planner_type)
         # get the joint limits for each joint
         self.robot = URDF.from_parameter_server(rospy.get_param("/urdf_source"))
@@ -249,20 +261,27 @@ class FabricsNode(object):
                 ]
             )
         # The planner hides all the logic behind the function set_components.
-        dummy_goal = self.goal_wrapper.compose_dummy_goal(goal_type)
+        #dummy_goal = self.goal_wrapper.compose_dummy_goal(goal_type)
         planner.set_components(
             collision_links=self.collision_links,
             self_collision_pairs=self.self_collision_pairs,
-            goal=dummy_goal,
+            goal=goal,
             limits=joint_limits,
             number_obstacles=self.num_sphere_obstacles,
             number_obstacles_cuboid=self.num_box_obstacles,
         )
         planner.concretize(mode='vel', time_step = 1/100)
+        t1 = time.perf_counter()
+        composition_time = (t1-t0) * 1000
         # serializing the planner
-        rospy.loginfo(f"Serializing the planner for goal_type:  {goal_type}")
+        rospy.loginfo(f"Planner composed in {composition_time} ms")
+        goal_string = self.goal_wrapper.goal_string(goal)
+        rospy.loginfo(f"Serializing the planner for goal:  {goal_string}")
+        t2 = time.perf_counter()
         planner.serialize(serialize_file)
-        rospy.loginfo(f"Finished serializing, {serialize_file} has been created")
+        t3 = time.perf_counter()
+        serialize_time = (t3-t2) * 1000
+        rospy.loginfo(f"Finished serializing, {serialize_file} has been created in {serialize_time} ms")
         self.planners[serialize_file] = planner
 
 
@@ -272,13 +291,17 @@ class FabricsNode(object):
             if (
                 hasattr(self, '_goal')
                 and not self.stop_acc_bool
+                and not self._goal is None
             ):
                 self.act()
                 goal_is_reached = self.state_evaluator.evaluate(
                     self._goal_msg, self.joint_states
                 )
-                self.marker_manager.update_markers(
-                    self._goal_msg, self.obstacles, goal_is_reached
+                self.marker_manager.update_goal_markers(
+                    self._goal_msg, goal_is_reached
+                )
+                self.marker_manager.update_obstacle_markers(
+                    self.obstacles
                 )
             self.rate.sleep()
 
@@ -306,8 +329,12 @@ class FabricsNode(object):
             tcp_nodelay=True,
         )
         self.obstacles = []
-        self.goal_subscriber = rospy.Subscriber(
-            "planning_goal", FabricsGoal, self.goal_callback,
+        rospy.Subscriber(
+            "joint_space_goal", FabricsJointSpaceGoal, self.joint_space_goal_cb,
+            tcp_nodelay=True,
+        )
+        rospy.Subscriber(
+            "ee_pose_goal", FabricsPoseGoal, self.ee_pose_goal_cb,
             tcp_nodelay=True,
         )
         self.joint_states = JointState()
@@ -326,7 +353,11 @@ class FabricsNode(object):
         self.obstacles = msg.obstacles
         self._obstacle_runtime_arguments = self.compose_runtime_obstacles_argument()
 
-    def goal_callback(self, msg: FabricsGoal):
+    def joint_space_goal_cb(self, msg: FabricsJointSpaceGoal):
+        self._goal_msg = msg
+        self._goal, changed_planner = self.goal_wrapper.wrap(msg)
+
+    def ee_pose_goal_cb(self, msg: FabricsPoseGoal):
         self._goal_msg = msg
         self._goal, changed_planner = self.goal_wrapper.wrap(msg)
 
@@ -405,7 +436,7 @@ class FabricsNode(object):
         except Exception as e:
             rospy.loginfo(f"Not planning due to error {e}")
             rospy.loginfo("Waiting for correct planner to be loaded.")
-            self.load_planner(self.goal_wrapper._goal_type)
+            self.load_planner(self._goal)
 
 
 if __name__ == "__main__":

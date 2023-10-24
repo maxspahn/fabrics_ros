@@ -10,7 +10,6 @@ import rospy
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
 from fabrics_msgs.msg import (
     FabricsGoal,
-    FabricsGoalArray,
     FabricsObstacle,
     FabricsObstacleArray,
 )
