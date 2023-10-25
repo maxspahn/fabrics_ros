@@ -307,7 +307,7 @@ class FabricsNode(object):
                 )
                 """
             t1 = time.perf_counter()
-            rospy.loginfo(f"Compute time in ms : {(t1-t0) * 1000}")
+            #rospy.loginfo(f"Compute time in ms : {(t1-t0) * 1000}")
             self.rate.sleep()
 
     def init_publishers(self):
@@ -342,6 +342,10 @@ class FabricsNode(object):
             "ee_pose_goal", FabricsPoseGoal, self.ee_pose_goal_cb,
             tcp_nodelay=True,
         )
+        rospy.Subscriber(
+            "constraints_goal", FabricsConstraintsGoal, self.constraints_goal_cb,
+            tcp_nodelay=True,
+        )
         self.joint_states = JointState()
         self.joint_state_subscriber = rospy.Subscriber(
             "/joint_states_filtered",
@@ -363,6 +367,10 @@ class FabricsNode(object):
         self._goal, changed_planner = self.goal_wrapper.wrap(msg)
 
     def ee_pose_goal_cb(self, msg: FabricsPoseGoal):
+        self._goal_msg = msg
+        self._goal, changed_planner = self.goal_wrapper.wrap(msg)
+
+    def constraints_goal_cb(self, msg: FabricsConstraintsGoal):
         self._goal_msg = msg
         self._goal, changed_planner = self.goal_wrapper.wrap(msg)
 

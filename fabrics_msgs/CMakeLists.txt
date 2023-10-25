@@ -10,6 +10,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 add_message_files(
   FILES
+  FabricsConstraint.msg
   FabricsConstraintsGoal.msg
   FabricsJointSpaceGoal.msg
   FabricsObstacle.msg

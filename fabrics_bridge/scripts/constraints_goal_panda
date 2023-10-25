@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+# general python imports
+import numpy as np
+from std_msgs.msg import Float64MultiArray
+import tf
+
+# ros imports
+import rospy
+from geometry_msgs.msg import PoseStamped, Point, Quaternion
+from fabrics_msgs.msg import (
+    FabricsConstraint,
+    FabricsConstraintsGoal,
+)
+
+# Helper functions for making Point and Quaternion iterable
+def _it_point(self):
+    yield self.x
+    yield self.y
+    yield self.z
+
+
+Point.__iter__ = _it_point
+
+
+def _it_quat(self):
+    yield self.x
+    yield self.y
+    yield self.z
+    yield self.w
+
+
+Quaternion.__iter__ = _it_quat
+
+
+class ClientNode(object):
+    def __init__(self):
+        rospy.init_node("client_node")
+        self._rate = rospy.Rate(10)
+        # default number of obstacles is 20
+        self._num_obs = 10
+        self.init_goal()
+        self.init_publishers()
+
+    def init_publishers(self):
+        self._goal_publisher = rospy.Publisher(
+            "fabrics/constraints_goal", FabricsConstraintsGoal, queue_size=10
+        )
+
+    def init_goal(self):
+        self._goal = FabricsConstraintsGoal()
+        self._goal.constraints = []
+        angle = 2*np.pi/4
+        rotation_matrix = np.array([
+            [np.cos(angle), -np.sin(angle), 0],
+            [np.sin(angle), np.cos(angle), 0],
+            [0, 0, 1]
+        ])
+        goal_2_position = np.array([0.0292, 0, 0])
+        goal_3_position = np.array([0.0, 0.05, 0])
+        goal_2_position = np.dot(rotation_matrix, goal_2_position)
+        goal_3_position = np.dot(rotation_matrix, goal_3_position)
+        goal_1 = FabricsConstraint()
+        goal_1.weight = 3.0
+        goal_1.tolerance = 0.3
+        goal_1.geometric_constraint = Float64MultiArray(data=[0.4, -0.0, 0.8])
+        goal_1.parent_link = 'panda_link0'
+        goal_1.child_link = 'panda_vacuum1_link'
+        goal_2 = FabricsConstraint()
+        goal_2.weight = 6.0
+        goal_2.tolerance = 0.3
+        goal_2.geometric_constraint = Float64MultiArray(data=goal_2_position)
+        goal_2.parent_link = 'panda_link7'
+        goal_2.child_link = 'panda_vacuum_support_link'
+        goal_3 = FabricsConstraint()
+        goal_3.weight = 15.0
+        goal_3.tolerance = 0.3
+        goal_3.geometric_constraint = Float64MultiArray(data=goal_3_position)
+        goal_3.parent_link = 'panda_vacuum1_link'
+        goal_3.child_link = 'panda_vacuum2_link'
+        self._goal.constraints.append(goal_1)
+        self._goal.constraints.append(goal_2)
+        self._goal.constraints.append(goal_3)
+
+    def publish_goal(self):
+        self._goal_publisher.publish(self._goal)
+
+
+    def run(self):
+        while not rospy.is_shutdown():
+            self.publish_goal()
+            self._rate.sleep()
+
+
+if __name__ == "__main__":
+    client_node = ClientNode()
+    try:
+        client_node.run()
+    except rospy.ROSInterruptException:
+        pass

@@ -32,6 +32,44 @@ def _it(self):
     yield self.z
     yield self.w
 
+def quaternion_to_rotation_matrix(
+    quaternion: np.ndarray, ordering: str = "wxyz"
+) -> np.ndarray:
+    # Normalize the quaternion if needed
+    quaternion /= np.linalg.norm(quaternion)
+
+    if ordering == "wxyz":
+        w, x, y, z = quaternion
+    elif ordering == "xyzw":
+        x, y, z, w = quaternion
+    else:
+        raise InvalidQuaternionOrderError(
+            f"Order {ordering} is not permitted, options are 'xyzw', and 'wxyz'"
+        )
+    rotation_matrix = np.array(
+        [
+            [
+                1 - 2 * y**2 - 2 * z**2,
+                2 * x * y - 2 * w * z,
+                2 * x * z + 2 * w * y,
+            ],
+            [
+                2 * x * y + 2 * w * z,
+                1 - 2 * x**2 - 2 * z**2,
+                2 * y * z - 2 * w * x,
+            ],
+            [
+                2 * x * z - 2 * w * y,
+                2 * y * z + 2 * w * x,
+                1 - 2 * x**2 - 2 * y**2,
+            ],
+        ]
+    )
+
+    return rotation_matrix
+
+
+
 class InvalidGoalError(Exception):
     pass
 
@@ -72,13 +110,16 @@ class FabricsGoalWrapper(object):
 
 
     def compose_pose_goal(self, goal_msg: FabricsPoseGoal):
-        indices = rospy.get_param('/goal_indices')
-        goal_position = [list(goal_msg.goal_pose.position)[i] for i in indices]
+        goal_position = list(goal_msg.goal_pose.position)
+        goal_quaternion = list(goal_msg.goal_pose.orientation)
+        goal_rotation_matrix = quaternion_to_rotation_matrix(goal_quaternion, ordering='xyzw')
+        default_goal = np.array([0.1, 0.0, 0.0])
+        orientation_position = np.dot(goal_rotation_matrix, default_goal)
         goal_dict = {
             "position": {
                 "weight": goal_msg.weight_position,
                 "is_primary_goal": True,
-                "indices": indices, 
+                "indices": [0, 1, 2], 
                 "parent_link": rospy.get_param("/root_link"),
                 "child_link": rospy.get_param("/end_effector_link"),
                 "desired_position": goal_position,
@@ -91,7 +132,7 @@ class FabricsGoalWrapper(object):
                 "indices": [0, 1, 2],
                 "parent_link": rospy.get_param("/orientation_helper_link"),
                 "child_link": rospy.get_param("/end_effector_link"),
-                "desired_position": [0.0, 0.0, 0.1],
+                "desired_position": orientation_position.tolist(),
                 "epsilon": 0.01,
                 "type": "staticSubGoal",
             },
@@ -114,7 +155,22 @@ class FabricsGoalWrapper(object):
         return GoalComposition(name="goal", content_dict=goal_dict)
 
     def compose_constraints_goal(self, goal_msg: FabricsConstraintsGoal):
-        pass
+        goal_dict = {}
+        for i, constraint in enumerate(goal_msg.constraints):
+            sub_goal_dict = {
+                    "weight": constraint.weight,
+                    "is_primary_goal": False,
+                    "indices": [0, 1, 2],
+                    "parent_link": constraint.parent_link,
+                    "child_link": constraint.child_link,
+                    "desired_position": constraint.geometric_constraint.data,
+                    "epsilon": constraint.tolerance,
+                    "type": "staticSubGoal",
+            }
+            if i == 0:
+                sub_goal_dict['is_primary_goal'] = True
+            goal_dict[f"sub_goal_{i}"] = sub_goal_dict
+        return GoalComposition(name="goal", content_dict=goal_dict)
 
     def compose_dummy_goal(self, goal_type: str):
         if goal_type == 'FabricsJointSpaceGoal':
