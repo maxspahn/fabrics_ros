@@ -88,11 +88,10 @@ class FabricsGoalWrapper(object):
             "orientation": {
                 "weight": goal_msg.weight_orientation,
                 "is_primary_goal": False,
-                "indices": [0, 1],
+                "indices": [0, 1, 2],
                 "parent_link": rospy.get_param("/orientation_helper_link"),
                 "child_link": rospy.get_param("/end_effector_link"),
-                "angle": list(goal_msg.goal_pose.orientation),
-                "desired_position": [0.0, 0.0],
+                "desired_position": [0.0, 0.0, 0.1],
                 "epsilon": 0.01,
                 "type": "staticSubGoal",
             },
