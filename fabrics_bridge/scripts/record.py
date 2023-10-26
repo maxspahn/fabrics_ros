@@ -54,7 +54,6 @@ class Recording():
             'vacuum': 11,
         }
         self._record_threshold = 0.0005
-            
 
     def name(self, name: str) -> None:
         self._name = name
@@ -128,6 +127,7 @@ class RecordSkillNode:
         self._vacuum = False
         self._ee_frame = ee_frame
         self._target_frame = target_frame
+        self.use_static_frame = True
 
         self._currently_recording = False
         self.set_interaction_device(interaction_device)
@@ -139,6 +139,7 @@ class RecordSkillNode:
     def establish_ros_connections(self):
         self.tf_buffer = tf2_ros.Buffer()
         self.tf_listener = tf2_ros.TransformListener(self.tf_buffer)
+        self.tf_broadcaster = tf2_ros.StaticTransformBroadcaster()
         self._ki_publisher = rospy.Publisher(
             "/compliant_joint_velocity_controller/controller_ki",
             Float64MultiArray,
@@ -250,10 +251,16 @@ class RecordSkillNode:
         weight_1 = 6.0
         threshold_0 = 0.03
 
+        if self.use_static_frame:
+            self.broadcast_static_frame()
+            lookup_reference_frame = "recording"
+        else:
+            lookup_reference_frame = self._target_frame
+
         while not rospy.is_shutdown():
             try:
                 trans = self.tf_buffer.lookup_transform(
-                    self._target_frame, self._ee_frame, rospy.Time()
+                    lookup_reference_frame, self._ee_frame, rospy.Time()
                 )
             except (
                 tf2_ros.LookupException,
@@ -266,6 +273,7 @@ class RecordSkillNode:
             # Convert the transform to a PoseStamped message and add it to the list
             pose = PoseStamped()
             pose.header = trans.header
+            pose.header.frame_id = self._target_frame
             pose.pose.position = trans.transform.translation
             pose.pose.orientation = trans.transform.rotation
 
@@ -287,11 +295,22 @@ class RecordSkillNode:
                 #rospy.loginfo("Not recording. Press circle on panda to start, cross to stop.")
             r.sleep()
 
+    def broadcast_static_frame(self):
+        while True:
+            try:
+                static_playback_frame_transform = self.tf_buffer.lookup_transform('panda_link0', self._target_frame, rospy.Time(0))
+                break
+            except Exception as e:
+                rospy.logwarn(f"could not get transform for static playback frame, see error {e}")
+        static_playback_frame_transform.child_frame_id = 'recording'
+        self.tf_broadcaster.sendTransform(static_playback_frame_transform)
+        rospy.sleep(0.2)
+
 
 if __name__ == "__main__":
     record_skill = RecordSkillNode(
         skill_name=sys.argv[2],
-        target_frame="panda_link0",
+        target_frame="desired_product",
         ee_frame="panda_vacuum",
         interaction_device=sys.argv[1],
     )
