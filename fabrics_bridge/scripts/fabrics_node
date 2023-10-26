@@ -129,6 +129,7 @@ class FabricsNode(object):
     def __init__(self):
         rospy.init_node("fabrics_node")
         self._goal_type = ""
+        self._robot_type = rospy.get_param('/robot_type') 
         self.changed_planner = True
         self.stop_acc_bool = True
         self.planners = {}
@@ -373,7 +374,8 @@ class FabricsNode(object):
             self._vel_msg_boxer.linear.x = self._action[0]
             self._vel_msg_boxer.angular.z = self._action[1]
             self._vel_pub_panda.publish(self._vel_msg_panda)
-            self._vel_pub_boxer.publish(self._vel_msg_boxer)
+            if self._robot_type in ["albert", "boxer"]:
+                self._vel_pub_boxer.publish(self._vel_msg_boxer)
         except Exception as e:
             rospy.loginfo(f"Not planning due to error {e}")
             rospy.loginfo("Waiting for correct planner to be loaded.")
