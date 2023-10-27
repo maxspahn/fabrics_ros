@@ -270,7 +270,7 @@ class FabricsNode(object):
             number_obstacles=self.num_sphere_obstacles,
             number_obstacles_cuboid=self.num_box_obstacles,
         )
-        planner.concretize(mode='vel', time_step = 1/100)
+        planner.concretize(mode='vel', time_step = 10/100)
         t1 = time.perf_counter()
         composition_time = (t1-t0) * 1000
         # serializing the planner

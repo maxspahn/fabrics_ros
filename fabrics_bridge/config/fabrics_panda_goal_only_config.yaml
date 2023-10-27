@@ -1,0 +1,70 @@
+positional_goal_tolerance : 0.02
+robot_type: "panda"
+planner_type: "holonomic"
+degrees_of_freedom: 7
+goal_indices: 
+  - 0
+  - 1
+  - 2
+urdf_source: "/robot_description"
+root_link: "panda_link0"
+end_effector_link: "panda_vacuum1_link"
+orientation_helper_link: "panda_hand"
+end_links: 
+  - "panda_vacuum1_link"
+  - "panda_vacuum2_link"
+  - "panda_vacuum_support_link"
+joint_names:
+  - "panda_joint1"
+  - "panda_joint2"
+  - "panda_joint3"
+  - "panda_joint4"
+  - "panda_joint5"
+  - "panda_joint6"
+  - "panda_joint7"
+index_list:
+  - 5
+  - 6
+  - 7
+  - 8
+  - 9
+  - 10
+  - 11
+published_indices:
+  - 2
+  - 3
+  - 4
+  - 5
+  - 6
+  - 7
+  - 8
+num_sphere_obs : 0
+num_box_obs : 0
+angular_goal_tolerance: 0.1
+collision_bodies:
+  radius_body_panda_vacuum1_link: 0.02
+collision_links:  []
+self_collision_pairs: 
+    panda_vacuum1_link: []
+velocity_scaling: 1.0
+velocity_limits:
+        upper:
+              - 1.0
+              - 1.0
+              - 2.1750
+              - 2.1750 
+              - 2.1750
+              - 2.1750
+              - 2.6100 
+              - 2.6100 
+              - 2.6100
+        lower:
+              - -1.0
+              - -1.0
+              - -2.1750
+              - -2.1750 
+              - -2.1750
+              - -2.1750
+              - -2.6100 
+              - -2.6100 
+              - -2.6100
