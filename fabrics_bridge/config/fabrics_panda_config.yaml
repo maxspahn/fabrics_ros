@@ -38,8 +38,7 @@ published_indices:
   - 6
   - 7
   - 8
-num_sphere_obs : 20
-num_box_obs : 2
+num_obs : 20
 angular_goal_tolerance: 0.1
 collision_bodies:
   radius_body_panda_link0: 0.2
@@ -49,7 +48,6 @@ collision_bodies:
   radius_body_panda_link4: 0.1
   radius_body_panda_link5: 0.1
   radius_body_panda_link6: 0.09
-  radius_body_panda_link5_offset: 0.1
   radius_body_panda_link7: 0.1
   radius_body_panda_link8: 0.1
   radius_body_panda_vacuum: 0.02
@@ -78,7 +76,7 @@ self_collision_pairs:
       - panda_link4
     camera_link:
       - panda_link2
-velocity_scaling: 1.0
+velocity_scaling: 0.15
 velocity_limits:
         upper:
               - 1.0

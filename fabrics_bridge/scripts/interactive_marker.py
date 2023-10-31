@@ -4,7 +4,7 @@
 import rospy
 import tf.transformations
 import numpy as np
-from fabrics_msgs.msg import FabricsGoal
+from fabrics_msgs.msg import FabricsPoseGoal
 
 from interactive_markers.interactive_marker_server import (
     InteractiveMarkerServer,
@@ -15,7 +15,7 @@ from geometry_msgs.msg import PoseStamped
 from franka_msgs.msg import FrankaState
 
 marker_pose = PoseStamped()
-fabrics_goal = FabricsGoal(goal_type="ee_pose", weight_goal_0=1, weight_goal_1=0.5)
+fabrics_goal = FabricsPoseGoal(weight_position=1, weight_orientation=0.5)
 # [[min_x, max_x], [min_y, max_y], [min_z, max_z]]ls
 position_limits = [[-0.6, 0.6], [-0.6, 0.6], [0.05, 0.9]]
 
@@ -76,7 +76,7 @@ if __name__ == "__main__":
 
     wait_for_initial_pose()
 
-    fabrics_goal_pub = rospy.Publisher("fabrics/planning_goal", FabricsGoal, queue_size=10)
+    fabrics_goal_pub = rospy.Publisher("fabrics/ee_pose_goal", FabricsPoseGoal, queue_size=10)
     server = InteractiveMarkerServer("equilibrium_pose_marker")
     int_marker = InteractiveMarker()
     int_marker.header.frame_id = link_name

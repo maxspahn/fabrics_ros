@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+import os
+import sys
+import rospy
+import actionlib
+import numpy as np
+import pickle
+import tf
+import tf2_ros
+from pynput import keyboard
+from itertools import cycle
+
+from sensor_msgs.msg import JointState
+from fabrics_msgs.msg import (
+    FabricsConstraint,
+    FabricsConstraintsGoal,
+    FabricsState,
+    FabricsObstacleArray,
+    FabricsObstacle,
+)
+from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
+from geometry_msgs.msg import Point, Quaternion, PoseStamped
+from std_msgs.msg import Float64MultiArray
+from albert_vacuum_gripper.msg import DropOffActionGoal, VacuumActionGoal
+
+from record import Recording
+
+
+# Helpers
+def _it(self):
+    yield self.x
+    yield self.y
+    yield self.z
+
+
+Point.__iter__ = _it
+
+
+def _it(self):
+    yield self.x
+    yield self.y
+    yield self.z
+    yield self.w
+
+
+Quaternion.__iter__ = _it
+
+
+class PlaybackWaypoints(object):
+    def __init__(self, recording: Recording, base_frame: str) -> None:
+        # Initialize action server
+        self._rate = rospy.Rate(10)
+        self._target_frame = "panda_link0"
+        self._ee_frame = "panda_vacuum"
+        self._vacuum = False
+        self.joint_states = JointState()
+        urdf = rospy.get_param(rospy.get_param("/urdf_source"))
+        self._index_list = rospy.get_param("/index_list")
+        self._fk = GenericURDFFk(
+            urdf,
+            rootLink=rospy.get_param("/root_link"),
+            end_link=rospy.get_param("/end_links"),
+        )
+
+        self.establish_ros_connections()
+        self._recording = recording
+
+
+        # initialize goal
+        # it's a goal wrt panda_link0
+        self._goal = FabricsConstraintsGoal()
+        self.set_controller()
+        self._listener = keyboard.Listener(
+                on_press=self.keyboard_cb,
+        )
+        self._listener.start()
+        self._weight_factor = 1
+        self._threshold_factor = 1
+        self._remove_point = False
+
+    def keyboard_cb(self, event):
+        if event == keyboard.KeyCode.from_char("w"):
+            self._weight_factor *= 1.1
+        if event == keyboard.KeyCode.from_char("v"):
+            self._weight_factor *= 0.99
+        if event == keyboard.KeyCode.from_char("t"):
+            self._threshold_factor *= 1.1
+        if event == keyboard.KeyCode.from_char("s"):
+            self._threshold_factor *= 0.99
+        if event == keyboard.KeyCode.from_char("r"):
+            self._remove_point = True
+
+    def establish_ros_connections(self):
+        self.init_publishers()
+        self.init_subscribers()
+        rospy.sleep(1.0)
+
+    def init_publishers(self):
+        self.fabrics_goal_pub = rospy.Publisher(
+            "fabrics/constraints_goal", FabricsConstraintsGoal, queue_size=10
+        )
+        self._ki_publisher = rospy.Publisher(
+            "/compliant_joint_velocity_controller/controller_ki",
+            Float64MultiArray,
+            queue_size=1
+        )
+        self._kp_publisher = rospy.Publisher(
+            "/compliant_joint_velocity_controller/controller_kp",
+            Float64MultiArray,
+            queue_size=1
+        )
+        self._suck_publisher = rospy.Publisher("/franka_vacuum_gripper/vacuum/goal", VacuumActionGoal, queue_size=1)
+        self._unsuck_publisher = rospy.Publisher("/franka_vacuum_gripper/dropoff/goal", DropOffActionGoal, queue_size=1)
+
+    def init_subscribers(self):
+        self.fabrics_state_sub = rospy.Subscriber(
+            "/fabrics/state", FabricsState, self.fabrics_state_cb
+        )
+        self.fabrics_state = FabricsState(goal_reached=False)
+        self.joint_state_subscriber = rospy.Subscriber(
+            "/joint_states_filtered",
+            JointState,
+            self.joint_states_callback,
+            tcp_nodelay=True,
+        )
+
+    def suck(self):
+        goal_msg = VacuumActionGoal()
+        goal_msg.goal.vacuum = 1
+        self._suck_publisher.publish(goal_msg)
+
+    def unsuck(self):
+        goal_msg = DropOffActionGoal()
+        self._unsuck_publisher.publish(goal_msg)
+
+    def joint_states_callback(self, msg: JointState):
+        # TODO: better way of extracting just the panda joint states
+        self.joint_states.name = np.array(msg.name)[self._index_list]
+        self.joint_states.position = np.array(msg.position)[self._index_list]
+        self.joint_states.velocity = np.array(msg.velocity)[self._index_list]
+
+
+    def fabrics_state_cb(self, msg):
+        self.fabrics_state = msg
+
+    def index(self, name):
+        return self._recording._indices[name]
+
+    def publish_waypoint_goal(self, waypoint_index):
+        if self._remove_point:
+            rospy.loginfo(f"Removing waypoint {waypoint_index}")
+            self._recording.remove_waypoint(waypoint_index)
+            self._remove_point = False
+        waypoint = self._recording.waypoints()[waypoint_index]
+
+
+        goal_1_position = waypoint[self.index('position_1')[0]: self.index('position_1')[1]]
+        goal_2_position = waypoint[self.index('position_2')[0]: self.index('position_2')[1]]
+        goal_3_position = waypoint[self.index('position_3')[0]: self.index('position_3')[1]]
+        goal_1 = FabricsConstraint()
+        goal_2 = FabricsConstraint()
+        goal_3 = FabricsConstraint()
+
+        goal_1.weight = waypoint[self.index('weight_1')]
+        goal_2.weight = waypoint[self.index('weight_2')]
+        goal_3.weight = waypoint[self.index('weight_3')]
+
+        goal_1.tolerance = waypoint[self.index('tolerance_1')]
+        goal_2.tolerance = waypoint[self.index('tolerance_2')]
+        goal_3.tolerance = waypoint[self.index('tolerance_3')]
+
+        goal_1.geometric_constraint = Float64MultiArray(data=goal_1_position)
+        goal_2.geometric_constraint = Float64MultiArray(data=goal_2_position)
+        goal_3.geometric_constraint = Float64MultiArray(data=goal_3_position)
+
+        goal_1.parent_link = 'panda_link0'
+        goal_1.child_link = 'panda_vacuum1_link'
+
+        goal_2.parent_link = 'panda_link7'
+        goal_2.child_link = 'panda_vacuum_support_link'
+
+        goal_3.parent_link = 'panda_vacuum1_link'
+        goal_3.child_link = 'panda_vacuum2_link'
+
+        self._goal.constraints = []
+        self._goal.constraints.append(goal_1)
+        self._goal.constraints.append(goal_2)
+        self._goal.constraints.append(goal_3)
+
+
+
+        if self._vacuum != waypoint[self.index('vacuum')]:
+            if waypoint[self.index('vacuum')]:
+                self._vacuum = True
+                self.suck()
+            else:
+                self._vacuum = False
+                self.unsuck()
+
+
+        #rospy.loginfo(f"Publishing goal for waypoint {waypoint_index} with weight {weight_0} and tolerance {threshold_0}")
+        self.fabrics_goal_pub.publish(self._goal)
+        #self._recording.change_value_at_waypoint(waypoint_index, 'weight_0', weight_0)
+        #self._recording.change_value_at_waypoint(waypoint_index, 'tolerance_0', threshold_0)
+
+
+    def execute_trajectory(self, step_size: int):
+        waypoint_index = 0
+        while waypoint_index < len(self._recording.waypoints()):
+            self.publish_waypoint_goal(waypoint_index)
+            self._rate.sleep()
+            if self.fabrics_state.goal_reached:
+                closest_waypoint = waypoint_index
+            else:
+                closest_waypoint = self.get_closest_waypoint_index()
+
+            closest_waypoint = max(closest_waypoint, waypoint_index)
+            closest_waypoint = min(closest_waypoint + step_size, waypoint_index)
+            waypoint_index = min(len(self._recording.waypoints()), closest_waypoint + step_size)
+            """
+            closest_waypoint = max(closest_waypoint, waypoint_index)
+            distances = np.linalg.norm(self._positions[closest_waypoint, :] -
+                                       self._positions[closest_waypoint+1:, :],
+                                       axis = 1)
+            rospy.loginfo(distances.shape)
+            try:
+                waypoint_index = np.where(distances > step_size)[0][0] + closest_waypoint
+            except IndexError:
+                waypoint_index = len(self._recording.waypoints())
+            """
+
+
+    def get_closest_waypoint_index(self) -> int:
+        q = np.array(self.joint_states.position)
+        position_1_child = self._fk.fk(q, 'panda_link0', 'panda_vacuum1_link', positionOnly=True)
+
+        position_1 = position_1_child
+        positions = np.array([d[0:3] for d in self._recording._data])
+        distances = np.linalg.norm(position_1_child - positions, axis=1)
+        return np.argmin(distances)
+
+
+    def set_controller(self):
+        kp = [10, 20, 30, 40, 10, 10, 5]
+        ki = [2, 2, 2, 2, 0.5, 1, 0.5]
+        ki_msg = Float64MultiArray(data=ki)
+        kp_msg = Float64MultiArray(data=kp)
+        rospy.loginfo("Setting high controller gains.")
+        for i in range(10):
+            self._ki_publisher.publish(ki_msg)
+            self._kp_publisher.publish(kp_msg)
+
+
+    def run(self):
+        start = rospy.Time().now()
+        waypoints = self._recording.waypoints()
+        self.execute_trajectory(1)
+        #for pose in cycle(waypoints):
+        """
+        for waypoint_index in range(len(waypoints)):
+            #pose.header.frame_id="tag_2_filtered"
+            self.reach_waypoint(waypoint_index)
+        """
+        self._recording.name(f"{self._recording._name}_improved")
+        self._recording.save()
+
+        end = rospy.Time().now()
+        duration = end - start
+        rospy.loginfo(duration.to_sec())
+if __name__ == "__main__":
+    with open(sys.argv[1], 'rb') as f:
+        recording: Recording = pickle.load(f)
+
+
+    rospy.init_node("playback_waypoints")
+    node = PlaybackWaypoints(recording=recording, base_frame='/panda_link0')
+    node.run()

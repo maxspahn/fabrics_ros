@@ -8,12 +8,12 @@ goal_indices:
   - 2
 urdf_source: "/robot_description"
 root_link: "panda_link0"
-end_effector_link: "panda_vacuum"
+end_effector_link: "panda_vacuum1_link"
 orientation_helper_link: "panda_hand"
 end_links: 
-  - "panda_vacuum"
-  - "panda_vacuum_2"
-  - "camera_link"
+  - "panda_vacuum1_link"
+  - "panda_vacuum2_link"
+  - "panda_vacuum_support_link"
 joint_names:
   - "panda_joint1"
   - "panda_joint2"
@@ -49,35 +49,21 @@ collision_bodies:
   radius_body_panda_link4: 0.1
   radius_body_panda_link5: 0.1
   radius_body_panda_link6: 0.09
-  radius_body_panda_link5_offset: 0.1
   radius_body_panda_link7: 0.1
   radius_body_panda_link8: 0.1
-  radius_body_panda_vacuum: 0.02
-  radius_body_panda_vacuum_2: 0.02
+  radius_body_panda_vacuum1_link: 0.02
+  radius_body_panda_vacuum2_link: 0.02
   radius_body_panda_hand: 0.08
   radius_body_camera_link: 0.03
 collision_links: 
-  - panda_link3
-  - panda_link6
-  - panda_link4
-  - panda_vacuum
-  - panda_vacuum_2
-  - panda_hand
+  - panda_vacuum1_link
   - camera_link
 self_collision_pairs: 
-    panda_hand: 
-      - panda_link2
-      - panda_link4
-    panda_vacuum:
+    panda_vacuum1_link:
       - panda_link0
       - panda_link1
       - panda_link2
       - panda_link3
-    panda_link6:
-      - panda_link2
-      - panda_link4
-    camera_link:
-      - panda_link2
 velocity_scaling: 1.0
 velocity_limits:
         upper:
