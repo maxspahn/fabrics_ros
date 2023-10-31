@@ -17,7 +17,6 @@ from fabrics_msgs.msg import (
     FabricsState,
     FabricsObstacleArray,
     FabricsObstacle,
-    FabricsGoal,
 )
 from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
 from geometry_msgs.msg import Point, Quaternion, PoseStamped

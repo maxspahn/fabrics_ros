@@ -9,8 +9,7 @@ import tf
 import rospy
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
 from fabrics_msgs.msg import (
-    FabricsGoal,
-    FabricsGoalArray,
+    FabricsPoseGoal,
     FabricsObstacle,
     FabricsObstacleArray,
 )
@@ -42,7 +41,7 @@ class ClientNode(object):
         # default number of obstacles is 20
         self._num_obs = 10
         self.init_publishers()
-        self._goal = FabricsGoal()
+        self._goal = FabricsPoseGoal()
         # ring of spheres setting
         # radius of shelf (suppose it's a circular shelf)
         self.r_shelf = 0.30
@@ -52,7 +51,7 @@ class ClientNode(object):
 
     def init_publishers(self):
         self._goal_publisher = rospy.Publisher(
-            "fabrics/planning_goal", FabricsGoal, queue_size=10
+            "fabrics/ee_pose_goal", FabricsPoseGoal, queue_size=10
         )
         self._obs_publisher = rospy.Publisher(
             "fabrics/planning_obs", FabricsObstacleArray, queue_size=10
@@ -109,14 +108,12 @@ class ClientNode(object):
     def publish_goal(
         self, pos_x, pos_y, pos_z, quat_x, quat_y, quat_z, quat_w, weight_0, weight_1
     ):
-        self._goal.goal_pose.pose.position = Point(x=pos_x, y=pos_y, z=pos_z)
-        self._goal.goal_pose.pose.orientation = Quaternion(
+        self._goal.goal_pose.position = Point(x=pos_x, y=pos_y, z=pos_z)
+        self._goal.goal_pose.orientation = Quaternion(
             x=quat_x, y=quat_y, z=quat_z, w=quat_w
         )
-        self._goal.goal_pose.header.frame_id = rospy.get_param("/root_link")
-        self._goal.goal_type = "ee_pose"
-        self._goal.weight_goal_0 = weight_0
-        self._goal.weight_goal_1 = weight_1
+        self._goal.weight_position = weight_0
+        self._goal.weight_orientation = weight_1
         self._goal_publisher.publish(self._goal)
 
     def publish_obs(self):
