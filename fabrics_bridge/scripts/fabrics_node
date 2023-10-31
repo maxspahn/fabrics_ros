@@ -295,7 +295,6 @@ class FabricsNode(object):
                 and not self._goal is None
             ):
                 self.act()
-                """
                 goal_is_reached = self.state_evaluator.evaluate(
                     self._goal_msg, self.joint_states
                 )
@@ -305,7 +304,6 @@ class FabricsNode(object):
                 self.marker_manager.update_obstacle_markers(
                     self.obstacles
                 )
-                """
             t1 = time.perf_counter()
             #rospy.loginfo(f"Compute time in ms : {(t1-t0) * 1000}")
             self.rate.sleep()
