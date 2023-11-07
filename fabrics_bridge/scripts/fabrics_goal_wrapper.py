@@ -113,7 +113,7 @@ class FabricsGoalWrapper(object):
         goal_position = list(goal_msg.goal_pose.position)
         goal_quaternion = list(goal_msg.goal_pose.orientation)
         goal_rotation_matrix = quaternion_to_rotation_matrix(goal_quaternion, ordering='xyzw')
-        default_goal = np.array([0.1, 0.0, 0.0])
+        default_goal = np.array([0.0, 0.0, 0.1])
         orientation_position = np.dot(goal_rotation_matrix, default_goal)
         goal_dict = {
             "position": {

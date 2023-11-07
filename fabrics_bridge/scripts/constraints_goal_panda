@@ -49,16 +49,16 @@ class ClientNode(object):
     def init_goal(self):
         self._goal = FabricsConstraintsGoal()
         self._goal.constraints = []
-        angle = 2*np.pi/4
+        angle = 2*np.pi/4 * 0
         rotation_matrix = np.array([
             [np.cos(angle), -np.sin(angle), 0],
             [np.sin(angle), np.cos(angle), 0],
             [0, 0, 1]
         ])
-        goal_2_position = np.array([0.0292, 0, 0])
+        goal_2_position = np.array([0.292, 0, 0])
         goal_3_position = np.array([0.0, 0.05, 0])
-        goal_2_position = np.dot(rotation_matrix, goal_2_position)
-        goal_3_position = np.dot(rotation_matrix, goal_3_position)
+        #goal_2_position = np.dot(rotation_matrix, goal_2_position)
+        #goal_3_position = np.dot(rotation_matrix, goal_3_position)
         goal_1 = FabricsConstraint()
         goal_1.weight = 3.0
         goal_1.tolerance = 0.3
@@ -66,14 +66,14 @@ class ClientNode(object):
         goal_1.parent_link = 'panda_link0'
         goal_1.child_link = 'panda_vacuum1_link'
         goal_2 = FabricsConstraint()
-        goal_2.weight = 6.0
-        goal_2.tolerance = 0.3
+        goal_2.weight = 5.0
+        goal_2.tolerance = 0.01
         goal_2.geometric_constraint = Float64MultiArray(data=goal_2_position)
         goal_2.parent_link = 'panda_link7'
         goal_2.child_link = 'panda_vacuum_support_link'
         goal_3 = FabricsConstraint()
-        goal_3.weight = 15.0
-        goal_3.tolerance = 0.3
+        goal_3.weight = 5.0
+        goal_3.tolerance = 0.01
         goal_3.geometric_constraint = Float64MultiArray(data=goal_3_position)
         goal_3.parent_link = 'panda_vacuum1_link'
         goal_3.child_link = 'panda_vacuum2_link'
