@@ -100,6 +100,7 @@ class ClientNode(object):
             o.header.frame_id = "panda_link0"
             o.radius = self.r_obs
             o.position = Point(x=ring_obs[i, 0], y=ring_obs[i, 1], z=ring_obs[i, 2])
+            o.obstacle_type = "sphere"
             self.obs.obstacles.append(o)
         return self.obs
 

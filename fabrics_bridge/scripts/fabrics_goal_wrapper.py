@@ -101,6 +101,7 @@ class FabricsGoalWrapper(object):
             if isinstance(sub_goal, StaticSubGoal):
                 goal_string += sub_goal.parent_link()
                 goal_string += sub_goal.child_link()
+                goal_string += str(sub_goal.indices())
         return goal_string
 
     def hash_goal(self, goal: GoalComposition) -> str:
@@ -160,7 +161,7 @@ class FabricsGoalWrapper(object):
             sub_goal_dict = {
                     "weight": constraint.weight,
                     "is_primary_goal": False,
-                    "indices": [0, 1, 2],
+                    "indices": constraint.indices,
                     "parent_link": constraint.parent_link,
                     "child_link": constraint.child_link,
                     "desired_position": constraint.geometric_constraint.data,

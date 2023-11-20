@@ -58,10 +58,14 @@ class FabricsMarkerManager(object):
 
     def init_markers(self):
 
-        self.goal_marker = init_marker(1, 0, 0, 1, rospy.get_param("/root_link"), 0.0, 1, type=0)
-        self.goal_marker.points = [Point(x=0, y=0, z=0), Point(x=0, y=0, z=0.35)]
-        self.goal_marker.id = 1
-        self.goal_marker.scale = Vector3(0.02, 0.04, 0.04)
+        self.pose_goal_marker = init_marker(1, 0, 0, 1, rospy.get_param("/root_link"), 0.0, 1, type=0)
+        self.pose_goal_marker.points = [Point(x=0, y=0, z=0), Point(x=0, y=0, z=0.35)]
+        self.pose_goal_marker.id = 1
+        self.pose_goal_marker.scale = Vector3(0.02, 0.04, 0.04)
+
+        self.constraints_goal_marker = init_marker(1, 0, 0, 1, rospy.get_param("/root_link"), 0.0, 1, type=2)
+        self.constraints_goal_marker.id = 1
+        self.constraints_goal_marker.scale = Vector3(1.02, 1.04, 1.04)
 
         self.obs_markers = MarkerArray()
         self.obs_markers.markers = [
@@ -92,11 +96,19 @@ class FabricsMarkerManager(object):
 
     def update_goal_markers(self, goal: FabricsGoalUnion, goal_is_reached: bool):
         if isinstance(goal, FabricsPoseGoal):
-            self.goal_marker.color.g = 1.0 if goal_is_reached else 0.0
-            self.goal_marker.color.b = 0.0 if goal_is_reached else 1.0
+            self.pose_goal_marker.color.g = 1.0 if goal_is_reached else 0.0
+            self.pose_goal_marker.color.b = 0.0 if goal_is_reached else 1.0
 
-            self.goal_marker.pose = goal.goal_pose
+            self.pose_goal_marker.pose = goal.goal_pose
             self.goal_marker_publisher.publish(self.goal_marker)
+        elif isinstance(goal, FabricsConstraintsGoal):
+
+            self.constraints_goal_marker.pose.position.x = goal.constraints[0].geometric_constraint.data[0]
+            self.constraints_goal_marker.pose.position.y = goal.constraints[0].geometric_constraint.data[1]
+            self.constraints_goal_marker.pose.position.z = goal.constraints[0].geometric_constraint.data[2]
+            tolerance = goal.constraints[0].tolerance
+            self.constraints_goal_marker.scale = Vector3(tolerance, tolerance, tolerance)
+            self.goal_marker_publisher.publish(self.constraints_goal_marker)
 
     def update_obstacle_markers(self, obstacles):
         for i in range(self.num_obstacles):

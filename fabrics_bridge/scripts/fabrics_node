@@ -131,7 +131,7 @@ class FabricsNode(object):
         self._robot_type = rospy.get_param('/robot_type') 
         self.changed_planner = True
         self.stop_acc_bool = True
-        self.planners = {}
+        self.load_all_available_planners()
         self._runtime_arguments = {}
         self.goal_wrapper = FabricsGoalWrapper()
         self.rate = rospy.Rate(100)
@@ -158,6 +158,21 @@ class FabricsNode(object):
         self.init_runtime_arguments()
         self.compose_runtime_obstacles_argument()
         self._action = np.zeros(9)
+
+    def load_all_available_planners(self):
+        rospy.loginfo("Loading available planners.")
+        self.planners = {}
+        rospack = rospkg.RosPack()
+        planner_folder = rospack.get_path("fabrics_bridge") + "/planner/"
+        for planner_file in os.listdir(planner_folder):
+            full_path_to_file = planner_folder + planner_file
+            if planner_file[0] == '.':
+                continue
+            rospy.loginfo(f"Loading {planner_file}")
+            self.planners[full_path_to_file] = SerializedFabricPlanner(full_path_to_file)
+        rospy.loginfo("Loaded available planners.")
+        
+
 
     def init_runtime_arguments(self):
         if self._planner_type == 'nonholonomic':
@@ -197,8 +212,19 @@ class FabricsNode(object):
         # TODO: Currently, fabrics require inputs to be np.arrays. This should be chaged to also allow floats.
         for name, radius in self.collision_bodies.items():
             self.collision_bodies[name] = np.array([radius])
+    
+    def publish_zero_velocity(self):
+        self._action = np.zeros_like(self._action)
+        self._vel_msg_panda.data = self._action.tolist()[2:]
+        self._vel_msg_boxer.linear.x = self._action[0]
+        self._vel_msg_boxer.angular.z = self._action[1]
+        self._vel_pub_panda.publish(self._vel_msg_panda)
+        if self._robot_type in ["albert", "boxer"]:
+            self._vel_pub_boxer.publish(self._vel_msg_boxer)
 
     def load_planner(self, goal):
+        self.publish_zero_velocity()
+
         self.stop_acc_bool = True
         if goal is None:
             return
@@ -225,7 +251,7 @@ class FabricsNode(object):
         hash_self_collision_pairs = list_to_unique_hash(self.self_collision_pairs)
         hash_collision_links = list_to_unique_hash(self.collision_links)
         hash_goal = self.goal_wrapper.hash_goal(goal)
-        return (
+        composed_hash = (
             hash_robot_type
             + hash_sphere_obstacle
             + hash_box_obstacle
@@ -233,6 +259,9 @@ class FabricsNode(object):
             + hash_collision_links
             + hash_goal
         )
+        actual_hash = hashlib.md5(composed_hash.encode('utf-8')).hexdigest()
+        rospy.loginfo(f"new_hash {actual_hash}")
+        return composed_hash
 
     def init_planner(self, goal: GoalComposition):
         # TODO: Add full body control robot type as an option

@@ -36,6 +36,7 @@ class JointSpaceExampleClient(object):
                 y=obs[1],
                 z=obs[2],
             )
+            o.obstacle_type = "sphere"
 
             self.obs.obstacles.append(o)
         

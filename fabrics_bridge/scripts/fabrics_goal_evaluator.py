@@ -68,7 +68,7 @@ class FabricsGoalEvaluator(object):
             self.state.tolerances = []
             for constraint in goal.constraints:
                 fk = self.compute_fk(q, constraint.parent_link, constraint.child_link)
-                error = np.linalg.norm(fk - constraint.geometric_constraint.data)
+                error = np.linalg.norm(fk[list(constraint.indices)] - constraint.geometric_constraint.data)
                 self.state.errors.append(error)
                 self.state.tolerances.append(constraint.tolerance)
 
