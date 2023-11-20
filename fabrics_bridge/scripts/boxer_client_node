@@ -64,6 +64,7 @@ class ClientNode(object):
             o.header.frame_id = rospy.get_param("/root_link")
             o.radius = self.r_obs
             o.position = Point(x=obst[0], y=obst[1], z=obst[2])
+            o.obstacle_type = "sphere"
             self.obs.obstacles.append(o)
         return self.obs
 
