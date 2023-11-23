@@ -158,13 +158,17 @@ class FabricsGoalWrapper(object):
     def compose_constraints_goal(self, goal_msg: FabricsConstraintsGoal):
         goal_dict = {}
         for i, constraint in enumerate(goal_msg.constraints):
+            desired_position = constraint.geometric_constraint.data
+            if isinstance(desired_position, np.ndarray):
+                desired_position = desired_position.tolist()
+
             sub_goal_dict = {
                     "weight": constraint.weight,
                     "is_primary_goal": False,
                     "indices": constraint.indices,
                     "parent_link": constraint.parent_link,
                     "child_link": constraint.child_link,
-                    "desired_position": constraint.geometric_constraint.data,
+                    "desired_position": desired_position,
                     "epsilon": constraint.tolerance,
                     "type": "staticSubGoal",
             }

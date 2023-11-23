@@ -25,6 +25,7 @@ class PandaFabricsNode(GenericFabricsNode):
             rootLink=rospy.get_param("/root_link"),
             end_link=rospy.get_param("/end_links"),
         )
+        self._forward_kinematics.generateFunctions()
         self._planner_type = 'holonomic'
         # get the joint limits for each joint
         robot = URDF.from_parameter_server(rospy.get_param("/urdf_source"))
@@ -65,11 +66,4 @@ class PandaFabricsNode(GenericFabricsNode):
     def publish_action(self):
         action_msg = Float64MultiArray(data=self._action)
         self._panda_command_publisher.publish(action_msg)
-
-if __name__ == "__main__":
-    node = PandaFabricsNode()
-    try:
-        node.run()
-    except rospy.ROSInterruptException:
-        pass
 

@@ -37,9 +37,12 @@ class FabricsGoalEvaluator(object):
         self.default_angular_goal_tolerance = rospy.get_param("/angular_goal_tolerance")
     
     def compute_fk(self, q: np.ndarray, parent_link: str, child_link: str) -> np.ndarray:
-        if parent_link == self._root_link:
+        if child_link == self._root_link:
             return np.zeros(3)
-        parent_position = self._fk.fk(q, parent_link=self._root_link, child_link=parent_link, positionOnly=True)
+        if parent_link == self._root_link:
+            parent_position = np.zeros(3)
+        else:
+            parent_position = self._fk.fk(q, parent_link=self._root_link, child_link=parent_link, positionOnly=True)
         child_position = self._fk.fk(q, parent_link=self._root_link, child_link=child_link, positionOnly=True)
         return child_position - parent_position
 
