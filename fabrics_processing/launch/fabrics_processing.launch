@@ -9,7 +9,7 @@
 
     <!-- start nodes -->
     <group if="$(arg use_kf)">
-      <node pkg="fabrics_processing" type="joint_states_kf" name="joint_states_kf"/>
+      <node pkg="fabrics_processing" type="joint_states_kf" name="joint_states_kf" output='screen'/>
     </group>
     <group unless="$(arg use_kf)">
       <node pkg="fabrics_processing" type="joint_states_filter" name="joint_states_filter"/>

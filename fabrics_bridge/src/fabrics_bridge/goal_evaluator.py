@@ -37,11 +37,13 @@ class FabricsGoalEvaluator(object):
         self.default_angular_goal_tolerance = rospy.get_param("/angular_goal_tolerance")
     
     def compute_fk(self, q: np.ndarray, parent_link: str, child_link: str) -> np.ndarray:
-        parent_position = self._fk.fk(q, self._root_link, parent_link, positionOnly=True)
-        child_position = self._fk.fk(q, self._root_link, child_link, positionOnly=True)
+        if parent_link == self._root_link:
+            return np.zeros(3)
+        parent_position = self._fk.fk(q, parent_link=self._root_link, child_link=parent_link, positionOnly=True)
+        child_position = self._fk.fk(q, parent_link=self._root_link, child_link=child_link, positionOnly=True)
         return child_position - parent_position
 
-    def evaluate(self, goal: FabricsGoalUnion, joint_states: JointState) -> bool:
+    def evaluate(self, goal: FabricsGoalUnion, q: np.ndarray) -> bool:
         if rospy.get_param("/robot_type") == "boxer":
             rospy.logwarn("Planning state evaluation not available for boxer robot")
             return False
@@ -58,12 +60,11 @@ class FabricsGoalEvaluator(object):
 
         if isinstance(goal, FabricsJointSpaceGoal):
             self.state.tolerances = [goal.tolerance]
-            difference_vector = np.array(joint_states.position) - np.array(goal.goal_joint_state.position)
+            difference_vector = q - np.array(goal.goal_joint_state.position)
             self.state.errors = [float(np.linalg.norm(difference_vector))]
             self.state.goal_reached = (self.state.errors[0] < goal.tolerance)
         elif isinstance(goal, FabricsConstraintsGoal):
             constraints_satisfied = []
-            q = joint_states.position
             self.state.errors = []
             self.state.tolerances = []
             for constraint in goal.constraints:

@@ -8,6 +8,9 @@ from tf.transformations import euler_from_quaternion
 from pykalman import KalmanFilter
 
 
+import tf
+
+
 class JointStatesKF(object):
 
     def __init__(self):
@@ -23,6 +26,7 @@ class JointStatesKF(object):
             JointState, queue_size=10
         )
 
+
         # Create combined JointState Listener
         self._joint_states_listener = AlbertJointStates()
 
@@ -34,6 +38,10 @@ class JointStatesKF(object):
         # Final filtered joint states to publish
         self._joint_states_filtered = JointState()
         self._joint_states_filtered.name = self._joint_states_listener.current.name
+
+
+        
+
 
     def _init_kf(self):
         """
@@ -118,6 +126,16 @@ class AlbertJointStates(object):
             'vel_rotational'] + ['panda_joint{}'.format(i+1) for i in range(7)]
         self._joint_state.position = [0]*len(self._joint_state.name)
         self._joint_state.velocity = [0]*len(self._joint_state.name)
+        self._tf_listener = tf.TransformListener()
+
+    def get_map_to_base_link(self):
+        self._tf_listener.waitForTransform('/map', '/base_link', rospy.Time(), rospy.Duration(1.0))
+        base_position, base_orientation = self._tf_listener.lookupTransform('/map', '/base_link', rospy.Time(0))
+
+        yaw = euler_from_quaternion(base_orientation)[2]
+
+        base_state = np.array([base_position[0], base_position[1], yaw])
+        return base_state
 
 
     def _init_subs(self):
@@ -171,6 +189,8 @@ class AlbertJointStates(object):
 
     @property
     def current(self):
+        base_position = self.get_map_to_base_link()
+        self._joint_state.position[0:3] = base_position
         return self._joint_state
 
 if __name__ == "__main__":

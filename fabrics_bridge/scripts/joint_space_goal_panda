@@ -9,7 +9,7 @@ from fabrics_msgs.msg import (
 )
 from geometry_msgs.msg import Point
 
-from fabrics_bridge.rectangle_spheres import *
+from fabrics_bridge.utils import rectangle_spheres
 
 
 class JointSpaceExampleClient(object):

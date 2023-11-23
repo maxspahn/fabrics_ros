@@ -70,8 +70,6 @@ self_collision_pairs:
 velocity_scaling: 1.0
 velocity_limits:
         upper:
-              - 1.0
-              - 1.0
               - 2.1750
               - 2.1750 
               - 2.1750
@@ -80,8 +78,6 @@ velocity_limits:
               - 2.6100 
               - 2.6100
         lower:
-              - -1.0
-              - -1.0
               - -2.1750
               - -2.1750 
               - -2.1750

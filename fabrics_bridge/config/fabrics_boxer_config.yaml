@@ -1,42 +1,34 @@
 positional_goal_tolerance : 0.02
-robot_type: "boxer"
 planner_type: "nonholonomic"
-m_arm: 10.0
-m_base: 1.0
-m_rot: 0.1
-l_offset: 1.0
-k_geo_col: 2.5
-k_fin_col: 3.0
 degrees_of_freedom: 3
+m_arm: 5.0
+m_base: 5.0
+m_rot: 0.5
+k_geo_col: 0.1
+k_fin_col: 0.1
+l_offset: "0.5"
 goal_indices: 
   - 0
   - 1
-root_link: "odom"
-urdf_source: "/robot_description_fabrics"
-end_effector_link: "ee_link"
+  - 2
+root_link: "world"
+urdf_source: "/robot_description"
+end_effector_link: 'ee_link'
 orientation_helper_link: "base_link"
 end_links: 
   - "ee_link"
-joint_names:
-  - "world_base_x"
-  - "world_base_y"
-index_list:
-  - 0
-  - 1
-  - 2
-index_list_qudot:
-  - 3
-  - 4
-published_indices:
-  - 0
-  - 1
-num_obs : 5
+num_sphere_obs : 0
+num_box_obs : 0
 angular_goal_tolerance: 0.1
 collision_bodies:
-  radius_body_base_link: 0.5
-  radius_body_ee_link: 0.4
+  radius_body_ee_link: 0.2
 collision_links: 
-  - base_link
-  - ee_link
-self_collision_pairs: None
-
+  - "ee_link"
+velocity_scaling: 1.0
+velocity_limits:
+  upper:
+        - 1.0
+        - 1.0
+  lower:
+        - -1.0
+        - -1.0

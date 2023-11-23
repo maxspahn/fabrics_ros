@@ -1,96 +1,32 @@
 #!/usr/bin/env python3
-from typing import List, Union
+from abc import ABC, abstractmethod
+from typing import Union
 import time
-from mpscenes.goals.sub_goal import SubGoal
 import numpy as np
 import rospy
 import rospkg
 import os
 import hashlib
 
-from std_msgs.msg import Float64MultiArray, Empty
-from sensor_msgs.msg import JointState
-from geometry_msgs.msg import Point, PoseStamped, Quaternion
-from urdf_parser_py.urdf import URDF
+from std_msgs.msg import Empty
+from geometry_msgs.msg import Point, Quaternion
+
+from mpscenes.goals.goal_composition import GoalComposition
+
+from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
+from fabrics.planner.serialized_planner import SerializedFabricPlanner
+
+
 from fabrics_msgs.msg import (
     FabricsJointSpaceGoal,
     FabricsPoseGoal,
     FabricsConstraintsGoal,
     FabricsObstacleArray,
 )
-from geometry_msgs.msg import Twist
-
-from mpscenes.goals.goal_composition import GoalComposition
-from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
-
-from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
-from fabrics.planner.non_holonomic_parameterized_planner import NonHolonomicParameterizedFabricPlanner
-from fabrics.planner.serialized_planner import SerializedFabricPlanner
-
-from fabrics_marker_manager import FabricsMarkerManager
-from fabrics_goal_evaluator import FabricsGoalEvaluator
-from fabrics_goal_wrapper import FabricsGoalWrapper
-from visualization_msgs.msg import Marker, MarkerArray
-
-def create_planner(planner_type: str, forward_kinematics) -> ParameterizedFabricPlanner:
-    base_energy: str = (
-        "0.5 * 0.2 * ca.dot(xdot, xdot)"
-    )
-    collision_geometry: str = (
-        "-0.5 / (x ** 2) * xdot ** 2"
-    )
-    collision_finsler: str = (
-        "0.1/(x**2) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
-    )
-    limit_geometry: str = (
-        "-0.50 / (x ** 2) * xdot ** 2"
-    )
-    limit_finsler: str = (
-        "0.4/(x**1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
-    )
-    self_collision_geometry: str = (
-        "-0.5 / (x ** 1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot ** 2"
-    )
-    self_collision_finsler: str = (
-        "0.1/(x**2) * xdot**2"
-    )
-    attractor_potential: str = (
-        "5.0 * (ca.norm_2(x) + 1 / 10 * ca.log(1 + ca.exp(-2 * 10 * ca.norm_2(x))))"
-    )
-    attractor_metric: str = (
-        "((2.0 - 0.3) * ca.exp(-1 * (0.75 * ca.norm_2(x))**2) + 0.3) * ca.SX(np.identity(x.size()[0]))"
-    )
-    degrees_of_freedom = rospy.get_param("/degrees_of_freedom")
-    if planner_type == "holonomic":
-        return ParameterizedFabricPlanner(
-            degrees_of_freedom,
-            forward_kinematics,
-            collision_geometry=collision_geometry,
-            collision_finsler=collision_finsler,
-            self_collision_finsler=self_collision_finsler,
-            limit_geometry=limit_geometry,
-            limit_finsler=limit_finsler,
-        )
-    if planner_type == "nonholonomic":
-        collision_geometry: str = (
-            "-sym('k_geo_col') / (x ** 1) * xdot ** 2"
-        )
-        collision_finsler: str = (
-            "sym('k_fin_col')/(x**1) * (-0.5 * (ca.sign(xdot) - 1)) * xdot**2"
-        )
-        return NonHolonomicParameterizedFabricPlanner(
-            degrees_of_freedom,
-            robot_type,
-            urdf=urdf,
-            root_link=rospy.get_param("/root_link"),
-            end_link=rospy.get_param("/end_links"),
-            collision_geometry=collision_geometry,
-            collision_finsler=collision_finsler,
-            self_collision_finsler=self_collision_finsler,
-            limit_geometry=limit_geometry,
-            limit_finsler=limit_finsler,
-            l_offset=rospy.get_param("/l_offset"),
-        )
+from fabrics_bridge.goal_wrapper import FabricsGoalWrapper
+from fabrics_bridge.marker_manager import FabricsMarkerManager
+from fabrics_bridge.goal_evaluator import FabricsGoalEvaluator
+from fabrics_bridge.utils import create_planner
 
 # Helpers
 def _it(self):
@@ -120,13 +56,15 @@ def list_to_unique_hash(a: list) -> str:
 Quaternion.__iter__ = _it
 
 
-class FabricsNode(object):
+class GenericFabricsNode(ABC):
 
     _planner : ParameterizedFabricPlanner
     _goal: Union[GoalComposition, None]
 
-    def __init__(self):
-        rospy.init_node("fabrics_node")
+    def __init__(self, node_name: str = 'fabrics_node'):
+        rospy.init_node(node_name)
+        self.load_parameters()
+        self.init_robot_specifics()
         self._goal = None
         self._robot_type = rospy.get_param('/robot_type') 
         self.changed_planner = True
@@ -135,37 +73,24 @@ class FabricsNode(object):
         self._runtime_arguments = {}
         self.goal_wrapper = FabricsGoalWrapper()
         self.rate = rospy.Rate(100)
-        self.load_parameters()
-        robot_type = rospy.get_param("/robot_type")
-        self._forward_kinematics = GenericURDFFk(
-            self.urdf,
-            rootLink=rospy.get_param("/root_link"),
-            end_link=rospy.get_param("/end_links"),
-        )
-        self.joint_names = rospy.get_param("/joint_names")
-        self._index_list = rospy.get_param("/index_list")
-        self._planner_type = rospy.get_param("/planner_type")
-        if self._planner_type == "nonholonomic":
-            self._index_list_qudot = rospy.get_param("/index_list_qudot")
         self.init_publishers()
         self.init_subscribers()
         self.state_evaluator = FabricsGoalEvaluator(self._forward_kinematics)
         self.marker_manager = FabricsMarkerManager(self.num_sphere_obstacles, self.collision_bodies, self.collision_links, self.self_collision_pairs)
 
-        #self.init_planner("FabricsJointSpaceGoal")
-        #self.init_planner("FabricsPoseGoal")
         self.stop_acc_bool = False
         self.init_runtime_arguments()
         self.compose_runtime_obstacles_argument()
-        self._action = np.zeros(9)
+    
+    @abstractmethod
+    def init_robot_specifics(self):
+        pass
 
     def load_all_available_planners(self):
         rospy.loginfo("Loading available planners.")
         self.planners = {}
-        rospack = rospkg.RosPack()
-        planner_folder = rospack.get_path("fabrics_bridge") + "/planner/"
-        for planner_file in os.listdir(planner_folder):
-            full_path_to_file = planner_folder + planner_file
+        for planner_file in os.listdir(self._planner_folder):
+            full_path_to_file = self._planner_folder + planner_file
             if planner_file[0] == '.':
                 continue
             rospy.loginfo(f"Loading {planner_file}")
@@ -215,12 +140,7 @@ class FabricsNode(object):
     
     def publish_zero_velocity(self):
         self._action = np.zeros_like(self._action)
-        self._vel_msg_panda.data = self._action.tolist()[2:]
-        self._vel_msg_boxer.linear.x = self._action[0]
-        self._vel_msg_boxer.angular.z = self._action[1]
-        self._vel_pub_panda.publish(self._vel_msg_panda)
-        if self._robot_type in ["albert", "boxer"]:
-            self._vel_pub_boxer.publish(self._vel_msg_boxer)
+        self.publish_action()
 
     def load_planner(self, goal):
         self.publish_zero_velocity()
@@ -231,7 +151,7 @@ class FabricsNode(object):
         rospack = rospkg.RosPack()
         file_hash = self.hash_planner_configuration(goal)
         goal_string = self.goal_wrapper.goal_string(goal)
-        serialize_file = rospack.get_path("fabrics_bridge") + "/planner/" + file_hash
+        serialize_file = self._planner_folder + file_hash
         # If the planner is not serialized yet, this node has to wait for the serialization to finish.
         try:
             rospy.loginfo(f"Loading planner for goal type : {goal_string}")
@@ -263,11 +183,8 @@ class FabricsNode(object):
         return short_hash
 
     def init_planner(self, goal: GoalComposition):
-        # TODO: Add full body control robot type as an option
-
-        rospack = rospkg.RosPack()
         file_hash = self.hash_planner_configuration(goal)
-        serialize_file = rospack.get_path("fabrics_bridge") + "/planner/" + file_hash
+        serialize_file = self._planner_folder + file_hash
         if os.path.exists(serialize_file):
             rospy.loginfo(f"Planner is already serialized in {serialize_file}")
             self.planners[serialize_file] = SerializedFabricPlanner(serialize_file)
@@ -281,23 +198,13 @@ class FabricsNode(object):
             self._planner_type,
             self._forward_kinematics
         )
-        # get the joint limits for each joint
-        self.robot = URDF.from_parameter_server(rospy.get_param("/urdf_source"))
-        joint_limits = []
-        for i in self.joint_names:
-            joint_limits.append(
-                [
-                    self.robot.joint_map[i].limit.lower,
-                    self.robot.joint_map[i].limit.upper,
-                ]
-            )
         # The planner hides all the logic behind the function set_components.
         #dummy_goal = self.goal_wrapper.compose_dummy_goal(goal_type)
         planner.set_components(
             collision_links=self.collision_links,
             self_collision_pairs=self.self_collision_pairs,
             goal=goal,
-            limits=joint_limits,
+            limits=self.joint_limits,
             number_obstacles=self.num_sphere_obstacles,
             number_obstacles_cuboid=self.num_box_obstacles,
         )
@@ -327,7 +234,7 @@ class FabricsNode(object):
             ):
                 self.act()
                 goal_is_reached = self.state_evaluator.evaluate(
-                    self._goal_msg, self.joint_states
+                    self._goal_msg, self._q
                 )
                 """
                 self.marker_manager.update_goal_markers(
@@ -341,23 +248,9 @@ class FabricsNode(object):
             #rospy.loginfo(f"Compute time in ms : {(t1-t0) * 1000}")
             self.rate.sleep()
 
+    @abstractmethod
     def init_publishers(self):
-        self._vel_pub_panda = rospy.Publisher(
-            '/panda_joint_velocity_controller/command',
-            Float64MultiArray,
-            queue_size=10
-        )
-        self._vel_pub_boxer = rospy.Publisher(
-            '/cmd_vel',
-            Twist,
-            queue_size=10
-        )
-        """ panda specifics """
-        self._vel_msg_panda = Float64MultiArray()
-        self._panda_indices = [2, 3, 4, 5, 6, 7, 8]
-        """ boxer specifics """
-        self._vel_msg_boxer = Twist()
-        self._boxer_indices = [0, 1]
+        pass
 
     def init_subscribers(self):
         self.obs_subscriber = rospy.Subscriber(
@@ -377,17 +270,11 @@ class FabricsNode(object):
             "constraints_goal", FabricsConstraintsGoal, self.constraints_goal_cb,
             tcp_nodelay=True,
         )
-        self.joint_states = JointState()
-        self.joint_state_subscriber = rospy.Subscriber(
-            "/joint_states_filtered",
-            JointState,
-            self.joint_states_callback,
-            tcp_nodelay=True,
-        )
         # preempt the previous goal once this cb is triggered
         self.preempt_goal_subscriber = rospy.Subscriber(
             "preempt_goal", Empty, self.preempt_goal_callback
         )
+        self.init_joint_states_subscriber()
 
     def obs_callback(self, msg: FabricsObstacleArray):
         self.obstacles = msg.obstacles
@@ -405,19 +292,15 @@ class FabricsNode(object):
         self._goal_msg = msg
         self._goal, changed_planner = self.goal_wrapper.wrap(msg)
 
-    def joint_states_callback(self, msg: JointState):
-        # TODO: better way of extracting just the panda joint states
-        self.joint_states.name = np.array(msg.name)[self._index_list]
-        self.joint_states.position = np.array(msg.position)[self._index_list]
-        self.joint_states.velocity = np.array(msg.velocity)[self._index_list]
-        if self._planner_type == "nonholonomic":
-            self._qudot = np.array(msg.velocity)[self._index_list_qudot]
+    @abstractmethod
+    def init_joint_states_subscriber(self):
+        pass
 
     def preempt_goal_callback(self, msg: Empty):
         rospy.loginfo(f"goal preempted")
         # only change the weights
         self._goal_msg = FabricsJointSpaceGoal()
-        self._goal_msg.goal_joint_state.position = self.joint_states.position.tolist()
+        self._goal_msg.goal_joint_state.position = self._q
         self._goal_msg.weight=0
         self._goal, changed_planner = self.goal_wrapper.wrap(self._goal_msg)
 
@@ -458,38 +341,39 @@ class FabricsNode(object):
         })
 
 
+    @abstractmethod
+    def set_joint_states_values(self):
+        pass
+
     def compute_action(self):
         self.goal_wrapper.compose_runtime_arguments(self._goal, self._runtime_arguments)
-        self._runtime_arguments['q'] = list(self.joint_states.position)
-        self._runtime_arguments['qdot'] = list(self.joint_states.velocity)
-        if self._planner_type == "nonholonomic":
-            self._runtime_arguments['qudot'] =  list(self._qudot)
-        return self._planner.compute_action(
+        self.set_joint_states_values()
+        action = self._planner.compute_action(
             **self._runtime_arguments,
         )
+        return action
+
+    @abstractmethod
+    def publish_action(self):
+        """
+        self._vel_msg_panda.data = self._action.tolist()[2:]
+        self._vel_msg_boxer.linear.x = self._action[0]
+        self._vel_msg_boxer.angular.z = self._action[1]
+        self._vel_pub_panda.publish(self._vel_msg_panda)
+        if self._robot_type in ["albert", "boxer"]:
+            self._vel_pub_boxer.publish(self._vel_msg_boxer)
+        """
+        pass
 
     def act(self):
         alpha = 0.95
         try:
             action = np.zeros_like(self._action)
-            action[rospy.get_param("/published_indices")] = self.compute_action()
+            action = self.compute_action()
             self._action = self._action * alpha + action * (1-alpha)
             self._action = np.clip(self._action, self._min_vel, self._max_vel)
-            self._vel_msg_panda.data = self._action.tolist()[2:]
-            self._vel_msg_boxer.linear.x = self._action[0]
-            self._vel_msg_boxer.angular.z = self._action[1]
-            self._vel_pub_panda.publish(self._vel_msg_panda)
-            if self._robot_type in ["albert", "boxer"]:
-                self._vel_pub_boxer.publish(self._vel_msg_boxer)
+            self.publish_action()
         except Exception as e:
             rospy.loginfo(f"Not planning due to error {e}")
             rospy.loginfo("Waiting for correct planner to be loaded.")
             self.load_planner(self._goal)
-
-
-if __name__ == "__main__":
-    my_fabric_node = FabricsNode()
-    try:
-        my_fabric_node.run()
-    except rospy.ROSInterruptException:
-        pass
