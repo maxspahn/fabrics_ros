@@ -1,0 +1,728 @@
+#!/usr/bin/env python3
+import sys
+import os
+import numpy as np
+from typing import List
+import rospy
+import rospkg
+from sensor_msgs.msg import JointState
+import std_msgs.msg
+from std_msgs.msg import String
+import tf
+import tf2_ros
+import pickle
+from copy import deepcopy
+from std_msgs.msg import Bool, Float64MultiArray, Float64
+from geometry_msgs.msg import PoseStamped, Vector3, TransformStamped
+from geometry_msgs.msg import Point, Quaternion
+from albert_vacuum_gripper.msg import DropOffActionGoal, VacuumActionGoal, VacuumState
+from ahold_product_detection.srv import ChangeProduct
+
+from fabrics_msgs.msg import (
+    FabricsConstraint,
+    FabricsConstraintsGoal,
+    FabricsJointSpaceGoal,
+    FabricsState,
+)
+
+from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
+
+import panda_py as papy
+
+from fabrics_bridge.panda_fabrics import PandaFabricsNode
+
+class WrongInteractionDevice(Exception):
+    pass
+
+def moving_average(data, window_size):
+    return np.convolve(data, np.ones((window_size, 3))/window_size, mode='valid')
+
+class Recording():
+    def __init__(self, tf_matrix):
+        self._data = []
+        self._tf_matrix = tf_matrix
+        self._name = "not_named"
+        self._indices = {
+            'position_1': [0, 3],
+            'position_2': [3, 6],
+            'position_3': [6, 9],
+            'header': 9,
+            'weight_1': 10,
+            'weight_2': 11,
+            'weight_3': 12,
+            'tolerance_1': 13,
+            'tolerance_2': 14,
+            'tolerance_3': 15,
+            'vacuum': 16,
+            'part_present': 17,
+        }
+        self._record_threshold = 0.0005
+
+    def name(self, name: str) -> None:
+        self._name = name
+
+    def get_name(self) -> str:
+        return self._name + ".pickle"
+
+    def number_waypoints(self) -> int:
+        return len(self._data)
+
+
+    def append_waypoint(self, waypoint: list) -> None:
+        if len(self._data) < 1:
+            distance = 1
+        else:
+            distance = np.linalg.norm(
+                np.array(waypoint[0:3]) - np.array(self._data[-1][0:3])
+            )
+            vacuum_changed = self._data[-1][self._indices['vacuum']] != waypoint[self._indices['vacuum']]
+        if (distance >= self._record_threshold) or vacuum_changed:
+            self._data.append(waypoint)
+        else:
+            rospy.loginfo("Waypoint discarded because it is too close to the old one.")
+
+    def remove_waypoint(self, index: int) -> None:
+        self._data.pop(index)
+
+    def transform_waypoints(self, tf_matrix) -> None:
+        self._transformed_data = deepcopy(self._data)
+        for i in range(len(self._data)):
+            for j in range(1,4):
+                index_0 = self._indices[f'position_{j}'][0]
+                index_1 = self._indices[f'position_{j}'][1]
+                ow = self._data[i][index_0:index_1]
+
+                if j == 1:
+                    extending_entry = 1
+                elif j == 2 or j == 3:
+                    extending_entry = 0
+                aw = np.array([ow[0], ow[1], ow[2], extending_entry])
+                naw = np.dot(tf_matrix, aw)
+                nw = naw[0:3]
+                self._transformed_data[i][index_0:index_1] = nw
+
+
+    def waypoints(self) -> list:
+        if not hasattr(self, '_transformed_data'):
+            self._transformed_data = deepcopy(self._data)
+        return self._transformed_data
+
+    def tf_matrix(self) -> np.ndarray:
+        return self._tf_matrix
+
+    def set_tf_matrix(self, tf_matrix) -> None:
+        self._tf_matrix = tf_matrix
+
+
+    def smoothen_trajectory(self):
+        window_size = 20
+
+        positions = np.array([d[0:3] for d in self._data])
+        smooth_positions = np.zeros_like(positions)
+        positions = np.pad(positions, [[window_size//2, window_size//2-1], [0, 0]], mode='edge')
+
+        for i in range(3):
+            smooth_positions[:, i] = np.convolve(positions[:, i], np.ones(window_size)/window_size, mode='valid')
+
+        for i in range(len(self._data)):
+            self._data[i][0:3] = smooth_positions[i, 0:3].tolist()
+
+    def save(self, smoothen: bool = False):
+        if smoothen:
+            self.smoothen_trajectory()
+        with open(f"{self._name}.pickle", "wb") as f:
+            pickle.dump(self, f)
+        rospy.loginfo(f"Saved {len(self._data)} poses to {self._name}.pickle")
+
+    def __str__(self) -> str:
+        return str(np.array(self._data)[:, 1])
+
+
+
+
+class TrajectoryManager(PandaFabricsNode):
+    def __init__(
+            self,
+            target_frame: str,
+            ee_frame: str,
+            interaction_device: str
+        ):
+        super().__init__()
+        self.goal_is_reached = False
+        self._goal_msg = None
+        self._goal_1_weight = 0
+        self._goal_2_weight = 0
+        self._goal_3_weight = 0
+        self._cur_goal_1_weight = 1.0
+        self._cur_goal_2_weight = 5
+        self._cur_goal_3_weight = 10
+        self._log_mode = "terminal"
+        rospy.loginfo("Starting Trajectory Manager to record and playback skills.")
+
+
+        self.establish_ros_connections()
+        rospy.sleep(1.0)
+
+        self._weight_factors = [1.0, 1.5, 1.5]
+        self._vacuum = False
+        self._part_present = False
+        self._ee_frame = ee_frame
+        self._target_frame = target_frame
+        self.use_static_frame = True
+        self._currently_recording = False
+        self._currently_executing = False
+        self._aborted = False
+        self._time = rospy.Time.now()
+        self._max_push_fwd = 0.1
+        self.set_interaction_device(interaction_device)
+            
+        rospack = rospkg.RosPack()
+        self._trajectories_folder = rospack.get_path("fabrics_bridge") + "/trajectories/"
+
+    def get_tf_panda_product(self, timeout: float = 5.0) -> np.ndarray:
+        try:
+            self._tf_listener.waitForTransform('/panda_link0', '/desired_product', rospy.Time(), rospy.Duration(timeout))
+
+            product_pose = self._tf_listener.lookupTransform('/panda_link0', '/desired_product', rospy.Time(0))
+
+            rospy.loginfo('setting static frame')
+            trajectory_frame_transform = TransformStamped()
+            trajectory_frame_transform.header.stamp = rospy.Time(0)
+            trajectory_frame_transform.header.frame_id = "panda_link0"
+            trajectory_frame_transform.child_frame_id = "trajectory_manager"
+
+            trajectory_frame_transform.transform.translation = Vector3(*product_pose[0])
+            trajectory_frame_transform.transform.rotation = Quaternion(*product_pose[1])
+            self._tf_static_broadcaster.sendTransform(trajectory_frame_transform) 
+
+            rot_matrix = quaternion_to_rotation_matrix(product_pose[1])
+            tf_matrix = pose_to_transformation_matrix(product_pose[0], product_pose[1], ordering='xyzw')
+            return tf_matrix, True
+        except Exception as e:
+            return np.identity(4), False
+
+    def establish_ros_connections(self):
+        self._logger_publisher = rospy.Publisher("/demo_logger", String, queue_size=10)
+        self._tf_listener = tf.TransformListener()
+        self._tf_static_broadcaster = tf2_ros.StaticTransformBroadcaster()
+        self._ki_publisher = rospy.Publisher(
+            "/compliant_joint_velocity_controller/controller_ki",
+            Float64MultiArray,
+            queue_size=1
+        )
+        self._kp_publisher = rospy.Publisher(
+            "/compliant_joint_velocity_controller/controller_kp",
+            Float64MultiArray,
+            queue_size=1
+        )
+        self._controller_load_publisher = rospy.Publisher('/compliant_joint_velocity_controller/controller_load', Float64, queue_size=1)
+        self._suck_publisher = rospy.Publisher("/franka_vacuum_gripper/vacuum/goal", VacuumActionGoal, queue_size=1)
+        self._unsuck_publisher = rospy.Publisher("/franka_vacuum_gripper/dropoff/goal", DropOffActionGoal, queue_size=1)
+        self._part_presest_subscriber = rospy.Subscriber("/franka_vacuum_gripper/vacuum_state", VacuumState, self.vacuum_state_callback)
+        self._playback_status_publisher = rospy.Publisher("/playback_status", String, queue_size=1)
+
+    def log(self, message):
+        if self._log_mode == 'voice':
+            msg = String(data=f"en/{message}")
+            self._error_publisher.publish(msg)
+        elif self._log_mode == 'terminal':
+            rospy.loginfo(message)
+        elif self._log_mode == 'logger':
+            msg = String(data=message)
+            self._logger_publisher.publish(msg)
+
+    def vacuum_state_callback(self, msg: VacuumState):
+        self._part_present = msg.part_present
+
+    def suck(self):
+        goal_msg = VacuumActionGoal()
+        try:
+            nr_vacuum_heads = rospy.get_param('pick_server/nr_vacuum_heads')
+            if nr_vacuum_heads == 1:
+                goal_msg.goal.one_head = True
+        except:
+            rospy.loginfo('No Nr vacuum heads set, default to 2')
+        goal_msg.goal.vacuum = 1
+        self._weight_factors[0] = 2.0
+        self._suck_publisher.publish(goal_msg)
+        self._vacuum = True
+
+    def unsuck(self):
+        goal_msg = DropOffActionGoal()
+        self._weight_factors[0] = 1.0
+        self._unsuck_publisher.publish(goal_msg)
+        self.unset_product_mass()
+        self._vacuum = False
+
+    def set_controller(self, mode="record"):
+        rospy.loginfo(f"Setting controller to mode {mode}")
+        if mode=='record':
+            ki = [0.0, ] * 7
+            kp = [1, 2, 10, 4, 1, 1, 0.5]
+        if mode=="playback":
+            kp = [10, 20, 30, 40, 10, 10, 5]
+            ki = [2, 2, 2, 2, 0.5, 1, 0.5]
+
+        ki_msg = Float64MultiArray(data=ki)
+        kp_msg = Float64MultiArray(data=kp)
+        for i in range(5):
+            self._ki_publisher.publish(ki_msg)
+            self._kp_publisher.publish(kp_msg)
+            self.rate.sleep()
+
+    def index(self, name):
+        return self._recording._indices[name]
+            
+    def publish_waypoint_goal(self, waypoint_index, push_forward = 0.0):
+        push_forward = max(0.0, min(push_forward, self._max_push_fwd))
+        waypoint = self._recording.waypoints()[waypoint_index]
+
+        goal_1_position = waypoint[self.index('position_1')[0]: self.index('position_1')[1]]
+        goal_2_position = waypoint[self.index('position_2')[0]: self.index('position_2')[1]]
+        goal_3_position = waypoint[self.index('position_3')[0]: self.index('position_3')[1]]
+        goal_1 = FabricsConstraint()
+        goal_2 = FabricsConstraint()
+        goal_3 = FabricsConstraint()
+
+        alpha = 0.05
+        self._goal_1_weight = (1-alpha) * self._goal_1_weight + alpha * self._cur_goal_1_weight
+        self._goal_2_weight = (1-alpha) * self._goal_2_weight + alpha * self._cur_goal_2_weight
+        self._goal_3_weight = (1-alpha) * self._goal_3_weight + alpha * self._cur_goal_3_weight
+
+        #goal_1.weight = waypoint[self.index('weight_1')]
+        #goal_2.weight = waypoint[self.index('weight_2')]
+        #goal_3.weight = waypoint[self.index('weight_3')]
+        goal_1.weight = self._goal_1_weight
+        goal_2.weight = self._goal_2_weight
+        goal_3.weight = self._goal_3_weight
+
+
+        goal_1.tolerance = waypoint[self.index('tolerance_1')]
+        goal_2.tolerance = waypoint[self.index('tolerance_2')]
+        goal_3.tolerance = waypoint[self.index('tolerance_3')]
+
+        vacuum_state = waypoint[self.index('vacuum')]
+        if not self._part_present and vacuum_state:
+            goal_1.weight *= 1.2
+            goal_1.tolerance /= 5
+        else:
+            goal_1.weight /= 2
+            goal_2.weight /= 2
+            goal_3.weight /= 2
+
+        goal_1_push_forward = goal_2_position/np.linalg.norm(goal_2_position) * push_forward
+        goal_1_position += goal_1_push_forward
+
+        goal_1.geometric_constraint = Float64MultiArray(data=goal_1_position)
+        goal_2.geometric_constraint = Float64MultiArray(data=goal_2_position)
+        goal_3.geometric_constraint = Float64MultiArray(data=goal_3_position)
+
+        goal_1.indices = [0, 1, 2]
+        goal_2.indices = [0, 1, 2]
+        goal_3.indices = [0, 1, 2]
+
+        goal_1.parent_link = 'panda_link0'
+        goal_1.child_link = 'panda_vacuum1_link'
+
+        goal_2.parent_link = 'panda_link7'
+        goal_2.child_link = 'panda_vacuum_support_link'
+
+        goal_3.parent_link = 'panda_vacuum1_link'
+        goal_3.child_link = 'panda_vacuum2_link'
+
+        constraints_goal = FabricsConstraintsGoal()
+        constraints_goal.constraints = []
+        constraints_goal.constraints.append(goal_1)
+        constraints_goal.constraints.append(goal_2)
+        constraints_goal.constraints.append(goal_3)
+
+
+        self.constraints_goal_cb(constraints_goal)
+
+
+
+        if self._vacuum != waypoint[self.index('vacuum')]:
+            if waypoint[self.index('vacuum')]:
+                self._vacuum = True
+                self.suck()
+            else:
+                self._vacuum = False
+                self.unsuck()
+
+    def transform_trajectory(self):
+        if self._vacuum:
+            return
+        tf_now, tf_found = self.get_tf_panda_product()
+        if not tf_found:
+            return
+        tf_ori = self._recording.tf_matrix()
+        dist_to_identity_now = tf_now == np.identity(4)
+        dist_to_identity_ori = tf_ori == np.identity(4)
+        if dist_to_identity_now.all():
+            tf_matrix = np.identity(4)
+        elif dist_to_identity_ori.all():
+            tf_matrix = np.identity(4)
+        else:
+            tf_matrix = np.dot(tf_now, np.linalg.inv(tf_ori))
+        self._recording.transform_waypoints(tf_matrix)
+
+    def set_product_mass(self):
+        product_mass = rospy.get_param("/pick_server/product_mass")
+        msg = Float64(data=product_mass * 12)
+        self._controller_load_publisher.publish(msg)
+
+    def unset_product_mass(self):
+        self._controller_load_publisher.publish(Float64(data=0))
+
+
+    def execute_trajectory(self, step_size: int, direction: int = +1):
+        self._goal = None
+        self._goal_1_weight = 0
+        self._goal_2_weight = 0
+        self._goal_3_weight = 0
+        #self.transform_trajectory()
+        n = self._recording.number_waypoints()
+        if direction == -1:
+            waypoint_index = n -1
+        else:
+            waypoint_index = 0
+        push_forward = 0.0
+        #self._desk.listen(self.panda_button_cb)
+        rospy.loginfo("Entering while loop")
+        while waypoint_index < n and waypoint_index >= 0:
+            rospy.loginfo(f'waypoint index: {waypoint_index}')
+
+            """
+            if direction == 1:
+                self.transform_trajectory()
+            """
+            if self._part_present:
+                self.set_product_mass()
+            else:
+                self.unset_product_mass()
+            if self._part_present and not self._recording.waypoints()[waypoint_index][self.index('part_present')]:
+                rospy.loginfo("passing to next waypoint because part is already present.")
+                waypoint_index += direction
+                continue
+            if self._aborted:
+                self.log("Stopping playback on user request")
+                break
+            waypoint_index = 135
+            self.publish_waypoint_goal(waypoint_index, push_forward=push_forward)
+            self.rate.sleep()
+            part_present = self._recording.waypoints()[waypoint_index][-1]
+            if self._part_present and part_present == self._part_present:
+                direction = 1
+            if direction == 1:
+                if self.goal_is_reached and part_present == self._part_present:
+                    push_forward = 0.0
+                    waypoint_index = min(n, waypoint_index + direction * step_size)
+                else:
+                    if part_present != self._part_present:
+                        push_forward += direction * 0.005
+                        if push_forward > self._max_push_fwd:
+                            rospy.loginfo('Reached max pushing depth')
+                            direction = -1
+                            self.unsuck()
+                    else:
+                        push_forward = 0.0
+            elif direction == -1:
+                rospy.loginfo(f"Current waypoint: {waypoint_index}")
+                if self.goal_is_reached:
+                    waypoint_index = max(-1, waypoint_index + direction * step_size)
+                else:
+                    push_forward += direction * 0.005
+
+            self._cur_goal_1_weight = 3
+            self._cur_goal_2_weight = 10
+            self._cur_goal_3_weight = 15
+            self.act()
+            self.goal_is_reached = self.state_evaluator.evaluate(self._goal_msg, self._q)
+        self.log("Finished playing back trajectory")
+        rospy.loginfo("Finished playing back trajectory")
+        return direction
+
+    def get_closest_waypoint_index(self) -> int:
+        position_1_child = self._forward_kinematics.fk(q, 'panda_link0', 'panda_vacuum1_link', positionOnly=True)
+
+        position_1 = position_1_child
+        positions = np.array([d[0:3] for d in self._recording.waypoints()])
+        distances = np.linalg.norm(position_1_child - positions, axis=1)
+        return np.argmin(distances)
+
+    def set_interaction_device(self, interaction_device):
+        if interaction_device == 'desk':
+            self._desk = papy.Desk('172.16.0.2', 'admin', '0123456789')
+            self._current_button = 'None'
+            self._desk.listen(self.panda_button_cb)
+            rospy.loginfo("Press circle to start recording and cross to end recording")
+        elif interaction_device == 'keyboard':
+            from pynput import keyboard
+            rospy.loginfo("Press r to start recording and e to end recording")
+            rospy.loginfo("Press v and n to activate and deactive the suction.")
+            self._listener = keyboard.Listener(
+                    on_press=self.keyboard_cb,
+            )
+            self._listener.start()
+        elif interaction_device == "tablet":
+            self.start_tablet_subscribers()
+        else:
+            raise WrongInteractionDevice(
+                    "Device %s is not available. " % interaction_device + 
+                    "Use one of [desk, tablet, keyboard]")
+
+    def start_tablet_subscribers(self):
+        self._start_record_sub = rospy.Subscriber("/tablet/start_record", Bool, self.start_record_callback)
+        self._stop_record_sub = rospy.Subscriber("/tablet/stop_record", Bool, self.stop_record_callback)
+        self._suck_sub = rospy.Subscriber("/tablet/activate_vacuum", Bool, self.activate_vacuum_callback)
+        self._unsuck_sub = rospy.Subscriber("/tablet/deactivate_vacuum", Bool, self.deactivate_vacuum_callback)
+        self._playback_subscriber = rospy.Subscriber("/tablet/start_playback", Bool, self.start_playback_callback)
+        self._playback_stop_subscriber = rospy.Subscriber("/tablet/stop_playback", Bool, self.stop_playback_callback)
+        self._abort_subscriber = rospy.Subscriber("/tablet/abort", Bool, self.abort_callback)
+        self._reset_subscriber = rospy.Subscriber("/tablet/reset", Bool, self.reset_callback)
+
+    def abort(self):
+        self.preempt_goal()
+        self._aborted = True
+        self.unsuck()
+        self.set_controller()
+        self.unset_product_mass()
+
+    def reset(self):
+        if not self._aborted:
+            self.abort()
+        self.log("Resetting panda to home position.")
+        goal = FabricsJointSpaceGoal()
+        goal.goal_joint_state.header.stamp = rospy.Time.now()
+        goal.goal_joint_state.name = rospy.get_param('/joint_names')
+        goal.goal_joint_state.position = [0.0, -1.15, 0.0, -1.9, 0.0, 1.8675, -np.pi/4]
+        goal.weight = 3.0
+        goal.tolerance = 0.02
+        self.joint_space_goal_cb(goal)
+        self.unset_product_mass()
+        self.set_controller(mode="playback")
+
+    def reset_callback(self, msg):
+        if msg.data:
+            self.reset()
+
+    def stop_playback(self):
+        self._aborted = True
+
+
+    def start_playback(self):
+        if self._currently_recording:
+            rospy.logerr("cannot start a playback while a recording is running")
+            return
+
+        self._aborted = False
+        self._execution_succeeded = False
+        self._currently_executing = True
+        skill_name = rospy.get_param('/trajectory_name')
+        full_name = self._trajectories_folder + skill_name + ".pickle"
+        self.set_controller(mode="playback")
+        self.log(f"Playing back : {full_name}")
+        with open(full_name, 'rb') as f:
+            self._recording: Recording = pickle.load(f)
+        final_direction = self.execute_trajectory(1)
+
+        # keep succeeded status for a while, so other services have time to process the feedback
+        if self._aborted or final_direction == -1:
+            self._execution_succeeded = False
+            rospy.sleep(0.5)
+        else:
+            self._execution_succeeded = True
+            rospy.sleep(0.5)
+        self._currently_executing = False
+
+    def abort_callback(self, msg):
+        if msg.data:
+            self.abort()
+
+
+    def start_playback_callback(self, msg):
+        if msg.data:
+            self.start_playback()
+
+    def stop_playback_callback(self, msg):
+        if msg.data:
+            self.stop_playback()
+
+    def start_record_callback(self, msg):
+        if msg.data:
+            self.start_recording()
+
+    def stop_record_callback(self, msg):
+        if msg.data:
+            self.stop_recording()
+
+    def activate_vacuum_callback(self, msg):
+        if msg.data:
+            self.suck()
+
+    def deactivate_vacuum_callback(self, msg):
+        if msg.data:
+            self.unsuck()
+
+
+    def start_recording(self):
+        if self._currently_executing:
+            rospy.logerr("cannot start a recording while and execution is running")
+            return
+
+        self._aborted = False
+        self.set_controller(mode='record')
+        #tf_matrix, tf_found = self.get_tf_panda_product()
+        tf_matrix = np.identity(4)
+        self._recording = Recording(tf_matrix)
+        skill_name = rospy.get_param('/trajectory_name')
+        full_name = self._trajectories_folder + skill_name
+        self._recording.name(full_name)
+        self._currently_recording = True
+        self._time = rospy.Time.now()
+
+    def stop_recording(self):
+            self._currently_recording = False
+            if hasattr(self, '_recording'):
+                self.save_poses()
+
+    def panda_button_cb(self, event):
+        if 'circle' in event and event['circle'] == True :
+            if self._current_button == 'circle':
+                return
+            self.start_recording()
+            self._current_button = 'circle'
+        if 'cross' in event and event['cross'] == True:
+            if self._current_button == 'cross':
+                return
+            self.stop_recording()
+            self._current_button = 'cross'
+        if 'check' in event and event['check'] == True:
+            if self._current_button == 'check':
+                return
+            self.log('aborting')
+            self.abort()
+            self._current_button = 'check'
+        if 'up' in event and event['up'] == True:
+            if self._current_button == 'up':
+                return
+            self.suck()
+            self._current_button = 'up'
+        if 'down' in event and event['down'] == True:
+            if self._current_button == 'down':
+                return
+            self.unsuck()
+            self._current_button = 'down'
+        if 'right' in event and event['right'] == True:
+            if self._current_button == 'right':
+                return
+            self.start_playback()
+            self._current_button = 'right'
+        if 'left' in event and event['left'] == True:
+            if self._current_button == 'left':
+                return
+            self.reset()
+            self._current_button = 'left'
+
+    def keyboard_cb(self, event):
+        from pynput import keyboard
+        if event == keyboard.KeyCode.from_char("r"):
+            self.start_recording()
+        if event == keyboard.KeyCode.from_char("e"):
+            self.stop_recording()
+        if event == keyboard.KeyCode.from_char("v"):
+            self.suck()
+        if event == keyboard.KeyCode.from_char("n"):
+            self.unsuck()
+
+    def save_poses(self):
+        self._recording.save(smoothen=True)
+        try:
+            rospy.loginfo("Successfully updated the database with new trajectory")
+        except rospy.ServiceException as e:
+            rospy.logerr("Update DB service call failed: %s" % e)
+        
+        del self._recording
+
+    def goal_position(self, q: np.ndarray, parent_link: str, child_link: str) -> np.ndarray:
+        parent = self._forward_kinematics.fk(q, 'panda_link0', parent_link, positionOnly=True)
+        child = self._forward_kinematics.fk(q, 'panda_link0', child_link, positionOnly=True)
+        position = child - parent
+        return position
+
+    def add_waypoint(self):
+
+        position_1 = self.goal_position(self._q, 'panda_link0', 'panda_vacuum1_link')
+        position_2 = self.goal_position(self._q, 'panda_link7', 'panda_vacuum_support_link')
+        position_3 = self.goal_position(self._q, 'panda_vacuum1_link', 'panda_vacuum2_link')
+        weight_1 = self._weight_factors[0] / np.linalg.norm(position_1)
+        weight_2 = self._weight_factors[1] / np.linalg.norm(position_2)
+        weight_3 = self._weight_factors[2] / np.linalg.norm(position_3)
+        threshold_1 = 0.1
+        threshold_2 = 0.1
+        threshold_3 = 0.1
+        duration_since_start = rospy.Time.now()-self._time
+        self._recording.append_waypoint(
+            position_1.tolist() \
+            + position_2.tolist() \
+            + position_3.tolist() \
+            + [
+                int(duration_since_start.to_sec()),
+                weight_1,
+                weight_2,
+                weight_3,
+                threshold_1,
+                threshold_2,
+                threshold_3,
+                self._vacuum,
+                self._part_present,
+            ]
+        )
+        if not self._vacuum:
+            tf_now, tf_found = self.get_tf_panda_product(timeout=0.1)
+            if tf_found:
+                rospy.loginfo("Found updated tf. Storing it to the recording.")
+                self._recording.set_tf_matrix(tf_now)
+        else:
+            rospy.loginfo("Not recording new tfs")
+
+
+    def run(self):
+        rospy.sleep(1)
+        self._status = None
+        while not rospy.is_shutdown():
+            if self._goal and self._goal_msg:
+                self.act()
+                self.goal_is_reached = self.state_evaluator.evaluate(self._goal_msg, self._q)
+            if self._aborted:
+                status = "aborted"
+                if self._currently_recording:
+                    self.log("Stopping recording on user request")
+                self._currently_executing = False
+                self._execution_succeeded = False
+                self._currently_recording = False
+            elif self._currently_executing and self._execution_succeeded:
+                status = "execution_succeeded"
+            elif self._currently_executing and not self._execution_succeeded:
+                status = "executing"
+            elif self._currently_recording:
+                self.add_waypoint()
+                status = "recording"
+            else:
+                status = "standby"
+            if status != self._status:
+                self._status = status
+                rospy.loginfo(f"Trajectory manager status {status}")
+                self._playback_status_publisher.publish(String(status))
+            self.rate.sleep()
+
+if __name__ == "__main__":
+    trajectory_manager = TrajectoryManager(
+        target_frame="desired_product",
+        ee_frame="panda_vacuum",
+        interaction_device='tablet',
+    )
+    try:
+        trajectory_manager.run()
+    except rospy.ROSInterruptException:
+        pass
