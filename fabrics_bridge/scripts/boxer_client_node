@@ -8,8 +8,10 @@ import tf
 # ros imports
 import rospy
 from geometry_msgs.msg import PoseStamped, Point, Quaternion
+from std_msgs.msg import Float64MultiArray
 from fabrics_msgs.msg import (
-    FabricsPoseGoal,
+    FabricsConstraintsGoal,
+    FabricsConstraint,
     FabricsObstacle,
     FabricsObstacleArray,
 )
@@ -41,7 +43,6 @@ class ClientNode(object):
         # default number of obstacles is 20
         self._num_obs = 1
         self.init_publishers()
-        self._goal = FabricsPoseGoal()
         # ring of spheres setting
         # radius of shelf (suppose it's a circular shelf)
         self.r_shelf = 0.30
@@ -49,10 +50,11 @@ class ClientNode(object):
         self.r_obs = 0.15
         self.obs = FabricsObstacleArray()
         self._obstacles = [[2.0, 2.0, 0.0]]
+        self.init_goal()
 
     def init_publishers(self):
         self._goal_publisher = rospy.Publisher(
-            "fabrics/ee_pose_goal", FabricsPoseGoal, queue_size=10
+            "fabrics/constraints_goal", FabricsConstraintsGoal, queue_size=10
         )
         self._obs_publisher = rospy.Publisher(
             "fabrics/planning_obs", FabricsObstacleArray, queue_size=10
@@ -68,16 +70,21 @@ class ClientNode(object):
             self.obs.obstacles.append(o)
         return self.obs
 
-    def publish_goal(
-        self, pos_x, pos_y, pos_z, quat_x, quat_y, quat_z, quat_w, weight_0, weight_1
-    ):
-        self._goal.goal_pose.position = Point(x=pos_x, y=pos_y, z=pos_z)
-        self._goal.goal_pose.orientation = Quaternion(
-            x=quat_x, y=quat_y, z=quat_z, w=quat_w
-        )
-        self._goal.weight_position = weight_0
-        self._goal.weight_orientation = weight_1
+    def publish_goal(self):
         self._goal_publisher.publish(self._goal)
+
+    def init_goal(self):
+        self._goal = FabricsConstraintsGoal()
+        self._goal.constraints = []
+        goal_1 = FabricsConstraint()
+        goal_1.weight = 1.0
+        goal_1.indices = [0, 1]
+        goal_1.tolerance = 0.04
+        goal_1.geometric_constraint = Float64MultiArray(data=[-0.0, -0.0])
+        goal_1.parent_link = 'world'
+        goal_1.child_link = 'ee_link'
+        self._goal.constraints.append(goal_1)
+
 
     def publish_obs(self):
         self.obs.obstacles = []
@@ -86,10 +93,7 @@ class ClientNode(object):
 
     def run(self):
         while not rospy.is_shutdown():
-            self.publish_goal(
-                4.0, 4.0, 0.10, 0, -0.7071067811865475, 0, -0.7071067811865475, 1, 0
-            )
-            self.publish_obs()
+            self.publish_goal()
             self._rate.sleep()
 
 
