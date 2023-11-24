@@ -63,6 +63,12 @@ class PandaFabricsNode(GenericFabricsNode):
         self._qdot = np.array(msg.velocity[5:12])
 
     def publish_action(self):
+        if np.isnan(self._action).any():
+            rospy.logwarn(f"Action not a number {self._action}")
+            from pprint import pprint
+
+            pprint(self._runtime_arguments)
+            return
         action_msg = Float64MultiArray(data=self._action)
         self._panda_command_publisher.publish(action_msg)
 
