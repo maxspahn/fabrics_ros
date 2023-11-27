@@ -189,8 +189,13 @@ class AlbertJointStates(object):
 
     @property
     def current(self):
-        base_position = self.get_map_to_base_link()
-        self._joint_state.position[0:3] = base_position
+        """
+        try:
+            base_position = self.get_map_to_base_link()
+            self._joint_state.position[0:3] = base_position
+        except Exception as e:
+            rospy.logwarn_once(e)
+        """
         return self._joint_state
 
 if __name__ == "__main__":

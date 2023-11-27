@@ -68,6 +68,12 @@ def quaternion_to_rotation_matrix(
 
     return rotation_matrix
 
+def ensure_list(value: Union[np.ndarray, list]) -> list:
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+    return value
+
+
 
 
 class InvalidGoalError(Exception):
@@ -142,6 +148,7 @@ class FabricsGoalWrapper(object):
 
     def compose_joint_space_goal(self, goal_msg: FabricsJointSpaceGoal):
         joint_positions = list(goal_msg.goal_joint_state.position)
+        print(joint_positions)
         dimension = len(joint_positions)
         goal_dict = {
             "joint_position": {
@@ -158,13 +165,15 @@ class FabricsGoalWrapper(object):
     def compose_constraints_goal(self, goal_msg: FabricsConstraintsGoal):
         goal_dict = {}
         for i, constraint in enumerate(goal_msg.constraints):
+            constraint_position = ensure_list(constraint.geometric_constraint.data)
+
             sub_goal_dict = {
                     "weight": constraint.weight,
                     "is_primary_goal": False,
                     "indices": constraint.indices,
                     "parent_link": constraint.parent_link,
                     "child_link": constraint.child_link,
-                    "desired_position": constraint.geometric_constraint.data,
+                    "desired_position": constraint_position,
                     "epsilon": constraint.tolerance,
                     "type": "staticSubGoal",
             }

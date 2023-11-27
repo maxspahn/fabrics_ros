@@ -300,7 +300,7 @@ class GenericFabricsNode(ABC):
         rospy.loginfo(f"goal preempted")
         # only change the weights
         self._goal_msg = FabricsJointSpaceGoal()
-        self._goal_msg.goal_joint_state.position = self._q
+        self._goal_msg.goal_joint_state.position = self._q.tolist()
         self._goal_msg.weight=0
         self._goal, changed_planner = self.goal_wrapper.wrap(self._goal_msg)
 
