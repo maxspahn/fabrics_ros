@@ -100,7 +100,7 @@ class FabricsMarkerManager(object):
             self.pose_goal_marker.color.b = 0.0 if goal_is_reached else 1.0
 
             self.pose_goal_marker.pose = goal.goal_pose
-            self.goal_marker_publisher.publish(self.goal_marker)
+            self.goal_marker_publisher.publish(self.pose_goal_marker)
         elif isinstance(goal, FabricsConstraintsGoal):
 
             self.constraints_goal_marker.pose.position.x = goal.constraints[0].geometric_constraint.data[0]

@@ -17,6 +17,16 @@ from fabrics_msgs.msg import (
 )
 FabricsGoalUnion = Union[FabricsJointSpaceGoal,FabricsPoseGoal,FabricsConstraintsGoal]
 
+# Helpers
+def _it(self):
+    yield self.x
+    yield self.y
+    yield self.z
+
+
+Point.__iter__ = _it
+
+
 
 class FabricsGoalEvaluator(object):
     state: FabricsState
