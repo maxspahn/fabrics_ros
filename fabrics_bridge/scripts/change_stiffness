@@ -1,0 +1,16 @@
+#!/usr/bin/env python3
+import sys
+
+import rospy
+from fabrics_bridge.set_controller import StiffnessNode
+
+if __name__ == "__main__":
+    if len(sys.argv) > 1:
+        mode = sys.argv[1]
+    else:
+        mode = 'record'
+    controller_setter = StiffnessNode(mode=mode)
+    try:
+        controller_setter.run()
+    except rospy.ROSInterruptException:
+        pass
