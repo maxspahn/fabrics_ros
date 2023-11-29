@@ -148,7 +148,6 @@ class FabricsGoalWrapper(object):
 
     def compose_joint_space_goal(self, goal_msg: FabricsJointSpaceGoal):
         joint_positions = list(goal_msg.goal_joint_state.position)
-        print(joint_positions)
         dimension = len(joint_positions)
         goal_dict = {
             "joint_position": {

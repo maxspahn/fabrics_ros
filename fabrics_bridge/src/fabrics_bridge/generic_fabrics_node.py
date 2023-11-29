@@ -24,8 +24,6 @@ from fabrics_msgs.msg import (
     FabricsObstacleArray,
 )
 from fabrics_bridge.goal_wrapper import FabricsGoalWrapper
-from fabrics_bridge.marker_manager import FabricsMarkerManager
-from fabrics_bridge.goal_evaluator import FabricsGoalEvaluator
 from fabrics_bridge.utils import create_planner
 
 # Helpers
@@ -75,8 +73,6 @@ class GenericFabricsNode(ABC):
         self.rate = rospy.Rate(100)
         self.init_publishers()
         self.init_subscribers()
-        self.state_evaluator = FabricsGoalEvaluator(self._forward_kinematics)
-        self.marker_manager = FabricsMarkerManager(self.num_sphere_obstacles, self.collision_bodies, self.collision_links, self.self_collision_pairs)
 
         self.stop_acc_bool = False
         self.init_runtime_arguments()
@@ -233,17 +229,6 @@ class GenericFabricsNode(ABC):
                 and not self._goal is None
             ):
                 self.act()
-                goal_is_reached = self.state_evaluator.evaluate(
-                    self._goal_msg, self._q
-                )
-                """
-                self.marker_manager.update_goal_markers(
-                    self._goal_msg, goal_is_reached
-                )
-                self.marker_manager.update_obstacle_markers(
-                    self.obstacles
-                )
-                """
             t1 = time.perf_counter()
             #rospy.loginfo(f"Compute time in ms : {(t1-t0) * 1000}")
             self.rate.sleep()

@@ -1,21 +1,18 @@
 from typing import Union
-import tf
-import rospy
-from fabrics_msgs.msg import FabricsState
-
-#!/usr/bin/env python3
 import numpy as np
 import rospy
 
 import tf
-from sensor_msgs.msg import JointState
-from geometry_msgs.msg import Point, PoseStamped
 from fabrics_msgs.msg import (
     FabricsJointSpaceGoal,
     FabricsPoseGoal,
     FabricsConstraintsGoal,
 )
+from fabrics_msgs.msg import FabricsState
 FabricsGoalUnion = Union[FabricsJointSpaceGoal,FabricsPoseGoal,FabricsConstraintsGoal]
+from fabrics_bridge.utils import quaternion_to_rotation_matrix
+from fabrics_bridge.utils import Quaternion, Point
+
 
 
 class FabricsGoalEvaluator(object):
@@ -26,7 +23,8 @@ class FabricsGoalEvaluator(object):
         )
         self._fk = fk
         self._root_link = rospy.get_param('/root_link')
-        self.tf_listener = tf.TransformListener()
+        self._end_effector_link = rospy.get_param('/end_effector_link')
+        self._orientation_helper_link = rospy.get_param("/orientation_helper_link")
         self.tf_broadcaster = tf.TransformBroadcaster()
         self.load_parameters()
         self.state_publisher = rospy.Publisher("state", FabricsState, queue_size=10)
@@ -84,6 +82,7 @@ class FabricsGoalEvaluator(object):
         elif isinstance(goal, FabricsPoseGoal):
             # broadcast goal frame
             # Note: at 10x lower frequency than act loop, because tf
+            """
             if not hasattr(self, "eval_i"):
                 self.eval_i = 0
             self.eval_i += 1
@@ -96,30 +95,24 @@ class FabricsGoalEvaluator(object):
                     "/fabrics_goal",
                     rospy.get_param("/root_link"),
                 )
+            """
 
-            # evaluate positional_error
-            trans, _ = self.tf_listener.lookupTransform(
-                rospy.get_param("/root_link"), rospy.get_param("/end_effector_link"), rospy.Time(0)
-            )
+            des_position = np.array(list(goal.goal_pose.position))
+            goal_quaternion = np.array(list(goal.goal_pose.orientation))
+            goal_rotation_matrix = quaternion_to_rotation_matrix(goal_quaternion, ordering='xyzw')
+
+            fk_position = self.compute_fk(q, self._root_link, self._end_effector_link)
+            fk_ori = self.compute_fk(q, self._root_link, self._orientation_helper_link)
+            fk_orientation = fk_ori - fk_position
+            default_goal = np.array([0.0, 0.0, -np.linalg.norm(fk_orientation)])
+            des_orientation = np.dot(goal_rotation_matrix, default_goal)
+
             positional_error = np.linalg.norm(
-                np.array(trans) - list(goal.goal_pose.position)
+                fk_position - des_position 
             )
-
-            # evaluate angular_error
-            # Note: this is done by taking the L2 norm between a point at z=0.5 along the '/panda_link8' frame and transforming it to the goal frame
-            p1 = PoseStamped()
-            p1.header.frame_id = rospy.get_param("/end_effector_link")
-            p1.pose.position = Point(x=0, y=0, z=0.5)
-            try:
-                p2 = self.tf_listener.transformPose("/fabrics_goal", p1)
-                angular_error = np.linalg.norm(
-                    np.array(list(p1.pose.position)) - list(p2.pose.position)
-                )
-            except Exception as e:
-                angular_error = 10
-                rospy.loginfo(e)
-                rospy.loginfo("Waiting for tf to be on time.")
-
+            angular_error = np.linalg.norm(
+                fk_orientation - des_orientation
+            )
             # update state
             self.state.errors = [positional_error, angular_error]
             self.state.tolerances = [goal.tolerance_position, goal.tolerance_orientation]
@@ -128,7 +121,5 @@ class FabricsGoalEvaluator(object):
                 and angular_error < goal.tolerance_orientation
             )
         self.state.header.stamp = rospy.Time.now()
-        #self.state.tolerance_goal_0 = self.positional_goal_tolerance
-        #self.state.tolerance_goal_1 = self.angular_goal_tolerance
         self.state_publisher.publish(self.state)
         return self.state.goal_reached

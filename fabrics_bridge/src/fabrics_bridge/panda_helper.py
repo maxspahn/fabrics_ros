@@ -2,24 +2,20 @@
 import numpy as np
 
 import rospy
-import rospkg
-from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
 
 from urdf_parser_py.urdf import URDF
 
-from fabrics_bridge.generic_fabrics_node import GenericFabricsNode
+from fabrics_bridge.generic_helper_node import GenericHelpersNode
 from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
 
-class PandaFabricsNode(GenericFabricsNode):
+class PandaHelpersNode(GenericHelpersNode):
     def __init__(self):
-        super().__init__('panda_fabrics_node')
+        super().__init__('panda_helpers__node')
 
     def init_robot_specifics(self):
         self.joint_names = [f'panda_joint{i+1}' for i in range(7)]
         self._action = np.zeros(7)
-        rospack = rospkg.RosPack()
-        self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/panda/"
         self._forward_kinematics = GenericURDFFk(
             self.urdf,
             rootLink=rospy.get_param("/root_link"),
@@ -36,13 +32,6 @@ class PandaFabricsNode(GenericFabricsNode):
                     robot.joint_map[i].limit.upper,
                 ]
             )
-
-    def init_publishers(self):
-        self._panda_command_publisher = rospy.Publisher(
-            '/panda_joint_velocity_controller/command',
-            Float64MultiArray,
-            queue_size=10
-        )
 
     def init_joint_states_subscriber(self):
         self._q = np.zeros(7)
@@ -62,17 +51,4 @@ class PandaFabricsNode(GenericFabricsNode):
         self._q = np.array(msg.position[5:12])
         self._qdot = np.array(msg.velocity[5:12])
 
-    def publish_action(self):
-        if np.isnan(self._action).any():
-            rospy.logwarn(f"Action not a number {self._action}")
-            return
-        action_msg = Float64MultiArray(data=self._action)
-        self._panda_command_publisher.publish(action_msg)
-
-if __name__ == "__main__":
-    node = PandaFabricsNode()
-    try:
-        node.run()
-    except rospy.ROSInterruptException:
-        pass
 

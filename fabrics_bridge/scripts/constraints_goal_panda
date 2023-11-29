@@ -11,27 +11,6 @@ from fabrics_msgs.msg import (
     FabricsConstraint,
     FabricsConstraintsGoal,
 )
-
-# Helper functions for making Point and Quaternion iterable
-def _it_point(self):
-    yield self.x
-    yield self.y
-    yield self.z
-
-
-Point.__iter__ = _it_point
-
-
-def _it_quat(self):
-    yield self.x
-    yield self.y
-    yield self.z
-    yield self.w
-
-
-Quaternion.__iter__ = _it_quat
-
-
 class ClientNode(object):
     def __init__(self):
         rospy.init_node("client_node")
@@ -60,7 +39,7 @@ class ClientNode(object):
         #goal_2_position = np.dot(rotation_matrix, goal_2_position)
         #goal_3_position = np.dot(rotation_matrix, goal_3_position)
         goal_1 = FabricsConstraint()
-        goal_1.weight = 0.0
+        goal_1.weight = 3.0
         goal_1.indices = [0, 1, 2]
         goal_1.tolerance = 0.04
         goal_1.geometric_constraint = Float64MultiArray(data=[0.7, 0.0, 0.8])
@@ -68,20 +47,20 @@ class ClientNode(object):
         goal_1.child_link = 'panda_vacuum1_link'
         goal_2 = FabricsConstraint()
         goal_2.indices = [0, 1, 2]
-        goal_2.weight = 5.0
+        goal_2.weight = 10.0
         goal_2.tolerance = 0.01
         goal_2.geometric_constraint = Float64MultiArray(data=goal_2_position)
         goal_2.parent_link = 'panda_link7'
         goal_2.child_link = 'panda_vacuum_support_link'
         goal_3 = FabricsConstraint()
         goal_3.indices = [2]
-        goal_3.weight = 10.0
+        goal_3.weight = 15.0
         goal_3.tolerance = 0.01
         goal_3.geometric_constraint = Float64MultiArray(data=goal_3_position[2:])
         goal_3.parent_link = 'panda_vacuum1_link'
         goal_3.child_link = 'panda_vacuum2_link'
         self._goal.constraints.append(goal_1)
-        #self._goal.constraints.append(goal_2)
+        self._goal.constraints.append(goal_2)
         self._goal.constraints.append(goal_3)
 
     def publish_goal(self):

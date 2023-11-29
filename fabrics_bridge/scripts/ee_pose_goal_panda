@@ -11,25 +11,7 @@ from fabrics_msgs.msg import (
     FabricsObstacle,
     FabricsObstacleArray,
 )
-
-# Helper functions for making Point and Quaternion iterable
-def _it_point(self):
-    yield self.x
-    yield self.y
-    yield self.z
-
-
-Point.__iter__ = _it_point
-
-
-def _it_quat(self):
-    yield self.x
-    yield self.y
-    yield self.z
-    yield self.w
-
-
-Quaternion.__iter__ = _it_quat
+from fabrics_bridge.utils import Point, Quaternion
 
 
 class ClientNode(object):
@@ -125,7 +107,7 @@ class ClientNode(object):
     def run(self):
         while not rospy.is_shutdown():
             self.publish_goal(
-                0.8, 0.2, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475, 0, 5
+                0.8, 0.2, 0.70, 0, -0.7071067811865475, 0, -0.7071067811865475, 5, 5
             )
             self.publish_obs()
             self._rate.sleep()

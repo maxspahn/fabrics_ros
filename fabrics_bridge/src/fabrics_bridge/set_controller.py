@@ -8,14 +8,16 @@ from std_msgs.msg import Float64MultiArray
 class StiffnessNode:
     def __init__(
             self,
+            mode: str = 'record',
         ):
+        self._mode = mode
         self._dq = np.zeros(7)
         self._dq_des = np.zeros(7)
         rospy.init_node("set_stiffness")
         self.establish_ros_connections()
         self._rate = rospy.Rate(500)
         rospy.sleep(1.0)
-        rospy.loginfo("Starting RecordSkillNode as record_skill.")
+        rospy.loginfo(f"Setting controller to mode {self._mode}")
 
         self.set_controller()
         
@@ -43,13 +45,14 @@ class StiffnessNode:
 
 
     def set_controller(self):
-        kp = [10, 20, 30, 40, 10, 10, 5]
-        ki = [2, 2, 2, 2, 0.5, 1, 0.5]
-        #kp = [0.1] * 7
-        #ki = [0] * 7
+        if self._mode == 'stiff':
+            kp = [10, 20, 30, 40, 10, 10, 5]
+            ki = [2, 2, 2, 2, 0.5, 1, 0.5]
+        else:
+            kp = [0.1] * 7
+            ki = [0] * 7
         ki_msg = Float64MultiArray(data=ki)
         kp_msg = Float64MultiArray(data=kp)
-        rospy.loginfo("Setting controller gains.")
         for i in range(10):
             self._ki_publisher.publish(ki_msg)
             self._kp_publisher.publish(kp_msg)
