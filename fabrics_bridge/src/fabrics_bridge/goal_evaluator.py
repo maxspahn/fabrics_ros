@@ -43,9 +43,6 @@ class FabricsGoalEvaluator(object):
         return child_position - parent_position
 
     def evaluate(self, goal: FabricsGoalUnion, q: np.ndarray) -> bool:
-        if rospy.get_param("/robot_type") == "boxer":
-            rospy.logwarn("Planning state evaluation not available for boxer robot")
-            return False
         """
         if goal.tolerance_goal_0 == 0:
             self.positional_goal_tolerance = self.default_positional_goal_tolerance
@@ -58,8 +55,11 @@ class FabricsGoalEvaluator(object):
         """
 
         if isinstance(goal, FabricsJointSpaceGoal):
+            robot_type = rospy.get_param('/robot_type')
             self.state.tolerances = [goal.tolerance]
             difference_vector = q - np.array(goal.goal_joint_state.position)
+            if robot_type == 'panda_plus':
+                difference_vector = q[1:] - np.array(goal.goal_joint_state.position)[1:]
             self.state.errors = [float(np.linalg.norm(difference_vector))]
             self.state.goal_reached = (self.state.errors[0] < goal.tolerance)
         elif isinstance(goal, FabricsConstraintsGoal):
