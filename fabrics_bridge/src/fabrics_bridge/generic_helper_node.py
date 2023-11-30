@@ -70,7 +70,11 @@ class GenericHelpersNode(ABC):
         self.num_sphere_obstacles = rospy.get_param("/num_sphere_obs")
         self.num_box_obstacles = rospy.get_param("/num_box_obs")
         # robot_description should be global because it's not part of fabrics ns
-        self.urdf = rospy.get_param(rospy.get_param("/urdf_source"))
+        try:
+            self.urdf = rospy.get_param(rospy.get_param("/urdf_source"))
+        except KeyError:
+            rospy.logwarn(f"Fabrics specific urdf not found.")
+            self.urdf = None
         self.collision_links = rospy.get_param("/collision_links")
         try:
             self.self_collision_pairs = rospy.get_param("/self_collision_pairs")
