@@ -51,7 +51,6 @@ class JointSpaceExampleClient(object):
     def publish_goal(self):
         goal = FabricsJointSpaceGoal()
         goal.goal_joint_state.header.stamp = rospy.Time.now()
-        goal.goal_joint_state.name = rospy.get_param('/joint_names')
         goal.goal_joint_state.position = [0.0, -0.9, 0.0, -1.501, 0.0, 1.8675, 1.0]
         #goal.goal_joint_state.position = [-1.7, -0.2, -1.4, -1.501, 0.0, 1.2675, 0.0]
         goal.weight = 3.0
