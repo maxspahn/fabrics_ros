@@ -1,0 +1,60 @@
+positional_goal_tolerance : 0.02
+robot_type: "panda_plus"
+planner_type: "holonomic"
+degrees_of_freedom: 8
+goal_indices: 
+  - 0
+  - 1
+  - 2
+root_link: "base_link"
+end_effector_link: "panda_vacuum1_link"
+orientation_helper_link: "panda_vacuum_support_link"
+num_sphere_obs : 20
+num_box_obs : 2
+angular_goal_tolerance: 0.1
+collision_bodies:
+  radius_body_panda_link1: 0.2
+  radius_body_panda_link2: 0.2
+  radius_body_panda_link3: 0.1
+  radius_body_panda_link4: 0.1
+  radius_body_panda_link5: 0.1
+  radius_body_panda_link6: 0.09
+  radius_body_panda_link7: 0.1
+  radius_body_panda_link8: 0.1
+  radius_body_panda_vacuum1_link: 0.05
+  radius_body_panda_vacuum2_link: 0.05
+  radius_body_panda_hand: 0.08
+  radius_body_camera_link: 0.03
+collision_links: 
+  - panda_vacuum1_link
+  - camera_link
+  - panda_link3
+self_collision_pairs: 
+    panda_vacuum1_link:
+      - panda_link1
+      - panda_link2
+      - panda_link4
+    panda_hand:
+      - panda_link1
+      - panda_link2
+      - panda_link4
+velocity_scaling: 1.0
+velocity_limits:
+        upper:
+              - 1
+              - 2.1750
+              - 2.1750 
+              - 2.1750
+              - 2.1750
+              - 2.6100 
+              - 2.6100 
+              - 2.6100
+        lower:
+              - -1
+              - -2.1750
+              - -2.1750 
+              - -2.1750
+              - -2.1750
+              - -2.6100 
+              - -2.6100 
+              - -2.6100
