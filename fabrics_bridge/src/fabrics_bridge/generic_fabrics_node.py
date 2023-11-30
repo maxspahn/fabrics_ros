@@ -64,13 +64,15 @@ class GenericFabricsNode(ABC):
         self.load_parameters()
         self.init_robot_specifics()
         self._goal = None
+        self._goal_string = 'none'
         self._robot_type = rospy.get_param('/robot_type') 
-        self.changed_planner = True
+        self._changed_planner = True
         self.stop_acc_bool = True
         self.load_all_available_planners()
         self._runtime_arguments = {}
         self.goal_wrapper = FabricsGoalWrapper()
-        self.rate = rospy.Rate(100)
+        self._frequency = 100
+        self.rate = rospy.Rate(self._frequency)
         self.init_publishers()
         self.init_subscribers()
 
@@ -121,7 +123,11 @@ class GenericFabricsNode(ABC):
         self.num_sphere_obstacles = rospy.get_param("/num_sphere_obs")
         self.num_box_obstacles = rospy.get_param("/num_box_obs")
         # robot_description should be global because it's not part of fabrics ns
-        self.urdf = rospy.get_param(rospy.get_param("/urdf_source"))
+        try:
+            self.urdf = rospy.get_param(rospy.get_param("/urdf_source"))
+        except KeyError:
+            rospy.logwarn(f"Fabrics specific urdf not found.")
+            self.urdf = None
         self.collision_links = rospy.get_param("/collision_links")
         try:
             self.self_collision_pairs = rospy.get_param("/self_collision_pairs")
@@ -146,11 +152,10 @@ class GenericFabricsNode(ABC):
             return
         rospack = rospkg.RosPack()
         file_hash = self.hash_planner_configuration(goal)
-        goal_string = self.goal_wrapper.goal_string(goal)
         serialize_file = self._planner_folder + file_hash
         # If the planner is not serialized yet, this node has to wait for the serialization to finish.
         try:
-            rospy.loginfo(f"Loading planner for goal type : {goal_string}")
+            rospy.loginfo(f"Loading planner for goal type : {self._goal_string}")
             self._planner = self.planners[serialize_file]
             rospy.loginfo(self._planner)
             self.stop_acc_bool = False
@@ -159,6 +164,7 @@ class GenericFabricsNode(ABC):
             rospy.loginfo("Planner not found: Waiting...")
             self.init_planner(goal)
             self.stop_acc_bool = False
+        self._changed_planner = False
 
     def hash_planner_configuration(self, goal: GoalComposition):
         hash_robot_type: str = rospy.get_param("/robot_type")
@@ -204,7 +210,7 @@ class GenericFabricsNode(ABC):
             number_obstacles=self.num_sphere_obstacles,
             number_obstacles_cuboid=self.num_box_obstacles,
         )
-        planner.concretize(mode='vel', time_step = 10/100)
+        planner.concretize(mode='vel', time_step = 10/self._frequency)
         t1 = time.perf_counter()
         composition_time = (t1-t0) * 1000
         # serializing the planner
@@ -228,6 +234,8 @@ class GenericFabricsNode(ABC):
                 and not self.stop_acc_bool
                 and not self._goal is None
             ):
+                if self._changed_planner:
+                    self.load_planner(self._goal)
                 self.act()
             t1 = time.perf_counter()
             #rospy.loginfo(f"Compute time in ms : {(t1-t0) * 1000}")
@@ -267,15 +275,27 @@ class GenericFabricsNode(ABC):
 
     def joint_space_goal_cb(self, msg: FabricsJointSpaceGoal):
         self._goal_msg = msg
-        self._goal, changed_planner = self.goal_wrapper.wrap(msg)
+        self._goal = self.goal_wrapper.wrap(msg)
+        goal_string = self.goal_wrapper.goal_string(self._goal)
+        if self._goal_string != goal_string:
+            self._changed_planner = True
+        self._goal_string = goal_string
 
     def ee_pose_goal_cb(self, msg: FabricsPoseGoal):
         self._goal_msg = msg
-        self._goal, changed_planner = self.goal_wrapper.wrap(msg)
+        self._goal = self.goal_wrapper.wrap(msg)
+        goal_string = self.goal_wrapper.goal_string(self._goal)
+        if self._goal_string != goal_string:
+            self._changed_planner = True
+        self._goal_string = goal_string
 
     def constraints_goal_cb(self, msg: FabricsConstraintsGoal):
         self._goal_msg = msg
-        self._goal, changed_planner = self.goal_wrapper.wrap(msg)
+        self._goal = self.goal_wrapper.wrap(msg)
+        goal_string = self.goal_wrapper.goal_string(self._goal)
+        if self._goal_string != goal_string:
+            self._changed_planner = True
+        self._goal_string = goal_string
 
     @abstractmethod
     def init_joint_states_subscriber(self):
@@ -287,7 +307,7 @@ class GenericFabricsNode(ABC):
         self._goal_msg = FabricsJointSpaceGoal()
         self._goal_msg.goal_joint_state.position = self._q.tolist()
         self._goal_msg.weight=0
-        self._goal, changed_planner = self.goal_wrapper.wrap(self._goal_msg)
+        self._goal = self.goal_wrapper.wrap(self._goal_msg)
 
     def compose_runtime_obstacles_argument(self):
         x_obst_sphere = np.full((self.num_sphere_obstacles, 3), [100.0] * 3)

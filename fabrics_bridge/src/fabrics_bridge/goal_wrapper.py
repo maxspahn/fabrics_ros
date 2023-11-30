@@ -85,17 +85,12 @@ class FabricsGoalWrapper(object):
         self._goal_type = ""
 
     def wrap(self, goal_msg: FabricsGoalUnion) -> bool:
-        changed_planner: bool = False
-        goal_type = type(goal_msg)
-        if not self._goal_type == goal_type:
-            self._goal_type = goal_type.__name__
-            changed_planner = True
         if isinstance(goal_msg, FabricsPoseGoal):
-            return self.compose_pose_goal(goal_msg), changed_planner
+            return self.compose_pose_goal(goal_msg)
         elif isinstance(goal_msg, FabricsJointSpaceGoal):
-            return self.compose_joint_space_goal(goal_msg), changed_planner
+            return self.compose_joint_space_goal(goal_msg)
         elif isinstance(goal_msg, FabricsConstraintsGoal):
-            return self.compose_constraints_goal(goal_msg), changed_planner
+            return self.compose_constraints_goal(goal_msg)
         else:
             raise InvalidGoalError()
 
