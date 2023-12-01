@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
-    <arg name="use_kf" default="true" />
+    <arg name="use_kf" default="false" />
+    <arg name="use_fir" default="true" />
+    <arg name="use_bad" default="false" />
     <arg name="use_active_inference" default="false" />
 
     <!-- load config files -->
@@ -11,7 +13,10 @@
     <group if="$(arg use_kf)">
       <node pkg="fabrics_processing" type="joint_states_kf" name="joint_states_kf" output='screen'/>
     </group>
-    <group unless="$(arg use_kf)">
+    <group if="$(arg use_fir)">
+      <node pkg="fabrics_processing" type="joint_states_fir" name="joint_states_kf" output='screen'/>
+    </group>
+    <group if="$(arg use_bad)">
       <node pkg="fabrics_processing" type="joint_states_filter" name="joint_states_filter"/>
     </group>
     <!--node pkg="fabrics_processing" type="joint_states_integrator" name="joint_states_integrator" output="screen"/-->
