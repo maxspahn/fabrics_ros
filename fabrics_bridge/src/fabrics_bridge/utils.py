@@ -12,6 +12,19 @@ def create_planner(planner_type: str, forward_kinematics) -> ParameterizedFabric
     base_energy: str = (
         "0.5 * 0.2 * ca.dot(xdot, xdot)"
     )
+    base_metric = "0.1 * np.array([ \
+        [10, 0, 0, 0, 0, 0, 0, 0],  \
+        [0, 1, 0, 0, 0, 0, 0, 0],  \
+        [0, 0, 1, 0, 0, 0, 0, 0],  \
+        [0, 0, 0, 1, 0, 0, 0, 0],  \
+        [0, 0, 0, 0, 1, 0, 0, 0],  \
+        [0, 0, 0, 0, 0, 1, 0, 0],  \
+        [0, 0, 0, 0, 0, 0, 1, 0],  \
+        [0, 0, 0, 0, 0, 0, 0, 1],  \
+        ])"
+    base_energy: str = (
+        f"ca.dot(xdot, ca.mtimes({base_metric}, xdot))"
+    )
     collision_geometry: str = (
         "-0.5 / (x ** 2) * xdot ** 2"
     )
@@ -41,6 +54,7 @@ def create_planner(planner_type: str, forward_kinematics) -> ParameterizedFabric
         return ParameterizedFabricPlanner(
             degrees_of_freedom,
             forward_kinematics,
+            base_energy=base_energy,
             collision_geometry=collision_geometry,
             collision_finsler=collision_finsler,
             self_collision_finsler=self_collision_finsler,

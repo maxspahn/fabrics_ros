@@ -127,7 +127,7 @@ class PandaPlusFabricsNode(GenericFabricsNode):
             return
         action_msg = Float64MultiArray(data=self._action[1:])
         boxer_msg = Twist()
-        boxer_msg.linear.x = 0.3 * self._action[0]
+        boxer_msg.linear.x = self._action[0]
         self._panda_command_publisher.publish(action_msg)
         if self._publish_boxer:
             self._boxer_command_publisher.publish(boxer_msg)
