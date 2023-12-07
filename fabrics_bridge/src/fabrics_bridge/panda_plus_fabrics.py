@@ -36,11 +36,10 @@ class PandaPlusFabricsNode(GenericFabricsNode):
         self.joint_names = [f'panda_joint{i+1}' for i in range(7)]
         self._action = np.zeros(8)
         self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/pandaplus/"
-        self.urdf
         self._forward_kinematics = GenericURDFFk(
             self.urdf,
-            rootLink="base_link",
-            end_link=["panda_vacuum1_link" , "panda_vacuum2_link", "panda_vacuum_support_link"],
+            rootLink=rospy.get_param("/root_link"),
+            end_link=rospy.get_param("/end_links")
         )
         self._planner_type = 'holonomic'
         # get the joint limits for each joint

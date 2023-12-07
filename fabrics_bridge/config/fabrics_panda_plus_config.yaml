@@ -9,9 +9,22 @@ goal_indices:
 root_link: "base_link"
 end_effector_link: "panda_vacuum1_link"
 orientation_helper_link: "panda_vacuum_support_link"
+end_links: 
+  - "panda_vacuum1_link"
+  - "panda_vacuum2_link"
+  - "panda_vacuum_support_link"
 num_sphere_obs : 20
 num_box_obs : 2
 angular_goal_tolerance: 0.1
+urdf_source: "pandaplus"
+joint_names:
+  - "panda_joint1"
+  - "panda_joint2"
+  - "panda_joint3"
+  - "panda_joint4"
+  - "panda_joint5"
+  - "panda_joint6"
+  - "panda_joint7"
 collision_bodies:
   radius_body_panda_link1: 0.2
   radius_body_panda_link2: 0.2
