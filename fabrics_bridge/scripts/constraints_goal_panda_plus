@@ -60,8 +60,8 @@ class ClientNode(object):
         goal_3.parent_link = 'panda_vacuum1_link'
         goal_3.child_link = 'panda_vacuum2_link'
         self._goal.constraints.append(goal_1)
-        #self._goal.constraints.append(goal_2)
-        #self._goal.constraints.append(goal_3)
+        self._goal.constraints.append(goal_2)
+        self._goal.constraints.append(goal_3)
 
     def publish_goal(self):
         self._goal_publisher.publish(self._goal)

@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+import rospy
+import numpy as np
+import yaml
+import pickle
+import rospkg
+from std_msgs.msg import Empty
+from fabrics_msgs.msg import (
+    FabricsJointSpaceGoal,
+    FabricsPoseGoal,
+    FabricsConstraintsGoal,
+    FabricsObstacleArray,
+)
+from fabrics_bridge.goal_wrapper import FabricsGoalWrapper
+from fabrics_bridge.utils import list_to_unique_hash
+import hashlib
+
+from geometry_msgs.msg import Point, Quaternion
+
+from mpscenes.goals.goal_composition import GoalComposition
+
+
+class GoalRecorder():
+    def __init__(self):
+        node_name = 'goal_recorder'
+        rospy.init_node(node_name)
+        self._rate = rospy.Rate(1)
+        self._goal = None
+        self.goal_wrapper = FabricsGoalWrapper()
+        self.load_parameters()
+        self._planner_files = []
+        self._goal_string = 'none'
+        self.init_ros_connections()
+
+    def init_ros_connections(self) -> None:
+        rospy.Subscriber(
+            "/fabrics/ee_pose_goal", FabricsPoseGoal, self.ee_pose_goal_cb,
+            tcp_nodelay=True,
+        )
+        rospy.Subscriber(
+            "/fabrics/constraints_goal", FabricsConstraintsGoal, self.constraints_goal_cb,
+            tcp_nodelay=True,
+        )
+        rospy.Subscriber(
+            "/fabrics/joint_space_goal", FabricsJointSpaceGoal, self.joint_space_goal_cb,
+            tcp_nodelay=True,
+        )
+
+    def joint_space_goal_cb(self, msg: FabricsJointSpaceGoal):
+        self._goal_msg = msg
+        self._goal = self.goal_wrapper.wrap(msg)
+        goal_string = self.goal_wrapper.goal_string(self._goal)
+        self._goal_string = goal_string
+
+    def ee_pose_goal_cb(self, msg: FabricsPoseGoal):
+        self._goal_msg = msg
+        self._goal = self.goal_wrapper.wrap(msg)
+        goal_string = self.goal_wrapper.goal_string(self._goal)
+        self._goal_string = goal_string
+
+    def constraints_goal_cb(self, msg: FabricsConstraintsGoal):
+        self._goal_msg = msg
+        self._goal = self.goal_wrapper.wrap(msg)
+        goal_string = self.goal_wrapper.goal_string(self._goal)
+        self._goal_string = goal_string
+
+    def load_parameters(self):
+        rospack = rospkg.RosPack()
+        self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/pandaplus/"
+        scaling_factor = rospy.get_param('/velocity_scaling')
+        self._max_vel = np.array(rospy.get_param("/velocity_limits/upper")) * scaling_factor
+        self._min_vel = np.array(rospy.get_param("/velocity_limits/lower")) * scaling_factor
+        self.num_sphere_obstacles = rospy.get_param("/num_sphere_obs")
+        self.num_box_obstacles = rospy.get_param("/num_box_obs")
+        # robot_description should be global because it's not part of fabrics ns
+        try:
+            self.urdf = rospy.get_param(rospy.get_param("/urdf_source"))
+        except KeyError:
+            rospy.logwarn(f"Fabrics specific urdf not found.")
+            self.urdf = None
+        self.collision_links = rospy.get_param("/collision_links")
+        try:
+            self.self_collision_pairs = rospy.get_param("/self_collision_pairs")
+            if self.self_collision_pairs == "None":
+                self.self_collision_pairs = {}
+        except KeyError as e:
+            self.self_collision_pairs = {}
+        self.collision_bodies = rospy.get_param("/collision_bodies")
+        # TODO: Currently, fabrics require inputs to be np.arrays. This should be chaged to also allow floats.
+        for name, radius in self.collision_bodies.items():
+            self.collision_bodies[name] = np.array([radius])
+    
+
+    def hash_planner_configuration(self, goal: GoalComposition):
+        hash_robot_type: str = rospy.get_param("/robot_type")
+        hash_sphere_obstacle = hashlib.md5(str(self.num_sphere_obstacles).encode("utf-8")).hexdigest()
+        hash_box_obstacle = hashlib.md5(str(self.num_box_obstacles).encode("utf-8")).hexdigest()
+        hash_self_collision_pairs = list_to_unique_hash(self.self_collision_pairs)
+        hash_collision_links = list_to_unique_hash(self.collision_links)
+        hash_goal = self.goal_wrapper.hash_goal(goal)
+        composed_hash = (
+            hash_robot_type
+            + hash_sphere_obstacle
+            + hash_box_obstacle
+            + hash_self_collision_pairs
+            + hash_collision_links
+            + hash_goal
+        )
+        short_hash = hashlib.md5(composed_hash.encode('utf-8')).hexdigest()
+        return short_hash
+
+    def check_goal(self):
+        self.stop_acc_bool = True
+        file_hash = self.hash_planner_configuration(self._goal)
+        serialize_file = self._planner_folder + file_hash
+        if serialize_file not in self._planner_files:
+            self._planner_files.append(serialize_file)
+
+            f = open("all_goals.yaml", "a")
+            rospy.loginfo(f"Adding new goal")
+            yaml.dump({file_hash: self._goal.dict()}, f)
+            f.close()
+            rospy.loginfo(f"Added new goal")
+
+    def run(self):
+        while not rospy.is_shutdown():
+            if self._goal is not None:
+                self.check_goal()
+            self._rate.sleep()
+
+if __name__ == "__main__":
+    node = GoalRecorder()
+    try:
+        node.run()
+    except rospy.ROSInterruptException:
+        pass

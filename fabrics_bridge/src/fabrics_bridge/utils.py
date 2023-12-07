@@ -1,6 +1,7 @@
 import math
 import numpy as np
 import rospy
+import hashlib
 
 from fabrics_msgs.msg import FabricsObstacle
 from geometry_msgs.msg import Point, Quaternion, Vector3
@@ -217,3 +218,16 @@ def pose_to_transformation_matrix(
     transform_matrix[0:3,3] = position
     transform_matrix[0:3,0:3] = quaternion_to_rotation_matrix(quaternion, ordering=ordering)
     return transform_matrix
+
+
+
+
+def list_to_unique_hash(a: list) -> str:
+    string = ""
+    for value in sorted(a):
+        string = string.join(value)
+    encoded_string = string.encode("utf-8")
+    return hashlib.md5(encoded_string).hexdigest()
+
+
+

@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from abc import ABC, abstractmethod
 from typing import Union
+import yaml
 import time
 import numpy as np
 import rospy
@@ -24,35 +25,8 @@ from fabrics_msgs.msg import (
     FabricsObstacleArray,
 )
 from fabrics_bridge.goal_wrapper import FabricsGoalWrapper
-from fabrics_bridge.utils import create_planner
-
-# Helpers
-def _it(self):
-    yield self.x
-    yield self.y
-    yield self.z
-
-
-Point.__iter__ = _it
-
-
-def _it(self):
-    yield self.x
-    yield self.y
-    yield self.z
-    yield self.w
-
-
-def list_to_unique_hash(a: list) -> str:
-    string = ""
-    for value in sorted(a):
-        string = string.join(value)
-    encoded_string = string.encode("utf-8")
-    return hashlib.md5(encoded_string).hexdigest()
-
-
-Quaternion.__iter__ = _it
-
+from fabrics_bridge.utils import create_planner, list_to_unique_hash
+from fabrics_bridge.utils import Point
 
 class GenericFabricsNode(ABC):
 
@@ -223,6 +197,10 @@ class GenericFabricsNode(ABC):
         serialize_time = (t3-t2) * 1000
         rospy.loginfo(f"Finished serializing, {serialize_file} has been created in {serialize_time} ms")
         self.planners[serialize_file] = planner
+        goal_summary_file = self._planner_folder + "all_goals.yaml"
+        f = open(goal_summary_file, "a")
+        yaml.dump({file_hash: goal.dict()}, f)
+        f.close()
 
 
     def run(self):
