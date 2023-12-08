@@ -14,7 +14,7 @@ def create_planner(planner_type: str, forward_kinematics) -> ParameterizedFabric
         "0.5 * 0.2 * ca.dot(xdot, xdot)"
     )
     base_metric = "0.1 * np.array([ \
-        [10, 0, 0, 0, 0, 0, 0, 0],  \
+        [sym('m_base'), 0, 0, 0, 0, 0, 0, 0],  \
         [0, 1, 0, 0, 0, 0, 0, 0],  \
         [0, 0, 1, 0, 0, 0, 0, 0],  \
         [0, 0, 0, 1, 0, 0, 0, 0],  \

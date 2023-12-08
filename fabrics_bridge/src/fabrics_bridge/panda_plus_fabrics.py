@@ -1,5 +1,5 @@
 import numpy as np
-from std_msgs.msg import Empty
+from std_msgs.msg import Bool, Empty
 
 import rospy
 import rospkg
@@ -55,14 +55,15 @@ class PandaPlusFabricsNode(GenericFabricsNode):
 
     def ee_pose_goal_cb(self, msg: FabricsPoseGoal):
         super().ee_pose_goal_cb(msg)
-        self._publish_boxer = True
+        self._publish_boxer = msg.move_base
 
     def constraints_goal_cb(self, msg: FabricsConstraintsGoal):
         super().constraints_goal_cb(msg)
-        self._publish_boxer = True
+        self._publish_boxer = msg.move_base
 
 
     def joint_space_goal_cb(self, msg: FabricsJointSpaceGoal):
+        rospy.loginfo_throttle(5, "Received joint space goal")
         self._goal_msg = msg
         self._goal_msg.goal_joint_state.position = [float(self._q[0])] + list(msg.goal_joint_state.position)
         self._goal = self.goal_wrapper.wrap(self._goal_msg)
@@ -74,6 +75,17 @@ class PandaPlusFabricsNode(GenericFabricsNode):
 
     def reset_boxer_position(self):
         self._boxer_reset_publisher.publish(Empty())
+
+    def init_subscribers(self):
+        super().init_subscribers()
+        self._stop_boxer_sub = rospy.Subscriber(
+            "stop_boxer", Bool, self.stop_boxer_callback,
+            tcp_nodelay=True,
+        )
+
+    def stop_boxer_callback(self, msg: Bool):
+        self._publish_boxer = not msg.data
+
 
     def init_publishers(self):
         self._panda_command_publisher = rospy.Publisher(
@@ -111,6 +123,8 @@ class PandaPlusFabricsNode(GenericFabricsNode):
     def set_joint_states_values(self):
         self._runtime_arguments['q'] = self._q
         self._runtime_arguments['qdot'] = self._qdot
+        self._runtime_arguments['m_base'] = 10 if self._publish_boxer else 100
+
 
     def joint_states_callback(self, msg: JointState):
         self._q[1:] = np.array(msg.position[5:12])
@@ -123,19 +137,12 @@ class PandaPlusFabricsNode(GenericFabricsNode):
     def publish_action(self):
         if np.isnan(self._action).any():
             rospy.logwarn(f"Action not a number {self._action}")
+            self.publish_zero_velocity()
             return
         action_msg = Float64MultiArray(data=self._action[1:])
-        boxer_msg = Twist()
-        boxer_msg.linear.x = self._action[0]
         self._panda_command_publisher.publish(action_msg)
+        rospy.loginfo_throttle(5, f"Boxer moving allowing: {self._publish_boxer}")
         if self._publish_boxer:
+            boxer_msg = Twist()
+            boxer_msg.linear.x = np.clip(self._action[0], -0.3, 0.3)
             self._boxer_command_publisher.publish(boxer_msg)
-        
-
-if __name__ == "__main__":
-    node = PandaFabricsNode()
-    try:
-        node.run()
-    except rospy.ROSInterruptException:
-        pass
-
