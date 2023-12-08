@@ -3,3 +3,4 @@ float32 weight_position
 float32 weight_orientation
 float32 tolerance_position
 float32 tolerance_orientation
+bool move_base
