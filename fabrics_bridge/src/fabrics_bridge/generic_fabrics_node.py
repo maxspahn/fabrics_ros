@@ -39,14 +39,14 @@ class GenericFabricsNode(ABC):
         self.init_robot_specifics()
         self._goal = None
         self._goal_string = 'none'
+        self._frequency = 100
+        self.rate = rospy.Rate(self._frequency)
         self._robot_type = rospy.get_param('/robot_type') 
         self._changed_planner = True
         self.stop_acc_bool = True
+        self.goal_wrapper = FabricsGoalWrapper()
         self.load_all_available_planners()
         self._runtime_arguments = {}
-        self.goal_wrapper = FabricsGoalWrapper()
-        self._frequency = 100
-        self.rate = rospy.Rate(self._frequency)
         self.init_publishers()
         self.init_subscribers()
 
@@ -63,11 +63,14 @@ class GenericFabricsNode(ABC):
         self.planners = {}
         for planner_file in os.listdir(self._planner_folder):
             full_path_to_file = self._planner_folder + planner_file
-            if planner_file[0] == '.':
+            if planner_file[0] == '.' or 'all' in planner_file:
                 continue
             rospy.loginfo(f"Loading {planner_file}")
             self.planners[full_path_to_file] = SerializedFabricPlanner(full_path_to_file)
         rospy.loginfo("Loaded available planners.")
+        rospy.loginfo("Generate planners from goal list.")
+        self.generate_all_planners()
+        rospy.loginfo("Generated all planners from goal list.")
         
 
 
@@ -128,14 +131,12 @@ class GenericFabricsNode(ABC):
         file_hash = self.hash_planner_configuration(goal)
         serialize_file = self._planner_folder + file_hash
         # If the planner is not serialized yet, this node has to wait for the serialization to finish.
-        try:
+        if serialize_file in self.planners:
             rospy.loginfo(f"Loading planner for goal type : {self._goal_string}")
             self._planner = self.planners[serialize_file]
-            rospy.loginfo(self._planner)
             self.stop_acc_bool = False
-        except Exception as e:
-            rospy.logwarn(e)
-            rospy.loginfo("Planner not found: Waiting...")
+        else:
+            rospy.loginfo("Creating the planner for {self._goal_string}")
             self.init_planner(goal)
             self.stop_acc_bool = False
         self._changed_planner = False
@@ -157,6 +158,18 @@ class GenericFabricsNode(ABC):
         )
         short_hash = hashlib.md5(composed_hash.encode('utf-8')).hexdigest()
         return short_hash
+
+    def generate_all_planners(self):
+        goal_summary_file = self._planner_folder + "all_goals.yaml"
+        with open(goal_summary_file, "r") as f:
+            all_goals = yaml.safe_load(f)
+        for file_hash, goal_dict in all_goals.items():
+            serialize_file = self._planner_folder + file_hash
+            if serialize_file not in self.planners:
+                rospy.loginfo(f"Regenerating planner with hash {file_hash}")
+                goal = GoalComposition(name="goal1", content_dict=goal_dict)
+                self.init_planner(goal)
+
 
     def init_planner(self, goal: GoalComposition):
         file_hash = self.hash_planner_configuration(goal)
@@ -186,16 +199,16 @@ class GenericFabricsNode(ABC):
         )
         planner.concretize(mode='vel', time_step = 10/self._frequency)
         t1 = time.perf_counter()
-        composition_time = (t1-t0) * 1000
+        composition_time = (t1-t0) * 1
         # serializing the planner
-        rospy.loginfo(f"Planner composed in {composition_time} ms")
+        rospy.loginfo(f"Planner composed in {composition_time} s")
         goal_string = self.goal_wrapper.goal_string(goal)
         rospy.loginfo(f"Serializing the planner for goal:  {goal_string}")
         t2 = time.perf_counter()
         planner.serialize(serialize_file)
         t3 = time.perf_counter()
-        serialize_time = (t3-t2) * 1000
-        rospy.loginfo(f"Finished serializing, {serialize_file} has been created in {serialize_time} ms")
+        serialize_time = (t3-t2) * 1
+        rospy.loginfo(f"Finished serializing, {serialize_file} has been created in {serialize_time} s")
         self.planners[serialize_file] = planner
         goal_summary_file = self._planner_folder + "all_goals.yaml"
         f = open(goal_summary_file, "a")
@@ -252,6 +265,7 @@ class GenericFabricsNode(ABC):
         self._obstacle_runtime_arguments = self.compose_runtime_obstacles_argument()
 
     def joint_space_goal_cb(self, msg: FabricsJointSpaceGoal):
+        rospy.loginfo_throttle(5, "Received joint space goal")
         self._goal_msg = msg
         self._goal = self.goal_wrapper.wrap(msg)
         goal_string = self.goal_wrapper.goal_string(self._goal)
@@ -260,6 +274,8 @@ class GenericFabricsNode(ABC):
         self._goal_string = goal_string
 
     def ee_pose_goal_cb(self, msg: FabricsPoseGoal):
+        rospy.loginfo_throttle(5, "Received ee pose goal")
+        self._goal_msg = msg
         self._goal_msg = msg
         self._goal = self.goal_wrapper.wrap(msg)
         goal_string = self.goal_wrapper.goal_string(self._goal)
@@ -268,6 +284,7 @@ class GenericFabricsNode(ABC):
         self._goal_string = goal_string
 
     def constraints_goal_cb(self, msg: FabricsConstraintsGoal):
+        rospy.loginfo_throttle(5, "Received constraints goal")
         self._goal_msg = msg
         self._goal = self.goal_wrapper.wrap(msg)
         goal_string = self.goal_wrapper.goal_string(self._goal)
