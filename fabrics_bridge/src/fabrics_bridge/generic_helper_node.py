@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import sys
 from abc import ABC, abstractmethod
 import numpy as np
 import rospy
@@ -18,6 +19,9 @@ from fabrics_bridge.goal_evaluator import FabricsGoalEvaluator
 class GenericHelpersNode(ABC):
     def __init__(self, node_name: str = "fabrics_helpers"):
         self._node_name = node_name
+        if len(sys.argv) > 1:
+            self._mode = sys.argv[1]
+        self._mode = 'slim'
         rospy.init_node(self._node_name)
         self._goal_msg = None
         self.obstacles = []
@@ -29,7 +33,6 @@ class GenericHelpersNode(ABC):
         self.state_evaluator = FabricsGoalEvaluator(self._forward_kinematics)
         self.marker_manager = FabricsMarkerManager(self.num_sphere_obstacles, self.collision_bodies, self.collision_links, self.self_collision_pairs)
 
-        self.stop_acc_bool = False
         self.init_joint_states_subscriber()
 
     @abstractmethod
@@ -103,6 +106,7 @@ class GenericHelpersNode(ABC):
         while not rospy.is_shutdown():
             if self._goal_msg:
                 goal_is_reached = self.state_evaluator.evaluate(self._goal_msg, self._q)
-                self.marker_manager.update_goal_markers(self._goal_msg, goal_is_reached)
-                self.marker_manager.update_obstacle_markers(self.obstacles)
+                if self._mode == 'all':
+                    self.marker_manager.update_goal_markers(self._goal_msg, goal_is_reached)
+                    self.marker_manager.update_obstacle_markers(self.obstacles)
             self._rate.sleep()
