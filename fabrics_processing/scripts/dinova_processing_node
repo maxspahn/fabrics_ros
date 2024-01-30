@@ -1,0 +1,196 @@
+#!/usr/bin/env python3
+
+import time
+from geometry_msgs.msg import TransformStamped
+import numpy as np
+import rospy
+from sensor_msgs.msg import JointState
+from nav_msgs.msg import Odometry
+from std_msgs.msg import Empty, Float32
+from tf.transformations import euler_from_quaternion
+
+
+import tf
+import tf2_ros
+
+
+class DinovaProcessingNode(object):
+
+    def __init__(self):
+
+        # config
+        self._rate = 500
+        self._ros_rate = rospy.Rate(self._rate)
+        self._dt = 1./self._rate
+        self._pointrobot_position = 0
+        self._tf_publisher = tf2_ros.TransformBroadcaster()
+
+        # Publisher of filtered joint states
+        self._filter_joint_states_pub = rospy.Publisher(
+            '/joint_states_filtered',
+            JointState, queue_size=4
+        )
+        self._pointrobot_position_publisher = rospy.Publisher(
+            '/pointrobot_position', Float32, queue_size=1,
+        )
+        self.pointrobot_position_sub = rospy.Subscriber(
+            '/pointrobot_position/reset',
+            Empty,
+            self.reset_pointrobot_position_callback,
+            tcp_nodelay=True,
+        )
+        # Create combined JointState Listener
+        self._joint_states_listener = DingoJointStates()
+        self._filtered_positions = np.zeros(12)
+        self._filtered_velocities = np.zeros(12)
+        self._alpha = 0.5
+
+        # Final filtered joint states to publish
+        self._joint_states_filtered = JointState()
+        self._joint_states_filtered.name = self._joint_states_listener.names
+
+    def publish_pointrobot_position(self):
+        t = TransformStamped()
+        t.header.stamp = rospy.Time.now()
+        t.header.frame_id = 'panda_link0'
+        t.child_frame_id = 'base_link_fake'
+        t.transform.translation.x = -self._pointrobot_position
+        t.transform.rotation.w = 1.0
+        self._tf_publisher.sendTransform(t)
+        self._pointrobot_position_publisher.publish(Float32(data=self._pointrobot_position))
+
+
+    def reset_pointrobot_position_callback(self, msg: Empty):
+        self._pointrobot_position = 0.0
+
+    def pub_filtered_states(self):
+        cur_time = rospy.Time.now().to_sec()
+        self._joint_states_filtered.header.stamp = rospy.Time.now()
+        self._joint_states_filtered.position     = list(self._filtered_positions)
+        self._joint_states_filtered.velocity     = list(self._filtered_velocities)
+        self._filter_joint_states_pub.publish(self._joint_states_filtered)
+        if hasattr(self, '_old_time'):
+            time_step = cur_time - self._old_time
+            self._pointrobot_position += self._joint_states_filtered.velocity[3] * time_step
+            self.publish_pointrobot_position()
+        self._old_time = cur_time
+
+
+    def run(self):
+        self._ros_rate.sleep()
+        filter_times = []
+        publish_times = []
+        while not rospy.is_shutdown():
+            t_start = time.perf_counter()
+            t0 = time.perf_counter()
+            current_positions = self._joint_states_listener.current_positions
+            current_velocities = self._joint_states_listener.current_velocities
+            print("current_positions: ", current_positions)
+            if len(current_positions) != 12:
+                rospy.logwarn('blabl')
+                continue
+            self._filtered_positions = current_positions
+            self._filtered_velocities = self._alpha * self._filtered_velocities + (1-self._alpha) * current_velocities
+            self.pub_filtered_states()
+            t1 = time.perf_counter()
+            publish_times.append(t1-t0)
+            #self._ros_rate.sleep()
+        rospy.loginfo(f"Filter time: {1/np.mean(np.array(filter_times))}")
+        rospy.loginfo(f"Publish time: {1/np.mean(np.array(publish_times))}")
+
+class DingoJointStates(object):
+    def __init__(self):
+        self._init_subs()
+
+        self._joint_state = JointState()
+        self._joint_state.name = [
+            'pointrobot_x',
+            'pointrobot_y',
+            'pointrobot_theta',
+            'vel_forward',
+            'vel_rotational'] + ['kinova_joint{}'.format(i+1) for i in range(7)]
+        self._joint_state.position = [0]*len(self._joint_state.name)
+        self._joint_state.velocity = [0]*len(self._joint_state.name)
+        self._current_velocities = np.zeros(3)
+        self._tf_listener = tf.TransformListener()
+
+    def get_map_to_base_link(self):
+        self._tf_listener.waitForTransform('/map', '/base_link', rospy.Time(), rospy.Duration(1.0))
+        base_position, base_orientation = self._tf_listener.lookupTransform('/map', '/base_link', rospy.Time(0))
+
+        yaw = euler_from_quaternion(base_orientation)[2]
+
+        base_state = np.array([base_position[0], base_position[1], yaw])
+        return base_state
+
+
+    def _init_subs(self):
+        # Subscriber to the joint states topic
+        self._joint_states_sub = rospy.Subscriber(
+            '/franka_state_controller/joint_states',
+            JointState, self.joint_states_cb,
+            tcp_nodelay=True
+        )
+
+        # Subscriber to the robot odometry
+        self._odometry_sub = rospy.Subscriber(
+            '/odometry/filtered',
+            Odometry, self.odometry_cb,
+            tcp_nodelay=True
+        )
+
+
+    def odometry_cb(self, data):
+        eulers = euler_from_quaternion([
+            data.pose.pose.orientation.x,
+            data.pose.pose.orientation.y,
+            data.pose.pose.orientation.z,
+            data.pose.pose.orientation.w
+        ])
+        theta = eulers[2]
+        self._joint_state.position[0:3] = [
+            data.pose.pose.position.x,
+            data.pose.pose.position.y,
+            theta,
+        ]
+        self._joint_state.velocity[3:5] = [
+            data.twist.twist.linear.x,
+            data.twist.twist.angular.z
+        ]
+        self._joint_state.velocity[0:3] = [
+            np.cos(theta) * data.twist.twist.linear.x,
+            np.sin(theta) * data.twist.twist.linear.x,
+            data.twist.twist.angular.z
+        ]
+
+    def joint_states_cb(self, data):
+        obs_pos, obs_vel = [], []
+        try:
+            for i, joint in enumerate(data.name):
+                if not joint in self._joint_state.name: continue
+                idx = self._joint_state.name.index(joint)
+                self._joint_state.position[idx] = data.position[i]
+                self._joint_state.velocity[idx] = data.velocity[i]
+        except IndexError as e:
+            rospy.logwarn("No joint states being published")
+
+    @property
+    def names(self):
+        return self._joint_state.name
+
+    @property
+    def current_positions(self):
+        return np.array(self._joint_state.position)
+
+    @property
+    def current_velocities(self):
+        return np.array(self._joint_state.velocity)
+
+if __name__ == "__main__":
+    rospy.init_node('joint_states_filter')
+    node = DinovaProcessingNode()
+    try:
+        node.run()
+    except rospy.ROSInterruptException:
+        pass
+

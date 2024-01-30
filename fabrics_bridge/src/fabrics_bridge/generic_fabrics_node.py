@@ -45,7 +45,7 @@ class GenericFabricsNode(ABC):
         self._changed_planner = True
         self.stop_acc_bool = True
         self.goal_wrapper = FabricsGoalWrapper()
-        self.load_all_available_planners()
+        # self.load_all_available_planners()
         self._runtime_arguments = {}
         self.init_publishers()
         self.init_subscribers()
