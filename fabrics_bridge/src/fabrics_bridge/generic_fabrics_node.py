@@ -10,7 +10,7 @@ import os
 import hashlib
 
 from std_msgs.msg import Empty
-from geometry_msgs.msg import Point, Quaternion
+from geometry_msgs.msg import Point, Quaternion, PoseStamped
 
 from mpscenes.goals.goal_composition import GoalComposition
 
@@ -49,7 +49,7 @@ class GenericFabricsNode(ABC):
         self._runtime_arguments = {}
         self.init_publishers()
         self.init_subscribers()
-
+        self.planners = {}
         self.stop_acc_bool = False
         self.init_runtime_arguments()
         self.compose_runtime_obstacles_argument()
@@ -71,7 +71,6 @@ class GenericFabricsNode(ABC):
         rospy.loginfo("Generate planners from goal list.")
         self.generate_all_planners()
         rospy.loginfo("Generated all planners from goal list.")
-        
 
 
     def init_runtime_arguments(self):
@@ -90,8 +89,24 @@ class GenericFabricsNode(ABC):
                     parameters[f'k_fin_col_obst_{i}_{collision_link}_leaf'] = k_fin_col
                     parameters[f'k_geo_col_obst_{i}_{collision_link}_leaf'] = k_geo_col
             self._runtime_arguments.update(parameters)
+        elif self._planner_type == "holonomic":
+            self._runtime_arguments.update({
+                "m_arm": np.array([rospy.get_param("/m_arm")]),
+                "m_base_x": np.array([rospy.get_param("/m_base")]),
+                "m_base_y": np.array([rospy.get_param("/m_base")]),
+                "m_rot": np.array([rospy.get_param("/m_rot")])
+            })
+            parameters = {}
+            k_fin_col = np.array([rospy.get_param("/k_fin_col")])
+            k_geo_col = np.array([rospy.get_param("/k_geo_col")])
+            for i in range(self.num_sphere_obstacles):
+                for collision_link in self.collision_links:
+                    parameters[f'k_fin_col_obst_{i}_{collision_link}_leaf'] = k_fin_col
+                    parameters[f'k_geo_col_obst_{i}_{collision_link}_leaf'] = k_geo_col
+            self._runtime_arguments.update(parameters)
         else:
             self._runtime_arguments = {}
+            
 
     def load_parameters(self):
         scaling_factor = rospy.get_param('/velocity_scaling')
@@ -183,20 +198,36 @@ class GenericFabricsNode(ABC):
         goal_string = self.goal_wrapper.goal_string(goal)
         rospy.loginfo(f"Creating the planner for goal:  {goal_string}")
         t0 = time.perf_counter()
+        print("self._planner_type: ", self._planner_type)
+        print("self._forward_kinematics: ", self._forward_kinematics)
         planner = create_planner(
             self._planner_type,
             self._forward_kinematics
         )
         # The planner hides all the logic behind the function set_components.
-        #dummy_goal = self.goal_wrapper.compose_dummy_goal(goal_type)
+        # dummy_goal = self.goal_wrapper.compose_dummy_goal(goal_type)
+        # goal_dict = {
+        #     "subgoal0": {
+        #         "weight": 0.5,
+        #         "is_primary_goal": True,
+        #         "indices": [0, 1],
+        #         "parent_link" : 'world',
+        #         "child_link" : 'base_link',
+        #         "desired_position": [3.5, 0.5],
+        #         "epsilon" : 0.1,
+        #         "type": "staticSubGoal"
+        #     }
+        # }
+        # goal = GoalComposition(name="goal", content_dict=goal_dict)
         planner.set_components(
             collision_links=self.collision_links,
             self_collision_pairs=self.self_collision_pairs,
             goal=goal,
-            limits=self.joint_limits,
+            # limits=self.joint_limits,
             number_obstacles=self.num_sphere_obstacles,
             number_obstacles_cuboid=self.num_box_obstacles,
         )
+        print("here10")
         planner.concretize(mode='vel', time_step = 10/self._frequency)
         t1 = time.perf_counter()
         composition_time = (t1-t0) * 1
@@ -254,6 +285,8 @@ class GenericFabricsNode(ABC):
             "constraints_goal", FabricsConstraintsGoal, self.constraints_goal_cb,
             tcp_nodelay=True,
         )
+        rospy.Subscriber('move_base_simple/goal', PoseStamped, self.cb_goal_rviz,
+                         tcp_nodelay=True,)
         # preempt the previous goal once this cb is triggered
         self.preempt_goal_subscriber = rospy.Subscriber(
             "preempt_goal", Empty, self.preempt_goal_callback
@@ -276,7 +309,6 @@ class GenericFabricsNode(ABC):
     def ee_pose_goal_cb(self, msg: FabricsPoseGoal):
         rospy.loginfo_throttle(5, "Received ee pose goal")
         self._goal_msg = msg
-        self._goal_msg = msg
         self._goal = self.goal_wrapper.wrap(msg)
         goal_string = self.goal_wrapper.goal_string(self._goal)
         if self._goal_string != goal_string:
@@ -285,6 +317,16 @@ class GenericFabricsNode(ABC):
 
     def constraints_goal_cb(self, msg: FabricsConstraintsGoal):
         rospy.loginfo_throttle(5, "Received constraints goal")
+        self._goal_msg = msg
+        self._goal = self.goal_wrapper.wrap(msg)
+        goal_string = self.goal_wrapper.goal_string(self._goal)
+        if self._goal_string != goal_string:
+            self._changed_planner = True
+        self._goal_string = goal_string
+
+    def cb_goal_rviz(self, msg: PoseStamped):
+        rospy.loginfo_throttle(5, "Received rviz goal, weight set to 0.5")
+        print("In rviz goal!!")
         self._goal_msg = msg
         self._goal = self.goal_wrapper.wrap(msg)
         goal_string = self.goal_wrapper.goal_string(self._goal)
@@ -348,6 +390,12 @@ class GenericFabricsNode(ABC):
     def compute_action(self):
         self.goal_wrapper.compose_runtime_arguments(self._goal, self._runtime_arguments)
         self.set_joint_states_values()
+        # print("sel")
+        # print("self._runtime_arguments:", self._runtime_arguments['x_goal_0'])
+        # print("self._runtime_arguments:", self._runtime_arguments['weight_goal_0'])
+        # print("self._runtime_arguments:", self._runtime_arguments['q'])
+        # print("self._runtime_arguments:", self._runtime_arguments['qdot'])  
+
         action = self._planner.compute_action(
             **self._runtime_arguments,
         )
@@ -370,6 +418,8 @@ class GenericFabricsNode(ABC):
         try:
             action = np.zeros_like(self._action)
             action = self.compute_action()
+            print("computing an action:", action)
+            self._action = action
             self._action = self._action * alpha + action * (1-alpha)
             self._action = np.clip(self._action, self._min_vel, self._max_vel)
             self.publish_action()

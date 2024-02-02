@@ -91,6 +91,8 @@ class FabricsGoalWrapper(object):
             return self.compose_joint_space_goal(goal_msg)
         elif isinstance(goal_msg, FabricsConstraintsGoal):
             return self.compose_constraints_goal(goal_msg)
+        elif isinstance(goal_msg, PoseStamped):
+            return self.compose_goal_rviz(goal_msg)
         else:
             raise InvalidGoalError()
 
@@ -184,8 +186,24 @@ class FabricsGoalWrapper(object):
         else:
             raise InvalidGoalError(f"Cannot create dummy goal for goal type {goal_type}")
 
-        
-
+    def compose_goal_rviz(self, msg:PoseStamped):
+        goal_position = [msg.pose.position.x, msg.pose.position.y]
+        print("goal position: ", goal_position)
+        goal_dict = {
+            "subgoal0": {
+                "weight": 1.0,
+                "is_primary_goal": True,
+                "indices": [0, 1],
+                "parent_link" : 'world',
+                "child_link" : 'base_link',
+                "desired_position": goal_position,
+                "epsilon" : 0.1,
+                "type": "staticSubGoal"
+            }
+        }
+        goal = GoalComposition(name="goal", content_dict=goal_dict)
+        return goal
+    
     def compose_runtime_arguments(self, goal: GoalComposition, runtime_arguments: dict) -> None:
         for i, sub_goal in enumerate(goal.sub_goals()):
             runtime_arguments[f'x_goal_{i}'] = np.array(sub_goal.position())

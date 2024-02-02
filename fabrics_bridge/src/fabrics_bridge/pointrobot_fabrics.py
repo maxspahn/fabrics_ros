@@ -5,6 +5,7 @@ import rospy
 import rospkg
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
+from geometry_msgs.msg import Twist
 
 from urdf_parser_py.urdf import URDF
 
@@ -17,7 +18,7 @@ class PointrobotFabricsNode(GenericFabricsNode):
 
     def init_robot_specifics(self):
         self.joint_names = [f'pointrobot_joint{i+1}' for i in range(2)]
-        self._action = np.zeros(7)
+        self._action = np.zeros(3)
         rospack = rospkg.RosPack()
         self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/pointrobot/"
         absolute_path = os.path.dirname(os.path.abspath(__file__))
@@ -28,28 +29,27 @@ class PointrobotFabricsNode(GenericFabricsNode):
             rootLink=rospy.get_param("/root_link"),
             end_link=rospy.get_param("/end_links"),
         )
-        self._planner_type = 'holonomic'
+        self._planner_type = rospy.get_param("/planner_type")
         # get the joint limits for each joint
         # robot = URDF.from_parameter_server(rospy.get_param("/urdf_source"))
         self.joint_limits = []
         for i in self.joint_names:
             self.joint_limits.append(
-                [
-                    rospy.get_param("/limits_lower"),
-                    rospy.get_param("/limits_higher")
-                ]
+                rospy.get_param("/joint_limits"),
+                    # rospy.get_param("/limits_higher")
             )
 
     def init_publishers(self):
         self._pointrobot_command_publisher = rospy.Publisher(
-            '/pointrobot_joint_velocity_controller/command',
-            Float64MultiArray,
+            '/cmd_vel',
+            Twist, 
             queue_size=10
         )
 
     def init_joint_states_subscriber(self):
-        self._q = np.zeros(7)
-        self._qdot = np.zeros(7)
+        #todo: remove hardcoded
+        self._q = np.zeros(3)
+        self._qdot = np.zeros(3)
         self.joint_state_subscriber = rospy.Subscriber(
             "/joint_states_filtered",
             JointState,
@@ -62,15 +62,25 @@ class PointrobotFabricsNode(GenericFabricsNode):
         self._runtime_arguments['qdot'] = self._qdot
 
     def joint_states_callback(self, msg: JointState):
-        self._q = np.array(msg.position[5:12])
-        self._qdot = np.array(msg.velocity[5:12])
+        #todo: remove hardcoded part
+        self._q = np.array(msg.position[0:3])
+        self._qdot = np.array(msg.velocity[0:3])
 
     def publish_action(self):
+        desired_vel= Twist()
         if np.isnan(self._action).any():
             rospy.logwarn(f"Action not a number {self._action}")
+            self._action = np.zeros((rospy.get_param("/degrees_of_freedom"), 1))
+            action_msg = Float64MultiArray(data=self._action)
+            self._pointrobot_command_publisher.publish(action_msg)
             return
         action_msg = Float64MultiArray(data=self._action)
-        self._pointrobot_command_publisher.publish(action_msg)
+        desired_vel.linear.x = self._action[0]
+        desired_vel.linear.y = self._action[1]
+        print("publish actions!!")
+
+        self._pointrobot_command_publisher.publish(desired_vel)
+        # self._pointrobot_command_publisher.publish(action_msg)
 
 if __name__ == "__main__":
     node = PointrobotFabricsNode()

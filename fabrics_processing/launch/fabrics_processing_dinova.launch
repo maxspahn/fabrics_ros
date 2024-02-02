@@ -27,7 +27,7 @@
 
     <group>
         <!-- start fabric node -->
-        <node pkg="fabrics_processing" type="dinova_processing_node" name="dinova_processing_node" output="screen"/>
+        <node pkg="fabrics_processing" type="pointrobot_processing_node" name="pointrobot_processing_node" output="screen"/>
     </group>
 	
   

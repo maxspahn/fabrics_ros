@@ -134,7 +134,7 @@ class DingoJointStates(object):
 
         # Subscriber to the robot odometry
         self._odometry_sub = rospy.Subscriber(
-            '/odometry/filtered',
+            '/robot_ekf/odometry',
             Odometry, self.odometry_cb,
             tcp_nodelay=True
         )
