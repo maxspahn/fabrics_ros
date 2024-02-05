@@ -68,6 +68,13 @@ class PointrobotFabricsNode(GenericFabricsNode):
             tcp_nodelay=True,
         )
 
+    def init_obstacle_vicon_subscriber(self):
+        print("I am at vicon subscriber")
+        self.obstacle_subscriber = rospy.Subscriber('vicon/obstacle1', PoseWithCovarianceStamped, self.cb_obstacle1, tcp_nodelay=True)
+        print("I am at vicon subscriber2")
+        self.obstacle1_received = True
+        return self.obstacle1_received
+
     def cb_obstacle1(self, msg):
         # This function is called whenever a message is received on the subscribed topic
         print("I am in cb_obstacle11111111111111111111")
