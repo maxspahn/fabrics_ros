@@ -2,6 +2,7 @@ positional_goal_tolerance : 0.02
 robot_type: "pointrobot"
 planner_type: "holonomic"
 degrees_of_freedom: 3
+dim_state: 2
 m_arm: 5.0
 m_base: 5.0
 m_rot: 0.5
@@ -14,11 +15,11 @@ goal_indices:
 root_link: "world"
 urdf_source: "/robot_description"
 end_effector_link: 'base_link'
-orientation_helper_link: "base_link"
+orientation_helper_link: "world"
 end_links: 
   - "base_link"
 num_sphere_obs : 0
-num_box_obs : 0
+num_box_obs : 1
 angular_goal_tolerance: 0.1
 collision_bodies:
   radius_body_ee_link: 0.2

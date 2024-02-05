@@ -35,6 +35,7 @@ class GenericFabricsNode(ABC):
 
     def __init__(self, node_name: str = 'fabrics_node'):
         rospy.init_node(node_name)
+        print("init!!")
         self.load_parameters()
         self.init_robot_specifics()
         self._goal = None
@@ -48,7 +49,9 @@ class GenericFabricsNode(ABC):
         # self.load_all_available_planners()
         self._runtime_arguments = {}
         self.init_publishers()
+        print("init!!!!!!!!!!!!!!!")
         self.init_subscribers()
+        print("init!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         self.planners = {}
         self.stop_acc_bool = False
         self.init_runtime_arguments()
@@ -205,20 +208,6 @@ class GenericFabricsNode(ABC):
             self._forward_kinematics
         )
         # The planner hides all the logic behind the function set_components.
-        # dummy_goal = self.goal_wrapper.compose_dummy_goal(goal_type)
-        # goal_dict = {
-        #     "subgoal0": {
-        #         "weight": 0.5,
-        #         "is_primary_goal": True,
-        #         "indices": [0, 1],
-        #         "parent_link" : 'world',
-        #         "child_link" : 'base_link',
-        #         "desired_position": [3.5, 0.5],
-        #         "epsilon" : 0.1,
-        #         "type": "staticSubGoal"
-        #     }
-        # }
-        # goal = GoalComposition(name="goal", content_dict=goal_dict)
         planner.set_components(
             collision_links=self.collision_links,
             self_collision_pairs=self.self_collision_pairs,
@@ -292,6 +281,8 @@ class GenericFabricsNode(ABC):
             "preempt_goal", Empty, self.preempt_goal_callback
         )
         self.init_joint_states_subscriber()
+        print("reaching here!")
+        self.obstacle1_received = self.init_obstacle_vicon_subscriber()
 
     def obs_callback(self, msg: FabricsObstacleArray):
         self.obstacles = msg.obstacles
@@ -338,6 +329,10 @@ class GenericFabricsNode(ABC):
     def init_joint_states_subscriber(self):
         pass
 
+    @abstractmethod
+    def init_obstacle_vicon_subscriber(self):
+        pass
+
     def preempt_goal_callback(self, msg: Empty):
         rospy.loginfo(f"goal preempted")
         # only change the weights
@@ -380,11 +375,16 @@ class GenericFabricsNode(ABC):
             'radius_obst': radius_obst,
             'x_obsts_cuboid': x_obsts_cuboid,
             'size_obsts_cuboid': size_obsts_cuboid,
+            'radius_body_base_link': 0.2
         })
 
 
     @abstractmethod
     def set_joint_states_values(self):
+        pass
+
+    @abstractmethod
+    def publish_obstacles(self):
         pass
 
     def compute_action(self):
@@ -416,9 +416,11 @@ class GenericFabricsNode(ABC):
     def act(self):
         alpha = 0.95
         try:
+            if self.obstacle1_received == True:
+                print("In if statement for obstacle received")
+                self.publish_obstacles()
             action = np.zeros_like(self._action)
             action = self.compute_action()
-            print("computing an action:", action)
             self._action = action
             self._action = self._action * alpha + action * (1-alpha)
             self._action = np.clip(self._action, self._min_vel, self._max_vel)

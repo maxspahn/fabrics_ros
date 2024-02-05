@@ -5,7 +5,8 @@ import rospy
 import rospkg
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
-from geometry_msgs.msg import Twist
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
+from fabrics_msgs.msg import FabricsObstacleArray, FabricsObstacle
 
 from urdf_parser_py.urdf import URDF
 
@@ -17,8 +18,9 @@ class PointrobotFabricsNode(GenericFabricsNode):
         super().__init__('pointrobot_fabrics_node')
 
     def init_robot_specifics(self):
-        self.joint_names = [f'pointrobot_joint{i+1}' for i in range(2)]
-        self._action = np.zeros(3)
+        self.dof = rospy.get_param("/degrees_of_freedom")
+        self.joint_names = [f'pointrobot_joint{i+1}' for i in range(self.dof)]
+        self._action = np.zeros(self.dof)
         rospack = rospkg.RosPack()
         self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/pointrobot/"
         absolute_path = os.path.dirname(os.path.abspath(__file__))
@@ -38,18 +40,27 @@ class PointrobotFabricsNode(GenericFabricsNode):
                 rospy.get_param("/joint_limits"),
                     # rospy.get_param("/limits_higher")
             )
+        self.obstacle1_received = False
+        self.obstacle1_msg = None
+        # self.init_obstacle_vicon_subscriber()
 
     def init_publishers(self):
         self._pointrobot_command_publisher = rospy.Publisher(
-            '/cmd_vel',
+            '/ccc',
             Twist, 
+            queue_size=10
+        )
+
+        self._obstacle_planner_publisher = rospy.Publisher(
+            '/www',
+            FabricsObstacleArray, 
             queue_size=10
         )
 
     def init_joint_states_subscriber(self):
         #todo: remove hardcoded
-        self._q = np.zeros(3)
-        self._qdot = np.zeros(3)
+        self._q = np.zeros(self.dof)
+        self._qdot = np.zeros(self.dof)
         self.joint_state_subscriber = rospy.Subscriber(
             "/joint_states_filtered",
             JointState,
@@ -57,14 +68,39 @@ class PointrobotFabricsNode(GenericFabricsNode):
             tcp_nodelay=True,
         )
 
+    def cb_obstacle1(self, msg):
+        # This function is called whenever a message is received on the subscribed topic
+        print("I am in cb_obstacle11111111111111111111")
+        print("msg:", msg)
+        self.obstacle1_msg = msg
+        # self.publish_obstacles()
+        print("I am in cb_obstacle1")
+
+    def publish_obstacles(self):
+        print("Im an in publish_obstacles")
+        obstacle_struct = FabricsObstacle()
+        obstacle_struct.radius = 0.2
+        obstacles_struct = FabricsObstacleArray()
+        # print("obstacle struct:", obstacle_struct)
+        # print("obstacles struct:", obstacles_struct)
+        # obstacle_struct.radius = 0.2
+        # self.obstacle1['radius'] = 0.2
+        # self.obstacle1.orientation = np.array([0.0])
+        # self.obstacle1.vel = np.array([0.0, 0.0])
+        if self.obstacle1_received == True and self.obstacle1_msg is not None:
+            print("self.obstacle1_msg.pose.pose.position:", self.obstacle1_msg)
+            obstacle_struct.position = self.obstacle1_msg.pose.pose.position
+            obstacles_struct.obstacles = obstacle_struct
+            self._obstacle_planner_publisher.publish(obstacle_struct)
+
     def set_joint_states_values(self):
         self._runtime_arguments['q'] = self._q
         self._runtime_arguments['qdot'] = self._qdot
 
     def joint_states_callback(self, msg: JointState):
         #todo: remove hardcoded part
-        self._q = np.array(msg.position[0:3])
-        self._qdot = np.array(msg.velocity[0:3])
+        self._q = np.array(msg.position[0:self.dof])
+        self._qdot = np.array(msg.velocity[0:self.dof])
 
     def publish_action(self):
         desired_vel= Twist()
@@ -77,7 +113,6 @@ class PointrobotFabricsNode(GenericFabricsNode):
         action_msg = Float64MultiArray(data=self._action)
         desired_vel.linear.x = self._action[0]
         desired_vel.linear.y = self._action[1]
-        print("publish actions!!")
 
         self._pointrobot_command_publisher.publish(desired_vel)
         # self._pointrobot_command_publisher.publish(action_msg)

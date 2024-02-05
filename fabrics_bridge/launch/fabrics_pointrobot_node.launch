@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <launch>
     <arg name="robot_name"/>
+    <arg name="obstacle_name1"/>
     <arg name="rviz" default="true"/>
     <rosparam command="load" file="$(find fabrics_bridge)/config/fabrics_pointrobot_config.yaml"/>
 
@@ -13,11 +14,11 @@
 
     <include file="$(find vicon_bridge)/launch/vicon.launch">
         <arg name="only_use_object_specific" default="true"/>
-        <arg name="object_names" value="[$(arg robot_name)]"/>
-        <arg name="object_msg_types" value="[geometry_msgs/PoseWithCovarianceStamped]"/>
-        <arg name="object_frame_ids" value="[map]"/>
-        <arg name="object_publish_topics" value="[/vicon/$(arg robot_name)]"/>
-        <arg name="object_frequency_divider" value="[1]"/>
+        <arg name="object_names" value="[$(arg robot_name), $(arg obstacle_name1)]"/>
+        <arg name="object_msg_types" value="[geometry_msgs/PoseWithCovarianceStamped, geometry_msgs/PoseWithCovarianceStamped]"/>
+        <arg name="object_frame_ids" value="[map, map]"/>
+        <arg name="object_publish_topics" value="[/vicon/$(arg robot_name), /vicon/obstacle1]"/>
+        <arg name="object_frequency_divider" value="[1, 1]"/>
     </include>
 
     <!-- Augment the pose readings with velocity estimates via an EKF -->

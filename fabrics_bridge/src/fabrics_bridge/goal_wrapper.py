@@ -114,7 +114,8 @@ class FabricsGoalWrapper(object):
 
 
     def compose_pose_goal(self, goal_msg: FabricsPoseGoal):
-        goal_position = list(goal_msg.goal_pose.position)
+        self.dim_state = rospy.get_param("/dim_state")
+        goal_position = [goal_msg.goal_pose.position.x, goal_msg.goal_pose.position.y, goal_msg.goal_pose.position.z][0:self.dim_state]
         goal_quaternion = list(goal_msg.goal_pose.orientation)
         goal_rotation_matrix = quaternion_to_rotation_matrix(goal_quaternion, ordering='xyzw')
         default_goal = np.array([0.0, 0.0, 0.1])
@@ -123,7 +124,7 @@ class FabricsGoalWrapper(object):
             "position": {
                 "weight": goal_msg.weight_position,
                 "is_primary_goal": True,
-                "indices": [0, 1, 2], 
+                "indices": list(range(self.dim_state)), 
                 "parent_link": rospy.get_param("/root_link"),
                 "child_link": rospy.get_param("/end_effector_link"),
                 "desired_position": goal_position,
@@ -145,7 +146,7 @@ class FabricsGoalWrapper(object):
 
     def compose_joint_space_goal(self, goal_msg: FabricsJointSpaceGoal):
         joint_positions = list(goal_msg.goal_joint_state.position)
-        dimension = len(joint_positions)
+        dimension = rospy.get_param("/degrees_of_freedom")
         goal_dict = {
             "joint_position": {
                 "weight": goal_msg.weight,
