@@ -18,8 +18,8 @@ end_effector_link: 'base_link'
 orientation_helper_link: "world"
 end_links: 
   - "base_link"
-num_sphere_obs : 0
-num_box_obs : 1
+num_sphere_obs : 1
+num_box_obs : 0
 angular_goal_tolerance: 0.1
 collision_bodies:
   radius_body_ee_link: 0.2

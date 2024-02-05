@@ -13,7 +13,7 @@ from std_msgs.msg import Empty
 from geometry_msgs.msg import Point, Quaternion, PoseStamped
 
 from mpscenes.goals.goal_composition import GoalComposition
-
+from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
 from fabrics.planner.parameterized_planner import ParameterizedFabricPlanner
 from fabrics.planner.serialized_planner import SerializedFabricPlanner
 
@@ -23,6 +23,7 @@ from fabrics_msgs.msg import (
     FabricsPoseGoal,
     FabricsConstraintsGoal,
     FabricsObstacleArray,
+    FabricsObstacle,
 )
 from fabrics_bridge.goal_wrapper import FabricsGoalWrapper
 from fabrics_bridge.utils import create_planner, list_to_unique_hash
@@ -48,11 +49,18 @@ class GenericFabricsNode(ABC):
         self.goal_wrapper = FabricsGoalWrapper()
         # self.load_all_available_planners()
         self._runtime_arguments = {}
+
+        self._obstacle_planner_publisher = rospy.Publisher(
+            '/planning_obs',
+            FabricsObstacleArray, 
+            queue_size=10
+        )
         self.init_publishers()
-        print("init!!!!!!!!!!!!!!!")
         self.init_subscribers()
-        print("init!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
         self.planners = {}
+        self.obstacles = []
+        self.obstacle1_received = False
+        self.obstacle1_msg = None
         self.stop_acc_bool = False
         self.init_runtime_arguments()
         self.compose_runtime_obstacles_argument()
@@ -216,7 +224,6 @@ class GenericFabricsNode(ABC):
             number_obstacles=self.num_sphere_obstacles,
             number_obstacles_cuboid=self.num_box_obstacles,
         )
-        print("here10")
         planner.concretize(mode='vel', time_step = 10/self._frequency)
         t1 = time.perf_counter()
         composition_time = (t1-t0) * 1
@@ -251,38 +258,54 @@ class GenericFabricsNode(ABC):
             t1 = time.perf_counter()
             #rospy.loginfo(f"Compute time in ms : {(t1-t0) * 1000}")
             self.rate.sleep()
+            # rospy.spin()
 
     @abstractmethod
     def init_publishers(self):
         pass
 
+    def publish_obstacles(self):
+        # print("Im an in publish_obstacles")
+        obstacle_struct = FabricsObstacle()
+        obstacle_struct.radius = 0.2
+        obstacle_struct.obstacle_type = "sphere"
+        obstacles_struct = FabricsObstacleArray()
+        # print("obstacle1_message:", self.obstacle1_msg)
+        if self.obstacle1_msg is not None:
+            # print("self.obstacle1_msg.pose.pose.position:", self.obstacle1_msg)
+            obstacle_struct.position = self.obstacle1_msg.pose.pose.position
+            obstacles_struct.obstacles = [obstacle_struct]
+            self._obstacle_planner_publisher.publish(obstacles_struct)
+
     def init_subscribers(self):
         self.obs_subscriber = rospy.Subscriber(
-            "planning_obs", FabricsObstacleArray, self.obs_callback,
-            tcp_nodelay=True,
-        )
-        self.obstacles = []
-        rospy.Subscriber(
-            "joint_space_goal", FabricsJointSpaceGoal, self.joint_space_goal_cb,
+            "fabrics/planning_obs", FabricsObstacleArray, self.obs_callback,
             tcp_nodelay=True,
         )
         rospy.Subscriber(
-            "ee_pose_goal", FabricsPoseGoal, self.ee_pose_goal_cb,
+            "fabrics/joint_space_goal", FabricsJointSpaceGoal, self.joint_space_goal_cb,
             tcp_nodelay=True,
         )
         rospy.Subscriber(
-            "constraints_goal", FabricsConstraintsGoal, self.constraints_goal_cb,
+            "fabrics/ee_pose_goal", FabricsPoseGoal, self.ee_pose_goal_cb,
             tcp_nodelay=True,
         )
-        rospy.Subscriber('move_base_simple/goal', PoseStamped, self.cb_goal_rviz,
+        rospy.Subscriber(
+            "fabrics/constraints_goal", FabricsConstraintsGoal, self.constraints_goal_cb,
+            tcp_nodelay=True,
+        )
+        rospy.Subscriber('fabrics/move_base_simple/goal', PoseStamped, self.cb_goal_rviz,
                          tcp_nodelay=True,)
         # preempt the previous goal once this cb is triggered
         self.preempt_goal_subscriber = rospy.Subscriber(
             "preempt_goal", Empty, self.preempt_goal_callback
         )
+
+        self.obstacle_subscriber = rospy.Subscriber('vicon/obstacle1', PoseWithCovarianceStamped, self.cb_obstacle1, tcp_nodelay=True)
+
         self.init_joint_states_subscriber()
         print("reaching here!")
-        self.obstacle1_received = self.init_obstacle_vicon_subscriber()
+        # self.obstacle1_received = self.init_obstacle_vicon_subscriber()
 
     def obs_callback(self, msg: FabricsObstacleArray):
         self.obstacles = msg.obstacles
@@ -325,13 +348,21 @@ class GenericFabricsNode(ABC):
             self._changed_planner = True
         self._goal_string = goal_string
 
+    def cb_obstacle1(self, msg):
+        # This function is called whenever a message is received on the subscribed topic
+        # print("I am in cb_obstacle11111111111111111111")
+        self.obstacle1_msg = msg
+        # self.publish_obstacles()
+        # print("I am in cb_obstacle1")
+        self.obstacle1_received == True
+
     @abstractmethod
     def init_joint_states_subscriber(self):
         pass
 
-    @abstractmethod
-    def init_obstacle_vicon_subscriber(self):
-        pass
+    # @abstractmethod
+    # def init_obstacle_vicon_subscriber(self):
+    #     pass
 
     def preempt_goal_callback(self, msg: Empty):
         rospy.loginfo(f"goal preempted")
@@ -347,13 +378,16 @@ class GenericFabricsNode(ABC):
         x_obsts_cuboid = np.full((self.num_box_obstacles, 3), [100.0] * 3)
         size_obsts_cuboid = np.full((self.num_box_obstacles, 3), 0.05)
 
+        print("self.obstacles: ", self.obstacles)
         for i, o in enumerate(self.obstacles):
+            print("o.obstacle_type", o.obstacle_type)
             if o.obstacle_type == "sphere":
                 if i >= self.num_sphere_obstacles:
                     rospy.logwarn(
                         f"Fabrics planner received more sphere obstacles than it can process: can only handle {self.num_sphere_obstacles}. Consider increasing the rosparameter num_sphere_obstacles."
                     )
                     break
+                print("spheres in for loop")
                 x_obst_sphere[i, :] = list(o.position)
                 radius_obst[i] = o.radius
             elif o.obstacle_type == "box":
@@ -377,24 +411,27 @@ class GenericFabricsNode(ABC):
             'size_obsts_cuboid': size_obsts_cuboid,
             'radius_body_base_link': 0.2
         })
+        print("I am at runtime arguments obstacles")
 
 
     @abstractmethod
     def set_joint_states_values(self):
         pass
 
-    @abstractmethod
-    def publish_obstacles(self):
-        pass
+    # @abstractmethod
+    # def publish_obstacles(self):
+    #     pass
 
     def compute_action(self):
+        self.compose_runtime_obstacles_argument()
         self.goal_wrapper.compose_runtime_arguments(self._goal, self._runtime_arguments)
         self.set_joint_states_values()
         # print("sel")
-        # print("self._runtime_arguments:", self._runtime_arguments['x_goal_0'])
-        # print("self._runtime_arguments:", self._runtime_arguments['weight_goal_0'])
-        # print("self._runtime_arguments:", self._runtime_arguments['q'])
-        # print("self._runtime_arguments:", self._runtime_arguments['qdot'])  
+        print("self._runtime_arguments:", self._runtime_arguments['x_goal_0'])
+        print("self._runtime_arguments:", self._runtime_arguments['weight_goal_0'])
+        print("self._runtime_arguments:", self._runtime_arguments['q'])
+        print("self._runtime_arguments:", self._runtime_arguments['qdot'])  
+        print("self._runtime_arguments:", self._runtime_arguments['x_obst'])
 
         action = self._planner.compute_action(
             **self._runtime_arguments,
@@ -416,9 +453,9 @@ class GenericFabricsNode(ABC):
     def act(self):
         alpha = 0.95
         try:
-            if self.obstacle1_received == True:
-                print("In if statement for obstacle received")
-                self.publish_obstacles()
+            # print("self.obstacle1_received", self.obstacle1_received)
+            # if self.obstacle1_received == True:
+            self.publish_obstacles()
             action = np.zeros_like(self._action)
             action = self.compute_action()
             self._action = action

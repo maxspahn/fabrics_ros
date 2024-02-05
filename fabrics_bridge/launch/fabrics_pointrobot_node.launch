@@ -4,11 +4,11 @@
     <arg name="obstacle_name1"/>
     <arg name="rviz" default="true"/>
     <rosparam command="load" file="$(find fabrics_bridge)/config/fabrics_pointrobot_config.yaml"/>
-
-    <group ns="fabrics">
+<!-- 
+    <group ns="fabrics"> -->
         <!-- start fabric node -->
-        <node pkg="fabrics_bridge" type="pointrobot_fabrics_node" name="pointrobot_fabrics_node" output="screen"/>
-    </group>
+    <node pkg="fabrics_bridge" type="pointrobot_fabrics_node" name="pointrobot_fabrics_node" output="screen"/>
+    <!-- </group> -->
     <!-- <node pkg="rviz" type="rviz" name="rviz" args="-d $(find fabrics_bridge)/config/fabrics_boxer_visualization.rviz" if="$(arg rviz)"/> -->
     <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find dingo_planners)/rviz/demo.rviz"/> -->
 
