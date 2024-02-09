@@ -51,7 +51,7 @@ class GenericFabricsNode(ABC):
         self._runtime_arguments = {}
 
         self._obstacle_planner_publisher = rospy.Publisher(
-            '/planning_obs',
+            '/fabrics/planning_obs',
             FabricsObstacleArray, 
             queue_size=10
         )
@@ -224,7 +224,7 @@ class GenericFabricsNode(ABC):
             number_obstacles=self.num_sphere_obstacles,
             number_obstacles_cuboid=self.num_box_obstacles,
         )
-        planner.concretize(mode='vel', time_step = 10/self._frequency)
+        planner.concretize(mode='vel', time_step = 1/self._frequency)
         t1 = time.perf_counter()
         composition_time = (t1-t0) * 1
         # serializing the planner
@@ -268,7 +268,7 @@ class GenericFabricsNode(ABC):
         # print("Im an in publish_obstacles")
         obstacle_struct = FabricsObstacle()
         obstacle_struct.radius = 0.2
-        obstacle_struct.obstacle_type = "sphere"
+        obstacle_struct.obstacle_type = "sphere" #todo!!!!!
         obstacles_struct = FabricsObstacleArray()
         # print("obstacle1_message:", self.obstacle1_msg)
         if self.obstacle1_msg is not None:
@@ -353,7 +353,7 @@ class GenericFabricsNode(ABC):
         # print("I am in cb_obstacle11111111111111111111")
         self.obstacle1_msg = msg
         # self.publish_obstacles()
-        # print("I am in cb_obstacle1")
+        #print("I am in cb_obstacle1")
         self.obstacle1_received == True
 
     @abstractmethod
@@ -378,7 +378,7 @@ class GenericFabricsNode(ABC):
         x_obsts_cuboid = np.full((self.num_box_obstacles, 3), [100.0] * 3)
         size_obsts_cuboid = np.full((self.num_box_obstacles, 3), 0.05)
 
-        print("self.obstacles: ", self.obstacles)
+        # print("self.obstacles: ", self.obstacles)
         for i, o in enumerate(self.obstacles):
             print("o.obstacle_type", o.obstacle_type)
             if o.obstacle_type == "sphere":
@@ -387,7 +387,6 @@ class GenericFabricsNode(ABC):
                         f"Fabrics planner received more sphere obstacles than it can process: can only handle {self.num_sphere_obstacles}. Consider increasing the rosparameter num_sphere_obstacles."
                     )
                     break
-                print("spheres in for loop")
                 x_obst_sphere[i, :] = list(o.position)
                 radius_obst[i] = o.radius
             elif o.obstacle_type == "box":
@@ -409,9 +408,9 @@ class GenericFabricsNode(ABC):
             'radius_obst': radius_obst,
             'x_obsts_cuboid': x_obsts_cuboid,
             'size_obsts_cuboid': size_obsts_cuboid,
-            'radius_body_base_link': 0.2
+            'radius_body_base_link': 0.4
         })
-        print("I am at runtime arguments obstacles")
+        # print("I am at runtime arguments obstacles")
 
 
     @abstractmethod
@@ -427,11 +426,11 @@ class GenericFabricsNode(ABC):
         self.goal_wrapper.compose_runtime_arguments(self._goal, self._runtime_arguments)
         self.set_joint_states_values()
         # print("sel")
-        print("self._runtime_arguments:", self._runtime_arguments['x_goal_0'])
-        print("self._runtime_arguments:", self._runtime_arguments['weight_goal_0'])
-        print("self._runtime_arguments:", self._runtime_arguments['q'])
-        print("self._runtime_arguments:", self._runtime_arguments['qdot'])  
-        print("self._runtime_arguments:", self._runtime_arguments['x_obst'])
+        print("self._runtime_arguments, x_goal_0:", self._runtime_arguments['x_goal_0'])
+        print("self._runtime_arguments, weight_goal0:", self._runtime_arguments['weight_goal_0'])
+        print("self._runtime_arguments, q:", self._runtime_arguments['q'])
+        print("self._runtime_arguments, qdot:", self._runtime_arguments['qdot'])  
+        print("self._runtime_arguments, x_obst:", self._runtime_arguments['x_obst'])
 
         action = self._planner.compute_action(
             **self._runtime_arguments,

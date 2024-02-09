@@ -6,7 +6,7 @@ import rospkg
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
-# from fabrics_msgs.msg import FabricsObstacleArray, FabricsObstacle
+from fabrics_msgs.msg import FabricsObstacleArray, FabricsObstacle
 
 from urdf_parser_py.urdf import URDF
 
@@ -45,10 +45,16 @@ class PointrobotFabricsNode(GenericFabricsNode):
 
     def init_publishers(self):
         self._pointrobot_command_publisher = rospy.Publisher(
-            '/ccc',
+            '/cmd_vel',
             Twist, 
             queue_size=10
         )
+
+        # self._obstacle_planner_publisher = rospy.Publisher(
+        #     '/planning_obs',
+        #     FabricsObstacleArray, 
+        #     queue_size=10
+        # )
 
     def init_joint_states_subscriber(self):
         #todo: remove hardcoded
