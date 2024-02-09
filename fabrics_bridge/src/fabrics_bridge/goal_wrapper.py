@@ -192,7 +192,7 @@ class FabricsGoalWrapper(object):
         print("goal position: ", goal_position)
         goal_dict = {
             "subgoal0": {
-                "weight": 1.0,
+                "weight": rospy.get_param("/weight_goal0"),
                 "is_primary_goal": True,
                 "indices": [0, 1],
                 "parent_link" : 'world',
@@ -208,7 +208,7 @@ class FabricsGoalWrapper(object):
     def compose_runtime_arguments(self, goal: GoalComposition, runtime_arguments: dict) -> None:
         for i, sub_goal in enumerate(goal.sub_goals()):
             runtime_arguments[f'x_goal_{i}'] = np.array(sub_goal.position())
-            runtime_arguments[f'weight_goal_{i}'] = 0.5 * np.array([sub_goal.weight()])
+            runtime_arguments[f'weight_goal_{i}'] = np.array([sub_goal.weight()])
             if hasattr(sub_goal, 'angle') and sub_goal.angle():
                 euler_goal = list(
                     tf.transformations.euler_from_quaternion(
