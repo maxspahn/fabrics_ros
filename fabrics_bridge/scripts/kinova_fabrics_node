@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 import rospy
 
-from fabrics_bridge.pointrobot_fabrics import PointrobotFabricsNode
+from fabrics_bridge.kinova_fabrics import KinovaFabricsNode
 
 if __name__ == "__main__":
-    node = PointrobotFabricsNode()
+    node = KinovaFabricsNode()
     try:
         node.run()
     except rospy.ROSInterruptException:
