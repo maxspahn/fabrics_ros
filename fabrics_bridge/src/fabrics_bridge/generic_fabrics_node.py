@@ -44,6 +44,7 @@ class GenericFabricsNode(ABC):
         self._frequency = 100
         self.rate = rospy.Rate(self._frequency)
         self._robot_type = rospy.get_param('/robot_type') 
+        self._dim_state = rospy.get_param('/dim_state')
         self._changed_planner = True
         self.stop_acc_bool = True
         self.goal_wrapper = FabricsGoalWrapper()
@@ -56,6 +57,7 @@ class GenericFabricsNode(ABC):
         self.obstacle1_received = False
         self.obstacle1_msg = None
         self.stop_acc_bool = False
+        self.goal_reached = False
         self.init_runtime_arguments()
         self.compose_runtime_obstacles_argument()
     
@@ -391,6 +393,17 @@ class GenericFabricsNode(ABC):
             'radius_body_base_link': rospy.get_param('/radius_body_base_link') 
         })
 
+    def check_goal_reached(self):
+        self.positional_goal_tolerance = rospy.get_param('/positional_goal_tolerance')
+        x_goal = self._runtime_arguments['x_goal_0'][0:self._dim_state]
+        x_state = self._runtime_arguments['q'][0:self._dim_state] #todo replace with fk in case of x_ee goal
+        distance = self.dist_goal_ee(x_state, x_goal)
+        if distance <= self.positional_goal_tolerance:
+            self.goal_reached = True
+
+    def dist_goal_ee(self, x_state, x_goal):
+        distance = np.linalg.norm(x_state - x_goal)
+        return distance
 
     @abstractmethod
     def set_joint_states_values(self):
@@ -405,9 +418,13 @@ class GenericFabricsNode(ABC):
         # print("self._runtime_arguments, q:", self._runtime_arguments['q'])
         # print("self._runtime_arguments, qdot:", self._runtime_arguments['qdot'])  
         # print("self._runtime_arguments, x_obst:", self._runtime_arguments['x_obst'])
-        action = self._planner.compute_action(
-            **self._runtime_arguments,
-        )
+        if self.goal_reached == False:
+            action = self._planner.compute_action(
+                **self._runtime_arguments,
+            )
+        else:
+            action = np.zeros_like(self._action)
+        print("action:", action)
         return action
 
     @abstractmethod
@@ -432,6 +449,7 @@ class GenericFabricsNode(ABC):
             self._action = self._action * alpha + action * (1-alpha)
             self._action = np.clip(self._action, self._min_vel, self._max_vel)
             self.publish_action()
+            self.check_goal_reached()
         except Exception as e:
             rospy.loginfo(f"Not planning due to error {e}")
             rospy.loginfo("Waiting for correct planner to be loaded.")

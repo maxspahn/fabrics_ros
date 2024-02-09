@@ -1,4 +1,4 @@
-positional_goal_tolerance : 0.02
+positional_goal_tolerance : 0.20
 robot_type: "pointrobot"
 planner_type: "nonholonomic"
 degrees_of_freedom: 3
