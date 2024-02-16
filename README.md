@@ -48,8 +48,8 @@ roslaunch fabrics_bridge fabrics_interactive_marker.launch
 To start the fabrics planner node for controlling the dingo base, Kuka arm, or dingo+kinova. Be aware that a ROS-master must already be running (in simulation or on the real-system). 
 This also connects you to the vicon bridge and opens RVIZ for a basic visualization:
 ```bash
-    roslaunch fabrics_bridge fabrics_pointrobot_node.launch robot_name:=dingo2 obstacle_name1:=dynamic_object1 #dingo-base
-    roslaunch fabrics_bridge fabrics_kuka_node.launch robot_name:=iiwa7  #kuka
+roslaunch fabrics_bridge fabrics_pointrobot_node.launch robot_name:=dingo2 obstacle_name1:=dynamic_object1 #dingo-base
+roslaunch fabrics_bridge fabrics_kuka_node.launch robot_name:=iiwa7  #kuka
 ```
 To select a goal, this can be done in Rviz or by running the script `request_ee_pose_node.py`
 ```bash
