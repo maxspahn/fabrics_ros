@@ -46,6 +46,8 @@ class GenericFabricsNode(ABC):
         self._robot_type = rospy.get_param('/robot_type') 
         self._dim_state = rospy.get_param('/dim_state')
         self.num_plane_constraints = rospy.get_param('/num_plane_constraints')
+        self.root_link = rospy.get_param('/root_link')
+        self.end_link = rospy.get_param('/end_effector_link')
         self._changed_planner = True
         self.stop_acc_bool = True
         self.goal_wrapper = FabricsGoalWrapper()
@@ -79,7 +81,6 @@ class GenericFabricsNode(ABC):
         rospy.loginfo("Generate planners from goal list.")
         self.generate_all_planners()
         rospy.loginfo("Generated all planners from goal list.")
-
 
     def init_runtime_arguments(self):
         if self._planner_type == 'nonholonomic':
@@ -397,10 +398,13 @@ class GenericFabricsNode(ABC):
     def check_goal_reached(self):
         self.positional_goal_tolerance = rospy.get_param('/positional_goal_tolerance')
         x_goal = self._runtime_arguments['x_goal_0'][0:self._dim_state]
-        x_state = self._runtime_arguments['q'][0:self._dim_state] #todo replace with fk in case of x_ee goal
+        q = self._runtime_arguments['q']
+        x_state = self._forward_kinematics.fk(q, self.root_link, self.end_link, positionOnly=True)
         distance = self.dist_goal_ee(x_state, x_goal)
         if distance <= self.positional_goal_tolerance:
             self.goal_reached = True
+        else:
+            print("distance between end-eff and goal:", distance)
 
     def dist_goal_ee(self, x_state, x_goal):
         distance = np.linalg.norm(x_state - x_goal)

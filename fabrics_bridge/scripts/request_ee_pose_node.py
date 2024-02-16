@@ -15,112 +15,53 @@ from fabrics_msgs.msg import (
     FabricsConstraint,
     FabricsObstacle,
     FabricsObstacleArray,
+    FabricsPoseGoal
 )
 
-# Helper functions for making Point and Quaternion iterable
-# def _it_point(self):
-#     yield self.x
-#     yield self.y
-#     yield self.z
-
-
-# Point.__iter__ = _it_point
-
-
-# def _it_quat(self):
-#     yield self.x
-#     yield self.y
-#     yield self.z
-#     yield self.w
-
-
-# Quaternion.__iter__ = _it_quat
-
-
 class ClientNode(object):
-    def __init__(self):
+    def __init__(self, WITH_ORIENTATION=False):
         rospy.init_node("client_node")
+        self.WITH_ORIENTATION = WITH_ORIENTATION
         self._rate = rospy.Rate(10)
-        # default number of obstacles is 20
         self._num_obs = 1
         self.init_publishers()
-        # ring of spheres setting
-        # radius of shelf (suppose it's a circular shelf)
-        self.r_shelf = 0.30
-        # diameter of a sphere
-        self.r_obs = 0.15
-        self.obs = FabricsObstacleArray()
-        self._obstacles = [[2.0, 2.0, 0.0]]
         self.dim_state = rospy.get_param("/dim_state")
-        self.init_goal()
+        if WITH_ORIENTATION == True:
+            self.init_goal_pose()
+        else:
+            self.init_goal_position()
 
     def init_publishers(self):
-        self._goal_publisher = rospy.Publisher(
-            "/move_base_simple/goal", PoseStamped, queue_size=10
-        )
-                # rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.cb_goal_rviz,
-                #          tcp_nodelay=True,)
-        # self._obs_publisher = rospy.Publisher(
-        #     "fabrics/planning_obs", FabricsObstacleArray, queue_size=10
-        # )
-
-    # def append_obstacles(self, ring_obs):
-    #     for obst in self._obstacles:
-    #         o = FabricsObstacle()
-    #         o.header.frame_id = rospy.get_param("/root_link")
-    #         o.radius = self.r_obs
-    #         o.position = Point(x=obst[0], y=obst[1], z=obst[2])
-    #         o.obstacle_type = "sphere"
-    #         self.obs.obstacles.append(o)
-    #     return self.obs
+        if self.WITH_ORIENTATION == True:
+            self._goal_publisher = rospy.Publisher(
+                "fabrics/ee_pose_goal", FabricsPoseGoal, queue_size=10
+            )
+        else:
+            self._goal_publisher = rospy.Publisher(
+                "/move_base_simple/goal", PoseStamped, queue_size=10
+            )
 
     def publish_goal(self):
         self._goal_publisher.publish(self._goal)
 
-    # def init_goal(self):
-    #     self._goal = FabricsConstraintsGoal()
-    #     self._goal.constraints = []
-    #     goal_1 = FabricsConstraint()
-    #     goal_1.weight = 1.0
-    #     goal_1.indices = list(range(self.dim_state))
-    #     goal_1.tolerance = 0.04
-    #     goal_1.geometric_constraint = Float64MultiArray(data=[-0.0, -0.0])
-    #     goal_1.parent_link = rospy.get_param("/root_link")
-    #     goal_1.child_link = rospy.get_param("/end_effector_link")
-    #     self._goal.constraints.append(goal_1)
-
-    # def publish_obs(self):
-    #     self.obs.obstacles = []
-    #     self.append_obstacles(self._obstacles)
-    #     self._obs_publisher.publish(self.obs)
-
-    def init_goal(self):
+    def init_goal_position(self):
         self._goal = PoseStamped()
-        self._goal.pose.position.x = 0.5
-        self._goal.pose.position.y = 0.5
-        self._goal.pose.position.z = 0.5 
+        self._goal.pose.position.x = 0.737
+        self._goal.pose.position.y = 0.163
+        self._goal.pose.position.z = 0.461
         return 
-        # if self.dim_state == 2:
-        #     goal_position = [self._goal.pose.position.x, self._goal.pose.position.y]
-        # elif self.dim_state == 3:
-        #     goal_position = [self._goal.pose.position.x, self._goal.pose.position.y, self._goal.pose.position.z]
-        # else:
-        #     print("This goal-space dimension is not known!")
-        # print("goal position: ", goal_position)
-        # goal_dict = {
-        #     "subgoal0": {
-        #         "weight": rospy.get_param("/weight_goal0"),
-        #         "is_primary_goal": True,
-        #         "indices": list(range(self.dim_state)),
-        #         "parent_link" : rospy.get_param("/root_link"),
-        #         "child_link" : rospy.get_param("/end_effector_link"),
-        #         "desired_position": goal_position,
-        #         "epsilon" : 0.1,
-        #         "type": "staticSubGoal"
-        #     }
-        # }
-        # goal = GoalComposition(name="goal", content_dict=goal_dict)
-        # return goal
+    
+    def init_goal_pose(self):
+        self._goal = FabricsPoseGoal()
+        self._goal.goal_pose.position.x = 0.737
+        self._goal.goal_pose.position.y = 0.163
+        self._goal.goal_pose.position.z = 0.461
+        
+        self._goal.goal_pose.orientation.x = 0
+        self._goal.goal_pose.orientation.y = 0
+        self._goal.goal_pose.orientation.z = 0
+        self._goal.goal_pose.orientation.w = 1
+        return
 
     def run(self):
         while not rospy.is_shutdown():

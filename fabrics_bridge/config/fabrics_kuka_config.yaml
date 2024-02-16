@@ -9,7 +9,7 @@ m_rot: 0.5
 k_geo_col: 0.1
 k_fin_col: 0.1
 l_offset: "0.5"
-weight_goal0: 0.5
+weight_goal0: 10 #0.5
 radius_obst: 0.2
 obstacle_type: "sphere"
 radius_body_base_link: 0.4

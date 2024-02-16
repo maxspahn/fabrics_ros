@@ -194,7 +194,6 @@ class FabricsGoalWrapper(object):
             goal_position = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
         else:
             print("This goal-space dimension is not known!")
-        print("goal position: ", goal_position)
         goal_dict = {
             "subgoal0": {
                 "weight": rospy.get_param("/weight_goal0"),

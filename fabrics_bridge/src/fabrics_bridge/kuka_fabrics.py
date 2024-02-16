@@ -91,10 +91,6 @@ class KukaFabricsNode(GenericFabricsNode):
         self._kuka_command_publisher.publish(msg)
         return True
     
-    def check_dist_to_goal(self, q_goal):
-        np.linalg.norm(self._q, q_goal)
-        
-    
     def publish_action(self):
         if np.isnan(self._action).any():
             rospy.logwarn(f"Action not a number {self._action}")
