@@ -51,15 +51,16 @@ This also connects you to the vicon bridge and opens RVIZ for a basic visualizat
 roslaunch fabrics_bridge fabrics_pointrobot_node.launch robot_name:=dingo2 obstacle_name1:=dynamic_object1 #dingo-base
 roslaunch fabrics_bridge fabrics_kuka_node.launch robot_name:=iiwa7  #kuka
 ```
+
+Then, to process output from fabrics (only needed for the dingo/pointrobot/dinova, not for kuka), and publish velocity commands to `/panda_joint_velocity_controller/command`, run:
+```bash
+roslaunch fabrics_processing fabrics_processing.launch
+```
+
 To select a goal, this can be done in Rviz or by running the script `request_ee_pose_node.py`
 ```bash
 rosrun fabrics_bridge request_ee_pose_node.py   #for the kuka
 rosrun fabrics_bridge client_node               #for a pointrobot
-```
-
-Then, to process output from fabrics (only needed for the dingo/pointrobot/dinova), and publish velocity commands to `/panda_joint_velocity_controller/command`, run:
-```bash
-roslaunch fabrics_processing fabrics_processing.launch
 ```
 
 ## Real Robot
