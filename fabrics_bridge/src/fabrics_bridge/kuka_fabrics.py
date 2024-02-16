@@ -64,6 +64,14 @@ class KukaFabricsNode(GenericFabricsNode):
             tcp_nodelay=True,
         )
 
+    def init_obstacle_subscriber(self):
+        self.obstacle_subscriber = rospy.Subscriber('vicon/obstacle1', PoseWithCovarianceStamped, self.cb_obstacle1, tcp_nodelay=True)
+
+    def cb_obstacle1(self, msg):
+        # This function is called whenever a message is received on the subscribed topic
+        self.obstacle1_msg = msg
+        self.obstacle1_received == True
+
     def set_joint_states_values(self):
         self._runtime_arguments['q'] = self._q
         self._runtime_arguments['qdot'] = self._qdot

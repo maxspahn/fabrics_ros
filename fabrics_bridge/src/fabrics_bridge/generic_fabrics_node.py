@@ -297,9 +297,13 @@ class GenericFabricsNode(ABC):
             "preempt_goal", Empty, self.preempt_goal_callback
         )
 
-        self.obstacle_subscriber = rospy.Subscriber('vicon/obstacle1', PoseWithCovarianceStamped, self.cb_obstacle1, tcp_nodelay=True)
-
+        # self.obstacle_subscriber = rospy.Subscriber('vicon/obstacle1', PoseWithCovarianceStamped, self.cb_obstacle1, tcp_nodelay=True)
+        self.init_obstacle_subscriber()
         self.init_joint_states_subscriber()
+
+    @abstractmethod
+    def init_obstacle_subscriber(self):
+        pass
 
     def obs_callback(self, msg: FabricsObstacleArray):
         self.obstacles = msg.obstacles
@@ -340,11 +344,6 @@ class GenericFabricsNode(ABC):
         if self._goal_string != goal_string:
             self._changed_planner = True
         self._goal_string = goal_string
-
-    def cb_obstacle1(self, msg):
-        # This function is called whenever a message is received on the subscribed topic
-        self.obstacle1_msg = msg
-        self.obstacle1_received == True
 
     @abstractmethod
     def init_joint_states_subscriber(self):
