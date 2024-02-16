@@ -6,12 +6,14 @@ import rospkg
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
-from fabrics_msgs.msg import FabricsObstacleArray, FabricsObstacle
+from fabrics_msgs.msg import FabricsObstacleArray, FabricsObstacle, ControlRequestKuka
 
 from urdf_parser_py.urdf import URDF
 
 from fabrics_bridge.generic_fabrics_node import GenericFabricsNode
 from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
+
+ROBOT = iiwa7 #replace if iiwa14!
 
 class KukaFabricsNode(GenericFabricsNode):
     def __init__(self):
@@ -42,9 +44,9 @@ class KukaFabricsNode(GenericFabricsNode):
         self.obstacle1_msg = None
 
     def init_publishers(self):
-        self._pointrobot_command_publisher = rospy.Publisher(
-            '/cmd_vel',
-            Twist, 
+        self._kuka_command_publisher = rospy.Publisher(
+            '/control_request' % ROBOT,
+            ControlRequestKuka, 
             queue_size=10
         )
 
@@ -58,7 +60,7 @@ class KukaFabricsNode(GenericFabricsNode):
         self._q = np.zeros(self.dof)
         self._qdot = np.zeros(self.dof)
         self.joint_state_subscriber = rospy.Subscriber(
-            "/joint_states_filtered",
+            "/joint_states",
             JointState,
             self.joint_states_callback,
             tcp_nodelay=True,
@@ -86,13 +88,13 @@ class KukaFabricsNode(GenericFabricsNode):
             rospy.logwarn(f"Action not a number {self._action}")
             self._action = np.zeros((rospy.get_param("/degrees_of_freedom"), 1))
             action_msg = Float64MultiArray(data=self._action)
-            self._pointrobot_command_publisher.publish(action_msg)
+            self._kuka_command_publisher.publish(action_msg)
             return
         action_msg = Float64MultiArray(data=self._action)
         desired_vel.linear.x = self._action[0]
         desired_vel.linear.y = self._action[1]
 
-        self._pointrobot_command_publisher.publish(desired_vel)
+        self._kuka_command_publisher.publish(desired_vel)
 
 if __name__ == "__main__":
     node = KukaFabricsNode()
