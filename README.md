@@ -57,8 +57,7 @@ rosrun fabrics_bridge request_ee_pose_node.py   #for the kuka
 rosrun fabrics_bridge client_node               #for a pointrobot
 ```
 
-Then, to process output from fabrics, and publish velocity commands to `/panda_joint_velocity_controller/command`, run:
-
+Then, to process output from fabrics (only needed for the dingo/pointrobot/dinova), and publish velocity commands to `/panda_joint_velocity_controller/command`, run:
 ```bash
 roslaunch fabrics_processing fabrics_processing.launch
 ```
