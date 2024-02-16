@@ -64,6 +64,7 @@ published_indices:
   - 7
   - 8
 num_obs : 5
+num_plane_constraints: 0
 angular_goal_tolerance: 0.1
 collision_bodies:
   radius_body_panda_link0: 0.2

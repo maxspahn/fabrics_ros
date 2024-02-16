@@ -15,6 +15,7 @@ end_links:
   - "panda_vacuum_support_link"
 num_sphere_obs : 20
 num_box_obs : 2
+num_plane_constraints: 0
 angular_goal_tolerance: 0.1
 urdf_source: "pandaplus"
 joint_names:

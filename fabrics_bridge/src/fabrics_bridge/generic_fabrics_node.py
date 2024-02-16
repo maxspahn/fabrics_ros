@@ -45,6 +45,7 @@ class GenericFabricsNode(ABC):
         self.rate = rospy.Rate(self._frequency)
         self._robot_type = rospy.get_param('/robot_type') 
         self._dim_state = rospy.get_param('/dim_state')
+        self.num_plane_constraints = rospy.get_param('/num_plane_constraints')
         self._changed_planner = True
         self.stop_acc_bool = True
         self.goal_wrapper = FabricsGoalWrapper()
@@ -219,6 +220,7 @@ class GenericFabricsNode(ABC):
             limits=self.joint_limits,
             number_obstacles=self.num_sphere_obstacles,
             number_obstacles_cuboid=self.num_box_obstacles,
+            number_plane_constraints=self.num_plane_constraints
         )
         planner.concretize(mode='vel', time_step = 1/self._frequency)
         t1 = time.perf_counter()
