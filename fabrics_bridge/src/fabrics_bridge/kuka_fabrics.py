@@ -6,14 +6,13 @@ import rospkg
 from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
-from fabrics_msgs.msg import FabricsObstacleArray, FabricsObstacle, ControlRequestKuka
+from fabrics_msgs.msg import FabricsObstacleArray, FabricsObstacle
+from cor_tud_msgs.msg import ControlRequest
 
 from urdf_parser_py.urdf import URDF
 
 from fabrics_bridge.generic_fabrics_node import GenericFabricsNode
 from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
-
-ROBOT = iiwa7 #replace if iiwa14!
 
 class KukaFabricsNode(GenericFabricsNode):
     def __init__(self):
@@ -25,8 +24,9 @@ class KukaFabricsNode(GenericFabricsNode):
         self._action = np.zeros(self.dof)
         rospack = rospkg.RosPack()
         self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/kuka/"
-        absolute_path = os.path.dirname(os.path.abspath(__file__))
-        with open("/home/saray/dingo_ws/src/fabrics_ros/fabrics_bridge/config/iiwa7.urdf", "r", encoding="utf-8") as file:
+        absolute_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+        print("absolute path: ", absolute_path)
+        with open(absolute_path+"/config/iiwa7.urdf", "r", encoding="utf-8") as file:
             self.urdf = file.read()
         self._forward_kinematics = GenericURDFFk(
             self.urdf,
@@ -45,8 +45,8 @@ class KukaFabricsNode(GenericFabricsNode):
 
     def init_publishers(self):
         self._kuka_command_publisher = rospy.Publisher(
-            '/control_request' % ROBOT,
-            ControlRequestKuka, 
+            '/%s/control_request' % "iiwa7",
+            ControlRequest, 
             queue_size=10
         )
 
@@ -60,7 +60,7 @@ class KukaFabricsNode(GenericFabricsNode):
         self._q = np.zeros(self.dof)
         self._qdot = np.zeros(self.dof)
         self.joint_state_subscriber = rospy.Subscriber(
-            "/joint_states",
+            "/%s/joint_states" % "iiwa7",
             JointState,
             self.joint_states_callback,
             tcp_nodelay=True,
@@ -82,19 +82,28 @@ class KukaFabricsNode(GenericFabricsNode):
         self._q = np.array(msg.position[0:self.dof])
         self._qdot = np.array(msg.velocity[0:self.dof])
 
+    def send_request(self, q_d, q_dot_d=[0, 0, 0, 0, 0, 0, 0]):
+        msg = ControlRequest()
+        msg.header.stamp = rospy.Time.now()
+        msg.q_d.data = q_d
+        msg.q_dot_d.data = q_dot_d
+        msg.control_type = 'joint impedance'
+        self._kuka_command_publisher.publish(msg)
+        return True
+    
+    def check_dist_to_goal(self, q_goal):
+        np.linalg.norm(self._q, q_goal)
+        
+    
     def publish_action(self):
-        desired_vel= Twist()
         if np.isnan(self._action).any():
             rospy.logwarn(f"Action not a number {self._action}")
             self._action = np.zeros((rospy.get_param("/degrees_of_freedom"), 1))
-            action_msg = Float64MultiArray(data=self._action)
-            self._kuka_command_publisher.publish(action_msg)
+            self.send_request(q_d = self._q, q_dot_d = self._action)
             return
-        action_msg = Float64MultiArray(data=self._action)
-        desired_vel.linear.x = self._action[0]
-        desired_vel.linear.y = self._action[1]
-
-        self._kuka_command_publisher.publish(desired_vel)
+        self.send_request(q_d = self._q, q_dot_d = self._action)
+        return
+        
 
 if __name__ == "__main__":
     node = KukaFabricsNode()

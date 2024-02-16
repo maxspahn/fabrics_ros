@@ -217,10 +217,10 @@ class GenericFabricsNode(ABC):
             collision_links=self.collision_links,
             self_collision_pairs=self.self_collision_pairs,
             goal=goal,
-            limits=self.joint_limits,
+            # limits=self.joint_limits,
             number_obstacles=self.num_sphere_obstacles,
-            number_obstacles_cuboid=self.num_box_obstacles,
-            number_plane_constraints=self.num_plane_constraints
+            # number_obstacles_cuboid=self.num_box_obstacles,
+            # number_plane_constraints=self.num_plane_constraints
         )
         planner.concretize(mode='vel', time_step = 1/self._frequency)
         t1 = time.perf_counter()
@@ -290,7 +290,7 @@ class GenericFabricsNode(ABC):
             "fabrics/constraints_goal", FabricsConstraintsGoal, self.constraints_goal_cb,
             tcp_nodelay=True,
         )
-        rospy.Subscriber('fabrics/move_base_simple/goal', PoseStamped, self.cb_goal_rviz,
+        rospy.Subscriber('/move_base_simple/goal', PoseStamped, self.cb_goal_rviz,
                          tcp_nodelay=True,)
         # preempt the previous goal once this cb is triggered
         self.preempt_goal_subscriber = rospy.Subscriber(
@@ -425,7 +425,7 @@ class GenericFabricsNode(ABC):
             )
         else:
             action = np.zeros_like(self._action)
-        print("action:", action)
+        # print("action:", action)
         return action
 
     @abstractmethod
