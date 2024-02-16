@@ -390,7 +390,7 @@ class GenericFabricsNode(ABC):
             'radius_obst': radius_obst,
             'x_obsts_cuboid': x_obsts_cuboid,
             'size_obsts_cuboid': size_obsts_cuboid,
-            'radius_body_base_link': rospy.get_param('/radius_body_base_link') 
+            # 'radius_body_base_link': rospy.get_param('/radius_body_base_link') 
         })
 
     def check_goal_reached(self):

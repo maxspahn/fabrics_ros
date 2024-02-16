@@ -83,6 +83,7 @@ class FabricsGoalWrapper(object):
     """Wrapper for translation of ros message type FabricsGoal to a fabrics goal"""
     def __init__(self):
         self._goal_type = ""
+        self.dim_state = rospy.get_param("/dim_state")
 
     def wrap(self, goal_msg: FabricsGoalUnion) -> bool:
         if isinstance(goal_msg, FabricsPoseGoal):
@@ -114,7 +115,6 @@ class FabricsGoalWrapper(object):
 
 
     def compose_pose_goal(self, goal_msg: FabricsPoseGoal):
-        self.dim_state = rospy.get_param("/dim_state")
         goal_position = [goal_msg.goal_pose.position.x, goal_msg.goal_pose.position.y, goal_msg.goal_pose.position.z][0:self.dim_state]
         goal_quaternion = list(goal_msg.goal_pose.orientation)
         goal_rotation_matrix = quaternion_to_rotation_matrix(goal_quaternion, ordering='xyzw')
@@ -188,15 +188,20 @@ class FabricsGoalWrapper(object):
             raise InvalidGoalError(f"Cannot create dummy goal for goal type {goal_type}")
 
     def compose_goal_rviz(self, msg:PoseStamped):
-        goal_position = [msg.pose.position.x, msg.pose.position.y]
+        if self.dim_state == 2:
+            goal_position = [msg.pose.position.x, msg.pose.position.y]
+        elif self.dim_state == 3:
+            goal_position = [msg.pose.position.x, msg.pose.position.y, msg.pose.position.z]
+        else:
+            print("This goal-space dimension is not known!")
         print("goal position: ", goal_position)
         goal_dict = {
             "subgoal0": {
                 "weight": rospy.get_param("/weight_goal0"),
                 "is_primary_goal": True,
-                "indices": [0, 1],
-                "parent_link" : 'world',
-                "child_link" : 'base_link',
+                "indices": list(range(self.dim_state)),
+                "parent_link" : rospy.get_param("/root_link"),
+                "child_link" : rospy.get_param("/end_effector_link"),
                 "desired_position": goal_position,
                 "epsilon" : 0.1,
                 "type": "staticSubGoal"

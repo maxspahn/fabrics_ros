@@ -1,0 +1,68 @@
+positional_goal_tolerance : 0.20
+robot_type: "kuka"
+planner_type: "holonomic"
+degrees_of_freedom: 7
+dim_state: 3
+m_arm: 5.0
+m_base: 5.0
+m_rot: 0.5
+k_geo_col: 0.1
+k_fin_col: 0.1
+l_offset: "0.5"
+weight_goal0: 0.5
+radius_obst: 0.2
+obstacle_type: "sphere"
+radius_body_base_link: 0.4
+goal_indices: 
+  - 0
+  - 1
+  - 2
+root_link: "iiwa_link_0"
+urdf_source: "/robot_description"
+end_effector_link: 'iiwa_link_ee'
+orientation_helper_link: "iiwa_link_ee"
+end_links: 
+  - "iiwa_link_ee"
+num_sphere_obs : 1
+num_box_obs : 0
+num_plane_constraints: 1
+angular_goal_tolerance: 0.1
+collision_bodies:
+  radius_body_iiwa_link_3: 0.3
+  radius_body_iiwa_link_4: 0.3
+  radius_body_iiwa_link_5: 0.3
+  radius_body_iiwa_link_6: 0.3
+  radius_body_iiwa_link_7: 0.3
+collision_links: 
+  - "iiwa_link_3"
+  - "iiwa_link_4"
+  - "iiwa_link_5"
+  - "iiwa_link_6"
+  - "iiwa_link_7"
+velocity_scaling: 1.0
+velocity_limits:
+  upper:
+        - 0.3
+        - 0.3
+        - 0.3
+        - 0.3
+        - 0.3
+        - 0.3
+        - 0.3
+  lower:
+        - -0.3
+        - -0.3
+        - -0.3
+        - -0.3
+        - -0.3
+        - -0.3
+        - -0.3
+joint_limits: [
+        [-2.96705973, 2.96705973],
+        [-2.0943951, 2.0943951],
+        [-2.96705973, 2.96705973],
+        [-2.0943951, 2.0943951],
+        [-2.96705973, 2.96705973],
+        [-2.0943951, 2.0943951],
+        [-3.05432619, 3.05432619],
+    ]

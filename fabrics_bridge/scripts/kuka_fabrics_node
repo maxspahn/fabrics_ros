@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+import rospy
+
+from fabrics_bridge.kuka_fabrics import KukaFabricsNode
+
+if __name__ == "__main__":
+    node = KukaFabricsNode()
+    try:
+        node.run()
+    except rospy.ROSInterruptException:
+        pass
+

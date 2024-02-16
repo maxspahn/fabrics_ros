@@ -53,15 +53,7 @@ def create_planner(planner_type: str, forward_kinematics) -> ParameterizedFabric
     degrees_of_freedom = rospy.get_param("/degrees_of_freedom")
     print("dof: ", degrees_of_freedom)
     if planner_type == "holonomic":
-        print("hereeeeeee")
-        print("degrees of freedom: ", degrees_of_freedom)
-        print("forward_kinematics: ", forward_kinematics)
-        print("base_energy: ", base_energy)
-        print("collision_geometry: ", collision_geometry)
-        print("collision_finsler: ", collision_finsler)
-        print("self collision finsler: ", self_collision_finsler)
-        print("limit geometry: ", limit_geometry)
-        print("limit finsler: ", limit_finsler)
+        print("In create_planner function")
         return ParameterizedFabricPlanner(
             degrees_of_freedom,
             forward_kinematics,
@@ -72,7 +64,6 @@ def create_planner(planner_type: str, forward_kinematics) -> ParameterizedFabric
             # limit_geometry=limit_geometry,
             # limit_finsler=limit_finsler,
         )
-        print("print in utils ")
     if planner_type == "nonholonomic":
         collision_geometry: str = (
             "-sym('k_geo_col') / (x ** 1) * xdot ** 2"
@@ -83,12 +74,12 @@ def create_planner(planner_type: str, forward_kinematics) -> ParameterizedFabric
         return NonHolonomicParameterizedFabricPlanner(
             degrees_of_freedom,
             forward_kinematics,
-            collision_geometry=collision_geometry,
-            collision_finsler=collision_finsler,
-            self_collision_finsler=self_collision_finsler,
-            limit_geometry=limit_geometry,
-            limit_finsler=limit_finsler,
-            l_offset=rospy.get_param("/l_offset"),
+            # collision_geometry=collision_geometry,
+            # collision_finsler=collision_finsler,
+            # self_collision_finsler=self_collision_finsler,
+            # limit_geometry=limit_geometry,
+            # limit_finsler=limit_finsler,
+            # l_offset=rospy.get_param("/l_offset"),
         )
 
 
