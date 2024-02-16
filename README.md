@@ -33,38 +33,29 @@ cd ~/fabric_ros_ws/src/fabrics_ros
 pip3 install -r requirements.txt
 ```
 
-
-
-
-
 ## Simulation
-
-To start an Albert simulation environment using velocity control mode:
+<!-- To start an Albert simulation environment using velocity control mode:
 
 ```bash
 roslaunch albert_gazebo albert_gazebo_navigation.launch panda_control_mode:=velocity
-```
+``` -->
 
-If you don't have a real goal and obstacles published/detected, run:
+<!-- If you don't have a real goal and obstacles published/detected, run:
 
 ```bash
 roslaunch fabrics_bridge fabrics_interactive_marker.launch
-```
-
-
-If you have a module which can publish data to `/planning_goal` and `/planning_obs`, run:
-
+``` -->
+To start the fabrics planner node for controlling the dingo base, Kuka arm, or dingo+kinova. Be aware that a ROS-master must already be running (in simulation or on the real-system). 
+This also connects you to the vicon bridge and opens RVIZ for a basic visualization:
 ```bash
-roslaunch fabrics_bridge fabrics_panda_node.launch
+    roslaunch fabrics_bridge fabrics_pointrobot_node.launch robot_name:=dingo2 obstacle_name1:=dynamic_object1 #dingo-base
+    roslaunch fabrics_bridge fabrics_kuka_node.launch robot_name:=iiwa7  #kuka
 ```
-An example client node that can publish `/planning_goal` and `/planning_obs`:
-
-
+To select a goal, this can be done in Rviz or by running the script `request_ee_pose_node.py`
 ```bash
-rosrun fabrics_bridge client_node
+rosrun fabrics_bridge request_ee_pose_node.py   #for the kuka
+rosrun fabrics_bridge client_node               #for a pointrobot
 ```
-
-
 
 Then, to process output from fabrics, and publish velocity commands to `/panda_joint_velocity_controller/command`, run:
 
