@@ -1,4 +1,4 @@
-positional_goal_tolerance : 0.15
+positional_goal_tolerance : 0.01
 robot_type: "kuka"
 planner_type: "holonomic"
 degrees_of_freedom: 7
@@ -13,7 +13,7 @@ weight_goal0: 80 #10
 radius_obst: 0.05
 obstacle_type: "sphere"
 radius_body_base_link: 0.3
-xyz_obstacle: [0.6, 0.0, 0.3] #0.3
+xyz_obstacle: [0.6, 0.0, 0.3]
 goal_indices: 
   - 0
   - 1
