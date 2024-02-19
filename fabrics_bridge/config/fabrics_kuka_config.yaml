@@ -1,4 +1,4 @@
-positional_goal_tolerance : 0.20
+positional_goal_tolerance : 0.15
 robot_type: "kuka"
 planner_type: "holonomic"
 degrees_of_freedom: 7
@@ -9,10 +9,11 @@ m_rot: 0.5
 k_geo_col: 0.1
 k_fin_col: 0.1
 l_offset: "0.5"
-weight_goal0: 10 #0.5
-radius_obst: 0.2
+weight_goal0: 80 #10
+radius_obst: 0.05
 obstacle_type: "sphere"
-radius_body_base_link: 0.4
+radius_body_base_link: 0.3
+xyz_obstacle: [0.6, 0.0, 0.3] #0.3
 goal_indices: 
   - 0
   - 1
@@ -42,21 +43,21 @@ collision_links:
 velocity_scaling: 1.0
 velocity_limits:
   upper:
-        - 0.3
-        - 0.3
-        - 0.3
-        - 0.3
-        - 0.3
-        - 0.3
-        - 0.3
+        - 5.
+        - 5.
+        - 5.
+        - 5.
+        - 5.
+        - 5.
+        - 5.
   lower:
-        - -0.3
-        - -0.3
-        - -0.3
-        - -0.3
-        - -0.3
-        - -0.3
-        - -0.3
+        - -5.
+        - -5.
+        - -5.
+        - -5.
+        - -5.
+        - -5.
+        - -5.
 joint_limits: [
         [-2.96705973, 2.96705973],
         [-2.0943951, 2.0943951],

@@ -8,6 +8,7 @@ import rospy
 import rospkg
 import os
 import hashlib
+import copy
 
 from std_msgs.msg import Empty
 from geometry_msgs.msg import Point, Quaternion, PoseStamped
@@ -218,7 +219,7 @@ class GenericFabricsNode(ABC):
             collision_links=self.collision_links,
             self_collision_pairs=self.self_collision_pairs,
             goal=goal,
-            # limits=self.joint_limits,
+            limits=self.joint_limits,
             number_obstacles=self.num_sphere_obstacles,
             # number_obstacles_cuboid=self.num_box_obstacles,
             # number_plane_constraints=self.num_plane_constraints
@@ -271,6 +272,13 @@ class GenericFabricsNode(ABC):
         # print("obstacle1_message:", self.obstacle1_msg)
         if self.obstacle1_msg is not None:
             obstacle_struct.position = self.obstacle1_msg.pose.pose.position
+            obstacles_struct.obstacles = [obstacle_struct]
+            self._obstacle_planner_publisher.publish(obstacles_struct)
+        else:
+            xyz_obst = rospy.get_param("/xyz_obstacle")
+            obstacle_struct.position.x = xyz_obst[0]
+            obstacle_struct.position.y = xyz_obst[1]
+            obstacle_struct.position.z = xyz_obst[2]
             obstacles_struct.obstacles = [obstacle_struct]
             self._obstacle_planner_publisher.publish(obstacles_struct)
 
@@ -400,11 +408,17 @@ class GenericFabricsNode(ABC):
         x_goal = self._runtime_arguments['x_goal_0'][0:self._dim_state]
         q = self._runtime_arguments['q']
         x_state = self._forward_kinematics.fk(q, self.root_link, self.end_link, positionOnly=True)
+        # print("x_state:", x_state)
         distance = self.dist_goal_ee(x_state, x_goal)
-        if distance <= self.positional_goal_tolerance:
+        if distance <= self.positional_goal_tolerance and self.goal_reached == False:
+            self.q_final = copy.deepcopy(self._q)
             self.goal_reached = True
+        elif distance <= self.positional_goal_tolerance:
+            self.goal_reached = True
+            print("goal pose is reached!!")
         else:
-            print("distance between end-eff and goal:", distance)
+            kkk=1
+            #print("distance between end-eff and goal:", distance)
 
     def dist_goal_ee(self, x_state, x_goal):
         distance = np.linalg.norm(x_state - x_goal)
@@ -422,7 +436,7 @@ class GenericFabricsNode(ABC):
         # print("self._runtime_arguments, weight_goal0:", self._runtime_arguments['weight_goal_0'])
         # print("self._runtime_arguments, q:", self._runtime_arguments['q'])
         # print("self._runtime_arguments, qdot:", self._runtime_arguments['qdot'])  
-        # print("self._runtime_arguments, x_obst:", self._runtime_arguments['x_obst'])
+        #print("self._runtime_arguments, x_obst:", self._runtime_arguments['x_obst'])
         if self.goal_reached == False:
             action = self._planner.compute_action(
                 **self._runtime_arguments,

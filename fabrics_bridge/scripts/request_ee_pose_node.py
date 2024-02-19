@@ -22,7 +22,7 @@ class ClientNode(object):
     def __init__(self, WITH_ORIENTATION=False):
         rospy.init_node("client_node")
         self.WITH_ORIENTATION = WITH_ORIENTATION
-        self._rate = rospy.Rate(10)
+        self._rate = rospy.Rate(500)
         self._num_obs = 1
         self.init_publishers()
         self.dim_state = rospy.get_param("/dim_state")
@@ -45,17 +45,21 @@ class ClientNode(object):
         self._goal_publisher.publish(self._goal)
 
     def init_goal_position(self):
+        self.x_goal = [0.5, -0.5, 0.3]
+        # self.x_goal = rospy.get_param("/x_goal0")
         self._goal = PoseStamped()
-        self._goal.pose.position.x = 0.737
-        self._goal.pose.position.y = 0.163
-        self._goal.pose.position.z = 0.461
+        
+        self._goal.pose.position.x = self.x_goal[0]
+        self._goal.pose.position.y = self.x_goal[1]
+        self._goal.pose.position.z = self.x_goal[2]
         return 
     
     def init_goal_pose(self):
+        self.x_goal = [0.5, -0.4, 0.4]
         self._goal = FabricsPoseGoal()
-        self._goal.goal_pose.position.x = 0.737
-        self._goal.goal_pose.position.y = 0.163
-        self._goal.goal_pose.position.z = 0.461
+        self._goal.pose.position.x = self.x_goal[0]
+        self._goal.pose.position.y = self.x_goal[1]
+        self._goal.pose.position.z = self.x_goal[2]
         
         self._goal.goal_pose.orientation.x = 0
         self._goal.goal_pose.orientation.y = 0

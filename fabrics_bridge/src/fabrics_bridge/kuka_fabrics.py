@@ -22,11 +22,12 @@ class KukaFabricsNode(GenericFabricsNode):
         self.dof = rospy.get_param("/degrees_of_freedom")
         self.joint_names = [f'pointrobot_joint{i+1}' for i in range(self.dof)]
         self._action = np.zeros(self.dof)
+        self.action_list = [self._action]
         rospack = rospkg.RosPack()
         self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/kuka/"
         absolute_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
         print("absolute path: ", absolute_path)
-        with open(absolute_path+"/config/iiwa7.urdf", "r", encoding="utf-8") as file:
+        with open(absolute_path+"/config/matlab_iiwa14.urdf", "r", encoding="utf-8") as file:
             self.urdf = file.read()
         self._forward_kinematics = GenericURDFFk(
             self.urdf,
@@ -45,7 +46,7 @@ class KukaFabricsNode(GenericFabricsNode):
 
     def init_publishers(self):
         self._kuka_command_publisher = rospy.Publisher(
-            '/%s/control_request' % "iiwa7",
+            '/%s/control_request' % "iiwa14",
             ControlRequest, 
             queue_size=10
         )
@@ -60,7 +61,7 @@ class KukaFabricsNode(GenericFabricsNode):
         self._q = np.zeros(self.dof)
         self._qdot = np.zeros(self.dof)
         self.joint_state_subscriber = rospy.Subscriber(
-            "/%s/joint_states" % "iiwa7",
+            "/%s/joint_states" % "iiwa14",
             JointState,
             self.joint_states_callback,
             tcp_nodelay=True,
@@ -91,13 +92,39 @@ class KukaFabricsNode(GenericFabricsNode):
         self._kuka_command_publisher.publish(msg)
         return True
     
+    def clean_list_actions(self):
+        len_list = len(self.action_list)
+        self.action_list = self.action_list[len_list-200:len_list]
+        return 
+        
+    def filter_action(self, action):
+        # filter actions over time:
+        len_list = len(self.action_list)
+        if len_list >= 200:
+            self.clean_list_actions()
+        index_start = len_list - 5
+        if index_start <= 0:
+            index_start = 0 
+        size_filter = len_list - index_start
+        action_avg = sum(self.action_list[index_start:len_list])/size_filter
+        print("action:", action)
+        print("action_avg:", action_avg)
+        return action_avg
+    
     def publish_action(self):
         if np.isnan(self._action).any():
             rospy.logwarn(f"Action not a number {self._action}")
             self._action = np.zeros((rospy.get_param("/degrees_of_freedom"), 1))
+            self.action_list.append(self._action)
             self.send_request(q_d = self._q, q_dot_d = self._action)
             return
-        self.send_request(q_d = self._q, q_dot_d = self._action)
+        self.action_list.append(self._action)
+        # self._action = self.filter_action(self._action)
+        if self.goal_reached == False:
+            self.send_request(q_d = self._q, q_dot_d = self._action)
+        else:
+            # print("self.q_final: ", self.q_final)
+            self.send_request(q_d = self.q_final, q_dot_d = self._action)
         return
         
 
