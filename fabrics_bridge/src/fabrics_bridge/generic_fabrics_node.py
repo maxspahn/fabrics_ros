@@ -219,7 +219,7 @@ class GenericFabricsNode(ABC):
         planner.set_components(
             # collision_links=self.collision_links,
             # self_collision_pairs=self.self_collision_pairs,
-            # goal=goal,
+            goal=goal,
             # limits=self.joint_limits,
             # number_obstacles=self.num_sphere_obstacles,
             # number_obstacles_cuboid=self.num_box_obstacles,
@@ -409,8 +409,7 @@ class GenericFabricsNode(ABC):
         self.positional_goal_tolerance = rospy.get_param('/positional_goal_tolerance')
         x_goal = self._runtime_arguments['x_goal_0'][0:self._dim_state]
         q = self._runtime_arguments['q']
-        x_state = self._forward_kinematics.fk(q, self.root_link, self.end_link, positionOnly=True)
-        # print("x_state:", x_state)
+        x_state = self._forward_kinematics.fk(q, self.root_link, self.end_link, positionOnly=True)[0:self._dim_state]
         distance = self.dist_goal_ee(x_state, x_goal)
         if distance <= self.positional_goal_tolerance and self.goal_reached == False:
             self.q_final = copy.deepcopy(self._q)
@@ -434,19 +433,19 @@ class GenericFabricsNode(ABC):
         self.compose_runtime_obstacles_argument()
         self.goal_wrapper.compose_runtime_arguments(self._goal, self._runtime_arguments)
         self.set_joint_states_values()
-        print("self.goal: ", self._runtime_arguments['x_goal_0'])
+        # print("self.goal: ", self._runtime_arguments['x_goal_0'])
         # print("self._runtime_arguments, angle_goal1:", self._runtime_arguments['angle_goal_1'])
         # print("self._runtime_arguments, weight_goal1:", self._runtime_arguments['weight_goal_1'])
-        print("self._runtime_arguments, q:", self._runtime_arguments['q'])
-        print("self._runtime_arguments, qdot:", self._runtime_arguments['qdot'])  
-        print("self._runtime_arguments, x_obst:", self._runtime_arguments['x_obst'])
+        # print("self._runtime_arguments, q:", self._runtime_arguments['q'])
+        # print("self._runtime_arguments, qdot:", self._runtime_arguments['qdot'])  
+        # print("self._runtime_arguments, x_obst:", self._runtime_arguments['x_obst'])
         if self.goal_reached == False:
             action = self._planner.compute_action(
                 **self._runtime_arguments,
             )
         else:
             action = np.zeros_like(self._action)
-        # print("action:", action)
+        print("action:", action)
         return action
 
     @abstractmethod
@@ -470,9 +469,11 @@ class GenericFabricsNode(ABC):
             self._action = action
             self._action = self._action * alpha + action * (1-alpha)
             self._action = np.clip(self._action, self._min_vel, self._max_vel)
+            print("after clipping!!")
             self.publish_action()
             self.check_goal_reached()
+            print("after goal reached!")
         except Exception as e:
             rospy.loginfo(f"Not planning due to error {e}")
-            rospy.loginfo("Waiting for correct planner to be loaded.")
+            rospy.loginfo("Waiting for correct planner to be loaded or bug is fixed.")
             self.load_planner(self._goal)

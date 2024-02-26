@@ -1,7 +1,7 @@
 positional_goal_tolerance : 0.20
 robot_type: "kinova"
 planner_type: "holonomic"
-degrees_of_freedom: 7
+degrees_of_freedom: 6
 dim_state: 3
 m_arm: 5.0
 m_base: 5.0
@@ -38,7 +38,13 @@ velocity_limits:
         - 0.3
         - 0.3
         - 0.3
+        - 0.3
+        - 0.3
+        - 0.3
   lower:
+        - -0.3
+        - -0.3
+        - -0.3
         - -0.3
         - -0.3
         - -0.3

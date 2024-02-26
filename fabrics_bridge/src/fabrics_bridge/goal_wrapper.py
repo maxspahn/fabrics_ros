@@ -210,6 +210,24 @@ class FabricsGoalWrapper(object):
         goal = GoalComposition(name="goal", content_dict=goal_dict)
         return goal
     
+    # def compose_goal_rviz(self, msg:PoseStamped):
+    #     goal_position = [msg.pose.position.x, msg.pose.position.y]
+    #     print("goal position: ", goal_position)
+    #     goal_dict = {
+    #         "subgoal0": {
+    #             "weight": rospy.get_param("/weight_goal0"),
+    #             "is_primary_goal": True,
+    #             "indices": [0, 1],
+    #             "parent_link" : 'world',
+    #             "child_link" : 'base_link',
+    #             "desired_position": goal_position,
+    #             "epsilon" : 0.1,
+    #             "type": "staticSubGoal"
+    #         }
+    #     }
+    #     goal = GoalComposition(name="goal", content_dict=goal_dict)
+    #     return goal
+    
     def compose_runtime_arguments(self, goal: GoalComposition, runtime_arguments: dict) -> None:
         for i, sub_goal in enumerate(goal.sub_goals()):
             runtime_arguments[f'x_goal_{i}'] = np.array(sub_goal.position())
