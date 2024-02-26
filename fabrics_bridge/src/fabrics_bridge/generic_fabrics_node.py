@@ -64,6 +64,7 @@ class GenericFabricsNode(ABC):
         self.goal_reached = False
         self.init_runtime_arguments()
         self.compose_runtime_obstacles_argument()
+        print("end init!!")
     
     @abstractmethod
     def init_robot_specifics(self):
@@ -216,11 +217,11 @@ class GenericFabricsNode(ABC):
         )
         # The planner hides all the logic behind the function set_components.
         planner.set_components(
-            collision_links=self.collision_links,
-            self_collision_pairs=self.self_collision_pairs,
-            goal=goal,
-            limits=self.joint_limits,
-            number_obstacles=self.num_sphere_obstacles,
+            # collision_links=self.collision_links,
+            # self_collision_pairs=self.self_collision_pairs,
+            # goal=goal,
+            # limits=self.joint_limits,
+            # number_obstacles=self.num_sphere_obstacles,
             # number_obstacles_cuboid=self.num_box_obstacles,
             # number_plane_constraints=self.num_plane_constraints
         )
@@ -278,7 +279,8 @@ class GenericFabricsNode(ABC):
             xyz_obst = rospy.get_param("/xyz_obstacle")
             obstacle_struct.position.x = xyz_obst[0]
             obstacle_struct.position.y = xyz_obst[1]
-            obstacle_struct.position.z = xyz_obst[2]
+            if self._dim_state > 2:
+                obstacle_struct.position.z = xyz_obst[2]
             obstacles_struct.obstacles = [obstacle_struct]
             self._obstacle_planner_publisher.publish(obstacles_struct)
 
@@ -367,9 +369,9 @@ class GenericFabricsNode(ABC):
         self._goal = self.goal_wrapper.wrap(self._goal_msg)
 
     def compose_runtime_obstacles_argument(self):
-        x_obst_sphere = np.full((self.num_sphere_obstacles, 3), [100.0] * 3)
+        x_obst_sphere = np.full((self.num_sphere_obstacles, 3), [100.0] * 3) #todo
         radius_obst = np.full((self.num_sphere_obstacles, 1), 0.05)
-        x_obsts_cuboid = np.full((self.num_box_obstacles, 3), [100.0] * 3)
+        x_obsts_cuboid = np.full((self.num_box_obstacles, 3), [100.0] * 3) #todo
         size_obsts_cuboid = np.full((self.num_box_obstacles, 3), 0.05)
 
         for i, o in enumerate(self.obstacles):
@@ -432,11 +434,12 @@ class GenericFabricsNode(ABC):
         self.compose_runtime_obstacles_argument()
         self.goal_wrapper.compose_runtime_arguments(self._goal, self._runtime_arguments)
         self.set_joint_states_values()
-        print("self._runtime_arguments, angle_goal1:", self._runtime_arguments['angle_goal_1'])
-        print("self._runtime_arguments, weight_goal1:", self._runtime_arguments['weight_goal_1'])
-        # print("self._runtime_arguments, q:", self._runtime_arguments['q'])
-        # print("self._runtime_arguments, qdot:", self._runtime_arguments['qdot'])  
-        #print("self._runtime_arguments, x_obst:", self._runtime_arguments['x_obst'])
+        print("self.goal: ", self._runtime_arguments['x_goal_0'])
+        # print("self._runtime_arguments, angle_goal1:", self._runtime_arguments['angle_goal_1'])
+        # print("self._runtime_arguments, weight_goal1:", self._runtime_arguments['weight_goal_1'])
+        print("self._runtime_arguments, q:", self._runtime_arguments['q'])
+        print("self._runtime_arguments, qdot:", self._runtime_arguments['qdot'])  
+        print("self._runtime_arguments, x_obst:", self._runtime_arguments['x_obst'])
         if self.goal_reached == False:
             action = self._planner.compute_action(
                 **self._runtime_arguments,

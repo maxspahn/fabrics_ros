@@ -15,16 +15,18 @@ from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
 
 class KinovaFabricsNode(GenericFabricsNode):
     def __init__(self):
+        print("I reached __init__")
         super().__init__('kinova_fabrics_node')
 
     def init_robot_specifics(self):
+        print("Init_robot_specifics")
         self.dof = rospy.get_param("/degrees_of_freedom")
-        self.joint_names = [f'pointrobot_joint{i+1}' for i in range(self.dof)]
+        self.joint_names = [f'kinova_joint{i+1}' for i in range(self.dof)]
         self._action = np.zeros(self.dof)
         rospack = rospkg.RosPack()
-        self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/pointrobot/"
+        self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/kinova/"
         absolute_path = os.path.dirname(os.path.abspath(__file__))
-        with open("/home/saray/dingo_ws/src/fabrics_ros/fabrics_bridge/config/pointRobot.urdf", "r", encoding="utf-8") as file:
+        with open("/home/saray/dingo_ws/src/fabrics_ros/fabrics_bridge/config/dingo_kinova.urdf", "r", encoding="utf-8") as file:
             self.urdf = file.read()
         self._forward_kinematics = GenericURDFFk(
             self.urdf,
@@ -40,9 +42,10 @@ class KinovaFabricsNode(GenericFabricsNode):
                 rospy.get_param("/joint_limits"),
             )
         self.obstacle1_msg = None
+        print("end init robot specifics")
 
     def init_publishers(self):
-        self._pointrobot_command_publisher = rospy.Publisher(
+        self._kinova_command_publisher = rospy.Publisher(
             '/cmd_vel',
             Twist, 
             queue_size=10
@@ -64,6 +67,14 @@ class KinovaFabricsNode(GenericFabricsNode):
             tcp_nodelay=True,
         )
 
+    def init_obstacle_subscriber(self):
+        self.obstacle_subscriber = rospy.Subscriber('vicon/obstacle1', PoseWithCovarianceStamped, self.cb_obstacle1, tcp_nodelay=True)
+
+    def cb_obstacle1(self, msg):
+        # This function is called whenever a message is received on the subscribed topic
+        self.obstacle1_msg = msg
+        self.obstacle1_received == True
+
     def set_joint_states_values(self):
         self._runtime_arguments['q'] = self._q
         self._runtime_arguments['qdot'] = self._qdot
@@ -78,13 +89,13 @@ class KinovaFabricsNode(GenericFabricsNode):
             rospy.logwarn(f"Action not a number {self._action}")
             self._action = np.zeros((rospy.get_param("/degrees_of_freedom"), 1))
             action_msg = Float64MultiArray(data=self._action)
-            self._pointrobot_command_publisher.publish(action_msg)
+            self._kinova_command_publisher.publish(action_msg)
             return
         action_msg = Float64MultiArray(data=self._action)
         desired_vel.linear.x = self._action[0]
         desired_vel.linear.y = self._action[1]
 
-        self._pointrobot_command_publisher.publish(desired_vel)
+        self._kinova_command_publisher.publish(desired_vel)
 
 if __name__ == "__main__":
     node = KinovaFabricsNode()

@@ -13,6 +13,7 @@ weight_goal0: 0.5
 radius_obst: 0.2
 obstacle_type: "sphere"
 radius_body_base_link: 0.4
+xyz_obstacle: [10., 10.]
 goal_indices: 
   - 0
   - 1
