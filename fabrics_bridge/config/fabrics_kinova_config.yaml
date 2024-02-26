@@ -20,11 +20,11 @@ goal_indices:
   - 2
 root_link: "arm_base_link"
 urdf_source: "/robot_description"
-end_effector_link: 'arm_end_effector_link'
+end_effector_link: 'arm_dummy_link'
 orientation_helper_link: "world"
 end_links: 
-  - "arm_end_effector_link"
-num_sphere_obs : 0
+  - "arm_dummy_link" # "arm_end_effector_link"
+num_sphere_obs : 1
 num_box_obs : 0
 num_plane_constraints: 0
 angular_goal_tolerance: 0.1

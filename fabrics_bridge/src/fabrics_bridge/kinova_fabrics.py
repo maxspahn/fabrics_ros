@@ -21,6 +21,7 @@ class KinovaFabricsNode(GenericFabricsNode):
     def init_robot_specifics(self):
         print("Init_robot_specifics")
         self.dof = rospy.get_param("/degrees_of_freedom")
+        print("self.dof:", self.dof)
         self.joint_names = [f'kinova_joint{i+1}' for i in range(self.dof)]
         self._action = np.zeros(self.dof)
         rospack = rospkg.RosPack()
@@ -61,7 +62,7 @@ class KinovaFabricsNode(GenericFabricsNode):
         self._q = np.zeros(self.dof)
         self._qdot = np.zeros(self.dof)
         self.joint_state_subscriber = rospy.Subscriber(
-            "/joint_states_filtered",
+            "/joint_states",
             JointState,
             self.joint_states_callback,
             tcp_nodelay=True,
@@ -80,8 +81,10 @@ class KinovaFabricsNode(GenericFabricsNode):
         self._runtime_arguments['qdot'] = self._qdot
 
     def joint_states_callback(self, msg: JointState):
+        print("msg:", msg)
         self._q = np.array(msg.position[0:self.dof])
         self._qdot = np.array(msg.velocity[0:self.dof])
+        print("self._q: ", self._q)
 
     def publish_action(self):
         desired_vel= Twist()
