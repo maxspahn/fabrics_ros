@@ -7,9 +7,7 @@ from std_msgs.msg import Float64MultiArray
 from sensor_msgs.msg import JointState
 from geometry_msgs.msg import Twist, PoseWithCovarianceStamped
 from fabrics_msgs.msg import FabricsObstacleArray, FabricsObstacle
-
 from urdf_parser_py.urdf import URDF
-
 from fabrics_bridge.generic_fabrics_node import GenericFabricsNode
 from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
 
@@ -17,7 +15,7 @@ class KinovaFabricsNode(GenericFabricsNode):
     def __init__(self):
         print("I reached __init__")
         super().__init__('kinova_fabrics_node')
-
+        
     def init_robot_specifics(self):
         print("Init_robot_specifics")
         self.dof = rospy.get_param("/degrees_of_freedom")
@@ -27,7 +25,7 @@ class KinovaFabricsNode(GenericFabricsNode):
         rospack = rospkg.RosPack()
         self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/kinova/"
         absolute_path = os.path.dirname(os.path.abspath(__file__))
-        with open("/home/saray/dingo_ws/src/fabrics_ros/fabrics_bridge/config/dingo_kinova.urdf", "r", encoding="utf-8") as file:
+        with open(rospack.get_path("fabrics_bridge")+"/config/dingo_kinova.urdf", "r", encoding="utf-8") as file:
             self.urdf = file.read()
         self._forward_kinematics = GenericURDFFk(
             self.urdf,
@@ -99,6 +97,8 @@ class KinovaFabricsNode(GenericFabricsNode):
         desired_vel.linear.y = self._action[1]
 
         self._kinova_command_publisher.publish(desired_vel)
+        
+
 
 if __name__ == "__main__":
     node = KinovaFabricsNode()

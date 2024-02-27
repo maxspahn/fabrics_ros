@@ -18,13 +18,14 @@ class PointrobotFabricsNode(GenericFabricsNode):
         super().__init__('pointrobot_fabrics_node')
 
     def init_robot_specifics(self):
+        print("start init_robot_specifics")
         self.dof = rospy.get_param("/degrees_of_freedom")
         self.joint_names = [f'pointrobot_joint{i+1}' for i in range(self.dof)]
         self._action = np.zeros(self.dof)
         rospack = rospkg.RosPack()
         self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/pointrobot/"
         absolute_path = os.path.dirname(os.path.abspath(__file__))
-        with open("/home/saray/dingo_ws/src/fabrics_ros/fabrics_bridge/config/pointRobot.urdf", "r", encoding="utf-8") as file:
+        with open(rospack.get_path("fabrics_bridge")+ "/config/pointRobot.urdf", "r", encoding="utf-8") as file:
             self.urdf = file.read()
         self._forward_kinematics = GenericURDFFk(
             self.urdf,
@@ -40,6 +41,7 @@ class PointrobotFabricsNode(GenericFabricsNode):
                 rospy.get_param("/joint_limits"),
             )
         self.obstacle1_msg = None
+        print("end init_robot_specifics")
 
     def init_publishers(self):
         self._pointrobot_command_publisher = rospy.Publisher(

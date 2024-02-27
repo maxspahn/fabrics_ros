@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+import rospy
+
+from fabrics_bridge.kinova_kortex import KinovaKortexNode
+
+if __name__ == "__main__":
+    node = KinovaKortexNode()
+    try:
+        node.main()
+    except rospy.ROSInterruptException:
+        pass
+
