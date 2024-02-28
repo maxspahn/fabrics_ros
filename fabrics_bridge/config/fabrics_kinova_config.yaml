@@ -1,5 +1,5 @@
 positional_goal_tolerance : 0.20
-robot_type: "kinova"
+robot_type: "my_gen3"
 planner_type: "holonomic"
 degrees_of_freedom: 6
 dim_state: 3
