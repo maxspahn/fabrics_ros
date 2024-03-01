@@ -39,7 +39,7 @@ class KinovaKortexNode:
             self.all_notifs_succeeded = True
 
             # Get node params
-            self.robot_name = "my_gen3" #rospy.get_param('~robot_name', "my_gen3")
+            self.robot_name = "arm" #rospy.get_param('~robot_name', "my_gen3")
             print("after self._robot_name")
             rospy.loginfo("Using robot_name " + self.robot_name)
 
@@ -212,7 +212,7 @@ class KinovaKortexNode:
             for i in range(self.dof):
                 joint_angle = JointAngle()
                 joint_angle.joint_identifier = i
-                joint_angle.value = 90.0 #IN DEGREES!!!
+                joint_angle.value = 10.0 #IN DEGREES!!!
                 joint_angles.append(joint_angle)
             my_constrained_joint_angles.joint_angles.joint_angles = joint_angles
             req.input.oneof_action_parameters.reach_joint_angles.append(my_constrained_joint_angles)
