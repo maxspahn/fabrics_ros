@@ -45,8 +45,8 @@ class KinovaFabricsNode(GenericFabricsNode):
 
     def init_publishers(self):
         self._kinova_command_publisher = rospy.Publisher(
-            '/cmd_vel',
-            Twist, 
+            '/command_fabrics',
+            Float64MultiArray, 
             queue_size=10
         )
 
@@ -93,10 +93,10 @@ class KinovaFabricsNode(GenericFabricsNode):
             self._kinova_command_publisher.publish(action_msg)
             return
         action_msg = Float64MultiArray(data=self._action)
-        desired_vel.linear.x = self._action[0]
-        desired_vel.linear.y = self._action[1]
+        # desired_vel.linear.x = self._action[0]
+        # desired_vel.linear.y = self._action[1]
 
-        self._kinova_command_publisher.publish(desired_vel)
+        self._kinova_command_publisher.publish(action_msg)
         
 
 

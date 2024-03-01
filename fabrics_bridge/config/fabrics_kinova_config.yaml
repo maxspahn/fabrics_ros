@@ -49,3 +49,4 @@ velocity_limits:
         - -0.3
         - -0.3
 joint_limits: [[-5, 5], [-5, 5]]
+dt: 0.01

@@ -155,69 +155,101 @@ class KinovaKortexNode:
         return True
 
     def main(self):
-        print("in Main loop of kinova kortex")
-        # For testing purposes
+        ### initializations (not looped):
         success = self.is_init_success
+        print("in Main loop of kinova kortex")
+        
         try:
             rospy.delete_param("/kortex_examples_test_results/cartesian_poses_with_notifications_python")
         except:
             pass
-        print("after delete all params")
-
-        if success:
-            print("before clear faults!!")
         
         
-            # #*******************************************************************************
-            # # Make sure to clear the robot's faults else it won't move if it's already in fault
-            success &= self.example_clear_faults()
-            # #*******************************************************************************
+        # #*******************************************************************************
+        # # Make sure to clear the robot's faults else it won't move if it's already in fault
+        # success &= self.example_clear_faults()
+        # #*******************************************************************************
                 
-            # #*******************************************************************************
-            # # Start the example from the Home position
-            # # success &= self.example_home_the_robot()
-            # #*******************************************************************************
+        # #*******************************************************************************
+        # # Start the example from the Home position
+        # # success &= self.example_home_the_robot()
+        # #*******************************************************************************
 
-            # #*******************************************************************************
-            # # Set the reference frame to "Mixed"
-            success &= self.example_set_cartesian_reference_frame()
+        # #*******************************************************************************
+        # # Set the reference frame to "Mixed"
+        # success &= self.example_set_cartesian_reference_frame()
 
-            # #*******************************************************************************
-            # # Subscribe to ActionNotification's from the robot to know when a cartesian pose is finished
-            success &= self.example_subscribe_to_a_robot_notification()
+        # #*******************************************************************************
+        # # Subscribe to ActionNotification's from the robot to know when a cartesian pose is finished
+        # success &= self.example_subscribe_to_a_robot_notification()
         
-            # #*******************************************************************************
-            req = ExecuteActionRequest()
+        # #*******************************************************************************
+        req = ExecuteActionRequest()
                 
-            # Prepare and send cartesian pose ###
-            my_cartesian_speed = CartesianSpeed()
-            my_cartesian_speed.translation = 0.1 # m/s
-            my_cartesian_speed.orientation = 15  # deg/s
+        # Prepare and send cartesian pose ###
+        my_cartesian_speed = CartesianSpeed()
+        my_cartesian_speed.translation = 0.1 # m/s
+        my_cartesian_speed.orientation = 15  # deg/s
 
-            my_constrained_pose = ConstrainedPose()
-            my_constrained_pose.constraint.oneof_type.speed.append(my_cartesian_speed)
+        my_constrained_pose = ConstrainedPose()
+        my_constrained_pose.constraint.oneof_type.speed.append(my_cartesian_speed)
 
-            my_constrained_pose.target_pose.x = 0.374
-            my_constrained_pose.target_pose.y = 0.081
-            my_constrained_pose.target_pose.z = 0.650
-            my_constrained_pose.target_pose.theta_x = -57.6
-            my_constrained_pose.target_pose.theta_y = 91.1
-            my_constrained_pose.target_pose.theta_z = 2.3
-            req.input.oneof_action_parameters.reach_pose.append(my_constrained_pose)
+        my_constrained_pose.target_pose.x = 0.374
+        my_constrained_pose.target_pose.y = 0.081
+        my_constrained_pose.target_pose.z = 0.650
+        my_constrained_pose.target_pose.theta_x = -57.6
+        my_constrained_pose.target_pose.theta_y = 91.1
+        my_constrained_pose.target_pose.theta_z = 2.3
+        req.input.oneof_action_parameters.reach_pose.append(my_constrained_pose)
         
-            # prepare joint space goal
-            my_constrained_joint_angles = ConstrainedJointAngles()
-            print("my_constrainted_joint_angles!!: ", my_constrained_joint_angles)
-            joint_angles = []
-            for i in range(self.dof):
-                joint_angle = JointAngle()
-                joint_angle.joint_identifier = i
-                joint_angle.value = 90.0 #IN DEGREES!!!
-                joint_angles.append(joint_angle)
-            my_constrained_joint_angles.joint_angles.joint_angles = joint_angles
-            req.input.oneof_action_parameters.reach_joint_angles.append(my_constrained_joint_angles)
+        while not rospy.is_shutdown():
+            t0 = time.perf_counter()
+
+            if success == 1 or success == 0:
                 
-            """
+                # Make sure to clear the robot's faults else it won't move if it's already in fault
+                #success &= self.example_clear_faults()
+                
+                        #*******************************************************************************
+                # Make sure to clear the robot's faults else it won't move if it's already in fault
+                # success &= self.example_clear_faults()
+                # #*******************************************************************************
+                        
+                # #*******************************************************************************
+                # # Start the example from the Home position
+                # # success &= self.example_home_the_robot()
+                # #*******************************************************************************
+
+                # #*******************************************************************************
+                # # Set the reference frame to "Mixed"
+                # success &= self.example_set_cartesian_reference_frame()
+
+                # # #*******************************************************************************
+                # # # Subscribe to ActionNotification's from the robot to know when a cartesian pose is finished
+                # success &= self.example_subscribe_to_a_robot_notification()
+                
+                #*******************************************************************************
+                
+                # prepare joint space goal
+                my_constrained_joint_angles = ConstrainedJointAngles()
+                # print("my_constrainted_joint_angles!!: ", my_constrained_joint_angles)
+                joint_angles = []
+                for i in range(self.dof): 
+                    joint_angle = JointAngle()
+                    print("joint_angle:", joint_angle)
+                    joint_angle.joint_identifier = i
+                    if self.fabrics_joints is None:
+                        joint_angle.value = 0.
+                    else:
+                        # print("self.fabrics_joints: ", self.fabrics_joints)
+                        joint_angle.value = 90. #self.fabrics_joints[i]*100000 #IN DEGREES!!!
+                    joint_angles.append(joint_angle)
+                print("joint_angles: ", joint_angles)
+                my_constrained_joint_angles.joint_angles.joint_angles = joint_angles
+                req.input.oneof_action_parameters.reach_joint_angles.append(my_constrained_joint_angles)
+                # print("i AM AFTER JOINT ANGLES INPUT!!!")
+                
+                """
                 #prepare joint velocity goal: this doesn't work, not supported!!!
                 # Create a Base_JointSpeeds object
                 joint_speeds_struct = Base_JointSpeeds()
@@ -232,38 +264,38 @@ class KinovaKortexNode:
                 joint_speeds_struct.joint_speeds = joint_speeds
                 # print("joint_speeds_struct: ", joint_speeds_struct)
                 #req.input.oneof_action_parameters.send_joint_speeds = [joint_speeds_struct]
-            """
+                """
                 
-            # give goal to req
-            req.input.name = "pose1"
-            req.input.handle.action_type = ActionType.REACH_JOINT_ANGLES #JOINT_ANGLES #REACH_POSE #SEND_JOINT_SPEEDS #REACH_JOINT_ANGLES 
-            req.input.handle.identifier = 1001
+                # give goal to req
+                req.input.name = "pose1"
+                req.input.handle.action_type = ActionType.REACH_JOINT_ANGLES #JOINT_ANGLES #REACH_POSE #SEND_JOINT_SPEEDS #REACH_JOINT_ANGLES 
+                req.input.handle.identifier = 1001
 
-            rospy.loginfo("Sending pose 1...")
-            self.last_action_notif_type = None
-            try:
-                print("I am at execute action")
+                rospy.loginfo("Sending pose 1...")
+                self.last_action_notif_type = None
+                try:
+                    print("I am at execute action")
+                    # print("req: ", req)
+                    self.execute_action(req)
+                except rospy.ServiceException:
+                    rospy.logerr("Failed to send pose 1")
+                    success = False
+                else:
+                    print("in else statement waiting")
+                    rospy.loginfo("Waiting for pose 1 to finish...")
                 # print("req: ", req)
-                self.execute_action(req)
-            except rospy.ServiceException:
-                rospy.logerr("Failed to send pose 1")
-                success = False
-            else:
-                print("in else statement waiting")
-                rospy.loginfo("Waiting for pose 1 to finish...")
-                # print("req: ", req)
-            self.wait_for_action_end_or_abort()
+                # self.wait_for_action_end_or_abort()
 
-            success &= self.all_notifs_succeeded
+                # success &= self.all_notifs_succeeded
 
-            success &= self.all_notifs_succeeded
-            success &= self.all_notifs_succeeded
+                # success &= self.all_notifs_succeeded
 
-        # For testing purposes
-        rospy.set_param("/kortex_examples_test_results/cartesian_poses_with_notifications_python", success)
+            # For testing purposes
+            print("Kinova kortex executed successfully!!")
+            #rospy.set_param("/kortex_examples_test_results/cartesian_poses_with_notifications_python", success)
 
-        if not success:
-            rospy.logerr("The example encountered an error.")
+            # if not success:
+            #     rospy.logerr("The example encountered an error.")
 
 if __name__ == "__main__":
     ex = KinovaKortexNode()
