@@ -115,14 +115,13 @@ class KinovaFabricsNode(GenericFabricsNode):
         for i in range(6):
             joint_speed = JointSpeed()
             joint_speed.joint_identifier = i
-            if joint_speed.joint_identifier == 0:
-                joint_speed.value = 0.01
-            else:
-                joint_speed.value = 0.0
+            # if joint_speed.joint_identifier == 0:
+            #     joint_speed.value = 0.01
+            # else:
+            joint_speed.value = self._action[i]
             joint_speed.duration = 1
             joint_speeds.append(joint_speed)
         joint_speeds_struct.joint_speeds = joint_speeds
-        print("joint_speeds_struct!!!!!!: ", joint_speeds_struct)
         # Publish the message
         self.pub_kinova.publish(joint_speeds_struct)
         
