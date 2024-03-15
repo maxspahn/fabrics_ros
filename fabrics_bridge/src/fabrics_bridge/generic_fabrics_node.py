@@ -445,7 +445,7 @@ class GenericFabricsNode(ABC):
             )
         else:
             action = np.zeros_like(self._action)
-        # print("action:", action)
+        #print("action:", action)
         return action
 
     @abstractmethod

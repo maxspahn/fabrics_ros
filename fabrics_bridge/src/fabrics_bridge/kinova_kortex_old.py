@@ -11,6 +11,7 @@
 #
 ###
 
+
 import sys
 import rospy
 import time
@@ -19,17 +20,15 @@ from kortex_driver.srv import *
 from kortex_driver.msg import *
 from geometry_msgs.msg import Twist
 from std_msgs.msg import Float64MultiArray
-from sensor_msgs.msg import JointState
 
 class KinovaKortexNode:
     def __init__(self):
-        rospy.init_node('kinova_kortex_node')
-        self._frequency = 100
-        self.rate = rospy.Rate(self._frequency)
         try:
+            rospy.init_node('kinova_kortex_node')
             print("I am at init kinova kortex node")
+
             self.HOME_ACTION_IDENTIFIER = 2
-            self.dof = rospy.get_param("degrees_of_freedom")
+            self.dof = rospy.get_param("/degrees_of_freedom")
             self._q = np.zeros((self.dof, 1))
             self.fabrics_vel = np.zeros((self.dof, 1))
             self.fabrics_joints = None
@@ -39,19 +38,18 @@ class KinovaKortexNode:
             self.all_notifs_succeeded = True
 
             # Get node params
-            self.robot_name = "arm" #rospy.get_param('~robot_name', "my_gen3")
+            self.robot_name = "my_gen3" #rospy.get_param('~robot_name', "my_gen3")
             print("after self._robot_name")
             rospy.loginfo("Using robot_name " + self.robot_name)
 
             # Init the action topic subscriber
             self.action_topic_sub = rospy.Subscriber("/" + self.robot_name + "/action_topic", ActionNotification, self.cb_action_topic)
             self.joint_state_sub = rospy.Subscriber("/" + self.robot_name + "/joint_states", JointState, self.cb_joint_state)
-            print("reached after joint state sub!!!")
             self.last_action_notif_type = None
 
             # Init the subscriber to fabrics: 
             self.fabrics_sub = rospy.Subscriber('/command_fabrics', Float64MultiArray,  self.cb_fabrics_vel)
-            print("reached after fabrics_sub!!!")
+            
             
             # Init the services
             clear_faults_full_name = '/' + self.robot_name + '/base/clear_faults'
@@ -60,9 +58,8 @@ class KinovaKortexNode:
 
             read_action_full_name = '/' + self.robot_name + '/base/read_action'
             rospy.wait_for_service(read_action_full_name)
-            print("reached read action_full_name:", read_action_full_name)
             self.read_action = rospy.ServiceProxy(read_action_full_name, ReadAction)
-            print("reached after read action")
+
             execute_action_full_name = '/' + self.robot_name + '/base/execute_action'
             rospy.wait_for_service(execute_action_full_name)
             self.execute_action = rospy.ServiceProxy(execute_action_full_name, ExecuteAction)
@@ -76,11 +73,10 @@ class KinovaKortexNode:
             self.activate_publishing_of_action_notification = rospy.ServiceProxy(activate_publishing_of_action_notification_full_name, OnNotificationActionTopic)
             print("end of _init_   in kinova_kortex_node")
         except:
-            print("in except init")
             self.is_init_success = False
         else:
-            print("In else init")
             self.is_init_success = True
+
     def cb_action_topic(self, notif):
         self.last_action_notif_type = notif.action_event
         
@@ -95,7 +91,7 @@ class KinovaKortexNode:
     def integrate_vel_to_pos(self):
         delta_joint_position = self.fabrics_vel*rospy.get_param("/dt")*180/np.pi
         self.fabrics_joints = self._q +delta_joint_position
-        print("self.fabrics_joints: ", self.fabrics_joints)
+        # print("self.fabrics_joints: ", self.fabrics_joints)
 
     def wait_for_action_end_or_abort(self):
         while not rospy.is_shutdown():
@@ -119,6 +115,30 @@ class KinovaKortexNode:
             rospy.loginfo("Cleared the faults successfully")
             rospy.sleep(2.5)
             return True
+
+    def example_home_the_robot(self):
+        # The Home Action is used to home the robot. It cannot be deleted and is always ID #2:
+        req = ReadActionRequest()
+        req.input.identifier = self.HOME_ACTION_IDENTIFIER
+        self.last_action_notif_type = None
+        try:
+            res = self.read_action(req)
+        except rospy.ServiceException:
+            rospy.logerr("Failed to call ReadAction")
+            return False
+        # Execute the HOME action if we could read it
+        else:
+            # What we just read is the input of the ExecuteAction service
+            req = ExecuteActionRequest()
+            req.input = res.output
+            rospy.loginfo("Sending the robot home...")
+            try:
+                self.execute_action(req)
+            except rospy.ServiceException:
+                rospy.logerr("Failed to call ExecuteAction")
+                return False
+            else:
+                return self.wait_for_action_end_or_abort()
 
     def example_set_cartesian_reference_frame(self):
         # Prepare the request with the frame we want to set
@@ -166,29 +186,28 @@ class KinovaKortexNode:
 
         if success:
             print("before clear faults!!")
-        
-        
-            # #*******************************************************************************
-            # # Make sure to clear the robot's faults else it won't move if it's already in fault
+            #*******************************************************************************
+            # Make sure to clear the robot's faults else it won't move if it's already in fault
             success &= self.example_clear_faults()
-            # #*******************************************************************************
-                
-            # #*******************************************************************************
-            # # Start the example from the Home position
-            # # success &= self.example_home_the_robot()
-            # #*******************************************************************************
+            #*******************************************************************************
+            
+            #*******************************************************************************
+            # Start the example from the Home position
+            # success &= self.example_home_the_robot()
+            #*******************************************************************************
 
-            # #*******************************************************************************
-            # # Set the reference frame to "Mixed"
+            #*******************************************************************************
+            # Set the reference frame to "Mixed"
             success &= self.example_set_cartesian_reference_frame()
 
-            # #*******************************************************************************
-            # # Subscribe to ActionNotification's from the robot to know when a cartesian pose is finished
+            #*******************************************************************************
+            # Subscribe to ActionNotification's from the robot to know when a cartesian pose is finished
             success &= self.example_subscribe_to_a_robot_notification()
-        
-            # #*******************************************************************************
+
+            #*******************************************************************************
+            print("before req!!")
             req = ExecuteActionRequest()
-                
+            
             # Prepare and send cartesian pose ###
             my_cartesian_speed = CartesianSpeed()
             my_cartesian_speed.translation = 0.1 # m/s
@@ -204,7 +223,7 @@ class KinovaKortexNode:
             my_constrained_pose.target_pose.theta_y = 91.1
             my_constrained_pose.target_pose.theta_z = 2.3
             req.input.oneof_action_parameters.reach_pose.append(my_constrained_pose)
-        
+            
             # prepare joint space goal
             my_constrained_joint_angles = ConstrainedJointAngles()
             print("my_constrainted_joint_angles!!: ", my_constrained_joint_angles)
@@ -212,28 +231,38 @@ class KinovaKortexNode:
             for i in range(self.dof):
                 joint_angle = JointAngle()
                 joint_angle.joint_identifier = i
-                joint_angle.value = 0.0 #IN DEGREES!!!
+                joint_angle.value = 10.0 #IN DEGREES!!!
                 joint_angles.append(joint_angle)
             my_constrained_joint_angles.joint_angles.joint_angles = joint_angles
             req.input.oneof_action_parameters.reach_joint_angles.append(my_constrained_joint_angles)
-                
-            """
-                #prepare joint velocity goal: this doesn't work, not supported!!!
-                # Create a Base_JointSpeeds object
-                joint_speeds_struct = Base_JointSpeeds()
-                # Add speeds for each joint
-                joint_speeds = []
-                for i in range(self.dof):
-                    joint_speed = JointSpeed()
-                    joint_speed.joint_identifier = i
-                    joint_speed.value = 0.0
-                    joint_speed.duration = 1
-                    joint_speeds.append(joint_speed)
-                joint_speeds_struct.joint_speeds = joint_speeds
-                # print("joint_speeds_struct: ", joint_speeds_struct)
-                #req.input.oneof_action_parameters.send_joint_speeds = [joint_speeds_struct]
-            """
-                
+            
+            #prepare joint velocity goal: this doesn't work, not supported!!!
+            # Create a Base_JointSpeeds object
+            joint_speeds_struct = Base_JointSpeeds()
+            print("joint_speeds_struct!!!!!!: ", joint_speeds_struct)
+            # Add speeds for each joint
+            joint_speeds = []
+            for i in range(self.dof):
+                joint_speed = JointSpeed()
+                joint_speed.joint_identifier = i
+                joint_speed.value = 1.0  
+                joint_speed.duration = 1
+                joint_speeds.append(joint_speed)
+            joint_speeds_struct.joint_speeds = joint_speeds
+            print("joint_speeds_struct: ", joint_speeds_struct)
+            #req.input.oneof_action_parameters.send_joint_speeds = [joint_speeds_struct]
+            
+            # my_joint_speeds = Base_JointSpeeds
+            # print("my_joint_speeds: ", my_joint_speeds)
+            # joint_speeds = []
+            # for i in range(7):
+            #     joint_speed = JointSpeed()
+            #     joint_speed.joint_identifier = i
+            #     joint_speed.value = 0.1  # Replace with your actual speed
+            #     joint_speeds.append(joint_speed)
+            # my_joint_speeds.JointSpeed = joint_speeds
+            # req.input.oneof_action_parameters.send_joint_speeds.append(my_joint_speeds)
+            
             # give goal to req
             req.input.name = "pose1"
             req.input.handle.action_type = ActionType.REACH_JOINT_ANGLES #JOINT_ANGLES #REACH_POSE #SEND_JOINT_SPEEDS #REACH_JOINT_ANGLES 
@@ -242,21 +271,58 @@ class KinovaKortexNode:
             rospy.loginfo("Sending pose 1...")
             self.last_action_notif_type = None
             try:
-                print("I am at execute action")
-                # print("req: ", req)
                 self.execute_action(req)
             except rospy.ServiceException:
                 rospy.logerr("Failed to send pose 1")
                 success = False
             else:
-                print("in else statement waiting")
                 rospy.loginfo("Waiting for pose 1 to finish...")
-                # print("req: ", req)
+            print("req: ", req)
             self.wait_for_action_end_or_abort()
 
-            success &= self.all_notifs_succeeded
+            # # Prepare and send pose 2
+            # req.input.handle.identifier = 1002
+            # req.input.name = "pose2"
+
+            # my_constrained_pose.target_pose.z = 0.3
+
+            # req.input.oneof_action_parameters.reach_pose[0] = my_constrained_pose
+
+            # rospy.loginfo("Sending pose 2...")
+            # self.last_action_notif_type = None
+            # print("req: ", req)
+            # try:
+            #     self.execute_action(req)
+            # except rospy.ServiceException:
+            #     rospy.logerr("Failed to send pose 2")
+            #     success = False
+            # else:
+            #     rospy.loginfo("Waiting for pose 2 to finish...")
+
+            # self.wait_for_action_end_or_abort()
+
+            # # Prepare and send pose 3
+            # req.input.handle.identifier = 1003
+            # req.input.name = "pose3"
+
+            # my_constrained_pose.target_pose.x = 0.45
+
+            # req.input.oneof_action_parameters.reach_pose[0] = my_constrained_pose
+
+            # rospy.loginfo("Sending pose 3...")
+            # self.last_action_notif_type = None
+            # try:
+            #     self.execute_action(req)
+            # except rospy.ServiceException:
+            #     rospy.logerr("Failed to send pose 3")
+            #     success = False
+            # else:
+            #     rospy.loginfo("Waiting for pose 3 to finish...")
+
+            # self.wait_for_action_end_or_abort()
 
             success &= self.all_notifs_succeeded
+
             success &= self.all_notifs_succeeded
 
         # For testing purposes
