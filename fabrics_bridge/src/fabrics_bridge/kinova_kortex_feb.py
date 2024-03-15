@@ -72,7 +72,7 @@ class KinovaKortexNode:
 
             set_cartesian_reference_frame_full_name = '/' + self.robot_name + '/control_config/set_cartesian_reference_frame'
             rospy.wait_for_service(set_cartesian_reference_frame_full_name)
-            self.set_cartesian_reference_frame = rospy.ServiceProxy(set_cartesian_reference_frame_full_name, SetCartesianReferenceFrame)
+            self.set_cartesian_reference_frame = rospy.ServiceProxy(set_cartesian_reference_frame_full_name, SetCartesianReferrenceFrame)
 
             activate_publishing_of_action_notification_full_name = '/' + self.robot_name + '/base/activate_publishing_of_action_topic'
             rospy.wait_for_service(activate_publishing_of_action_notification_full_name)
@@ -98,11 +98,13 @@ class KinovaKortexNode:
         self.integrate_vel_to_pos()
     
     def integrate_vel_to_pos(self):
-        delta_joint_position = self.fabrics_vel*rospy.get_param("/dt")*180/np.pi
-        self.fabrics_joints = self._q +delta_joint_position
+        if self.fabrics_vel is not None and self._q is not None:
+            delta_joint_position = self.fabrics_vel*rospy.get_param("/dt")*180/np.pi
+            self.fabrics_joints = self._q +delta_joint_position
         
     def cb_joint_state(self, msg):
-        self._q = np.array(msg.position)
+        self._q = np.array(msg.position)*180/np.pi
+        # print("self._q: ", self._q)
 
     def wait_for_action_end_or_abort(self):
         while not rospy.is_shutdown():
@@ -220,7 +222,7 @@ class KinovaKortexNode:
 
                 #*******************************************************************************
                 req = ExecuteActionRequest()
-                
+                print("reached after req")
                 # prepare joint space goal
                 my_constrained_joint_angles = ConstrainedJointAngles()
                 joint_angles = []
@@ -229,12 +231,12 @@ class KinovaKortexNode:
                     joint_angle.joint_identifier = i
                     if self.fabrics_joints is not None:
                         joint_angle.value = self.fabrics_joints[i] #IN DEGREES!!!
+                        # print("self.joints:", self._q)
+                        # print("self.fabrics_joints:", self.fabrics_joints)
                     elif self._q is not None:
-                        joint_angle.value = self._q[i]
+                        joint_angle.value = 50. #self._q[i]
                     else:
-                        joint_angle.value = 0.
-                    print("self.joints:", self._q)
-                    print("self.fabrics_joints:", self.fabrics_joints)
+                        joint_angle.value = 50.
                     joint_angles.append(joint_angle)
                 my_constrained_joint_angles.joint_angles.joint_angles = joint_angles
                 req.input.oneof_action_parameters.reach_joint_angles.append(my_constrained_joint_angles)

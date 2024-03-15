@@ -18,12 +18,12 @@ goal_indices:
   - 0
   - 1
   - 2
-root_link: "arm_base_link"
+root_link: "base_link"
 urdf_source: "/robot_description"
-end_effector_link: 'arm_dummy_link'
+end_effector_link: 'end_effector_link'
 orientation_helper_link: "world"
 end_links: 
-  - "arm_dummy_link" # "arm_end_effector_link"
+  - "end_effector_link" # "arm_end_effector_link"
 num_sphere_obs : 1
 num_box_obs : 0
 num_plane_constraints: 0
@@ -31,22 +31,22 @@ angular_goal_tolerance: 0.1
 collision_bodies:
   radius_body_base_link: 0.4
 collision_links: 
-  - "base_link"
+  - "end_effector_link"
 velocity_scaling: 1.0
 velocity_limits:
   upper:
         - 0.3
-        - 0.3
-        - 0.3
-        - 0.3
-        - 0.3
-        - 0.3
+        - 0.30
+        - 0.30
+        - 0.30
+        - 0.30
+        - 0.30
   lower:
-        - -0.3
-        - -0.3
-        - -0.3
-        - -0.3
-        - -0.3
-        - -0.3
+        - -0.30
+        - -0.30
+        - -0.30
+        - -0.30
+        - -0.30
+        - -0.30
 joint_limits: [[-5, 5], [-5, 5]]
 dt: 0.01

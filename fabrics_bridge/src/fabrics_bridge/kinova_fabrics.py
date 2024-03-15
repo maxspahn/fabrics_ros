@@ -10,6 +10,10 @@ from fabrics_msgs.msg import FabricsObstacleArray, FabricsObstacle
 from urdf_parser_py.urdf import URDF
 from fabrics_bridge.generic_fabrics_node import GenericFabricsNode
 from forwardkinematics.urdfFks.generic_urdf_fk import GenericURDFFk
+from robotmodels.utils.robotmodel import RobotModel
+from sensor_msgs.msg import JointState
+from kortex_driver.msg import *
+from std_msgs.msg import Header
 
 class KinovaFabricsNode(GenericFabricsNode):
     def __init__(self):
@@ -24,9 +28,13 @@ class KinovaFabricsNode(GenericFabricsNode):
         self._action = np.zeros(self.dof)
         rospack = rospkg.RosPack()
         self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/kinova/"
-        absolute_path = os.path.dirname(os.path.abspath(__file__))
-        with open(rospack.get_path("fabrics_bridge")+"/config/dingo_kinova.urdf", "r", encoding="utf-8") as file:
+        # absolute_path = os.path.dirname(os.path.abspath(__file__))
+        robot_model = RobotModel('kinova', model_name='gen3_6dof')
+        urdf_file = robot_model.get_urdf_path()
+        with open(urdf_file, "r", encoding="utf-8") as file:
             self.urdf = file.read()
+        # with open(rospack.get_path("fabrics_bridge")+"/config/dingo_kinova.urdf", "r", encoding="utf-8") as file:
+        #     self.urdf = file.read()
         self._forward_kinematics = GenericURDFFk(
             self.urdf,
             rootLink=rospy.get_param("/root_link"),
@@ -55,12 +63,17 @@ class KinovaFabricsNode(GenericFabricsNode):
             FabricsObstacleArray, 
             queue_size=10
         )
+        
+        # self.pub_kinova = rospy.Publisher('/my_gen3/joint_angles', JointAngles, queue_size=10)
+        
+        # Create a publisher
+        self.pub_kinova = rospy.Publisher('/arm/in/joint_velocity', Base_JointSpeeds, queue_size=10)
 
     def init_joint_states_subscriber(self):
         self._q = np.zeros(self.dof)
         self._qdot = np.zeros(self.dof)
         self.joint_state_subscriber = rospy.Subscriber(
-            "/joint_states",
+            "/arm/base_feedback/joint_state",
             JointState,
             self.joint_states_callback,
             tcp_nodelay=True,
@@ -79,10 +92,8 @@ class KinovaFabricsNode(GenericFabricsNode):
         self._runtime_arguments['qdot'] = self._qdot
 
     def joint_states_callback(self, msg: JointState):
-        print("msg:", msg)
         self._q = np.array(msg.position[0:self.dof])
         self._qdot = np.array(msg.velocity[0:self.dof])
-        print("self._q: ", self._q)
 
     def publish_action(self):
         desired_vel= Twist()
@@ -96,9 +107,35 @@ class KinovaFabricsNode(GenericFabricsNode):
         # desired_vel.linear.x = self._action[0]
         # desired_vel.linear.y = self._action[1]
 
-        self._kinova_command_publisher.publish(action_msg)
+        # self._kinova_command_publisher.publish(action_msg)
         
-
+        joint_speeds_struct = Base_JointSpeeds()
+        # Add speeds for each joint
+        joint_speeds = []
+        for i in range(6):
+            joint_speed = JointSpeed()
+            joint_speed.joint_identifier = i
+            if joint_speed.joint_identifier == 0:
+                joint_speed.value = 0.01
+            else:
+                joint_speed.value = 0.0
+            joint_speed.duration = 1
+            joint_speeds.append(joint_speed)
+        joint_speeds_struct.joint_speeds = joint_speeds
+        print("joint_speeds_struct!!!!!!: ", joint_speeds_struct)
+        # Publish the message
+        self.pub_kinova.publish(joint_speeds_struct)
+        
+        # my_joint_angles = JointAngles()
+        # joint_angles = []
+        # for i in range(6):
+        #     joint_angle = JointAngle()
+        #     joint_angle.joint_identifier = i
+        #     joint_angle.value = 50. #IN DEGREES!!!
+        #     my_joint_angles.joint_angles.append(joint_angle)
+        # # my_constrained_joint_angles.joint_angles.joint_angles = joint_angles
+        # print("my_constrained_joint_angles:", my_joint_angles)
+        # self.pub_kinova.publish(my_joint_angles)
 
 if __name__ == "__main__":
     node = KinovaFabricsNode()

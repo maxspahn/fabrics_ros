@@ -436,8 +436,8 @@ class GenericFabricsNode(ABC):
         # print("self.goal: ", self._runtime_arguments['x_goal_0'])
         # print("self._runtime_arguments, angle_goal1:", self._runtime_arguments['angle_goal_1'])
         # # print("self._runtime_arguments, weight_goal1:", self._runtime_arguments['weight_goal_1'])
-        # print("self._runtime_arguments, q:", self._runtime_arguments['q'])
-        # print("self._runtime_arguments, qdot:", self._runtime_arguments['qdot'])  
+        print("self._runtime_arguments, q:", self._runtime_arguments['q'])
+        #print("self._runtime_arguments, qdot:", self._runtime_arguments['qdot'])  
         # print("self._runtime_arguments, x_obst:", self._runtime_arguments['x_obst'])
         if self.goal_reached == False:
             action = self._planner.compute_action(
@@ -469,7 +469,7 @@ class GenericFabricsNode(ABC):
             self._action = action
             self._action = self._action * alpha + action * (1-alpha)
             self._action = np.clip(self._action, self._min_vel, self._max_vel)
-            # print("after clipping!!")
+            print("action:", self._action)
             self.publish_action()
             self.check_goal_reached()
             # print("after goal reached!")

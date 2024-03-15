@@ -10,9 +10,9 @@
         <!-- start fabric node -->
     <node pkg="fabrics_bridge" type="kinova_fabrics_node" name="kinova_fabrics_node" output="screen"/>
 
-    <node pkg="fabrics_bridge" type="kinova_kortex_node" name="kinova_kortex_node" output="screen" launch-prefix="bash -c 'sleep $(arg start_delay_seconds); $0 $@' ">
+    <!-- <node pkg="fabrics_bridge" type="kinova_kortex_node" name="kinova_kortex_node" output="screen" launch-prefix="bash -c 'sleep $(arg start_delay_seconds); $0 $@' ">
         <param name="robot_name" value="$(arg robot_name)"/>
-    </node>
+    </node> -->
     <!-- </group> -->
     <!-- <node pkg="rviz" type="rviz" name="rviz" args="-d $(find fabrics_bridge)/config/fabrics_boxer_visualization.rviz" if="$(arg rviz)"/> -->
     <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find dingo_planners)/rviz/demo.rviz"/> -->
