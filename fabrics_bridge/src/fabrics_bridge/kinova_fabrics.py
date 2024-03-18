@@ -26,6 +26,7 @@ class KinovaFabricsNode(GenericFabricsNode):
         print("self.dof:", self.dof)
         self.joint_names = [f'kinova_joint{i+1}' for i in range(self.dof)]
         self._action = np.zeros(self.dof)
+        self._action_pos = np.zeros(self.dof)
         rospack = rospkg.RosPack()
         self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/kinova/"
         # absolute_path = os.path.dirname(os.path.abspath(__file__))
@@ -53,7 +54,7 @@ class KinovaFabricsNode(GenericFabricsNode):
 
     def init_publishers(self):
         self._kinova_command_publisher = rospy.Publisher(
-            '/command_fabrics',
+            '/joints_position_controller/command', #'/command_fabrics',
             Float64MultiArray, 
             queue_size=10
         )
@@ -72,8 +73,14 @@ class KinovaFabricsNode(GenericFabricsNode):
     def init_joint_states_subscriber(self):
         self._q = np.zeros(self.dof)
         self._qdot = np.zeros(self.dof)
+        # self.joint_state_subscriber = rospy.Subscriber(
+        #     "/arm/base_feedback/joint_state",
+        #     JointState,
+        #     self.joint_states_callback,
+        #     tcp_nodelay=True,
+        # )
         self.joint_state_subscriber = rospy.Subscriber(
-            "/arm/base_feedback/joint_state",
+            "/joint_states",
             JointState,
             self.joint_states_callback,
             tcp_nodelay=True,
@@ -92,38 +99,54 @@ class KinovaFabricsNode(GenericFabricsNode):
         self._runtime_arguments['qdot'] = self._qdot
 
     def joint_states_callback(self, msg: JointState):
-        self._q = np.array(msg.position[0:self.dof])
-        self._qdot = np.array(msg.velocity[0:self.dof])
+        self._q = np.array(msg.position[3:self.dof+3])
+        self._qdot = np.array(msg.velocity[3:self.dof+3])
 
+    def integrate_to_pos_command(self, action):
+        if self._q is not None:
+            print("self._q", self._q)
+            print("action:", action)
+            action_pos = self._q + 100*action
+        else:
+            action_pos = np.zeros(self.dof)
+        # action_new = self._q + np.array(action)*0.01
+        # print("action_pos:", action_pos)
+        return action_pos
+        
     def publish_action(self):
         desired_vel= Twist()
         if np.isnan(self._action).any():
             rospy.logwarn(f"Action not a number {self._action}")
             self._action = np.zeros((rospy.get_param("/degrees_of_freedom"), 1))
+            #self.integrate_to_pos_command(self._action)
             action_msg = Float64MultiArray(data=self._action)
             self._kinova_command_publisher.publish(action_msg)
             return
-        action_msg = Float64MultiArray(data=self._action)
+        self._action_pos = self.integrate_to_pos_command(self._action)
+        action_msg = Float64MultiArray(data=self._action_pos)
+        
+        self._kinova_command_publisher.publish(action_msg)
+        # print("action_msg:", action_msg)
         # desired_vel.linear.x = self._action[0]
         # desired_vel.linear.y = self._action[1]
 
         # self._kinova_command_publisher.publish(action_msg)
         
-        joint_speeds_struct = Base_JointSpeeds()
-        # Add speeds for each joint
-        joint_speeds = []
-        for i in range(6):
-            joint_speed = JointSpeed()
-            joint_speed.joint_identifier = i
-            # if joint_speed.joint_identifier == 0:
-            #     joint_speed.value = 0.01
-            # else:
-            joint_speed.value = self._action[i]
-            joint_speed.duration = 1
-            joint_speeds.append(joint_speed)
-        joint_speeds_struct.joint_speeds = joint_speeds
-        # Publish the message
-        self.pub_kinova.publish(joint_speeds_struct)
+        # joint_speeds_struct = Base_JointSpeeds()
+        # # Add speeds for each joint
+        # joint_speeds = []
+        # for i in range(6):
+        #     joint_speed = JointSpeed()
+        #     joint_speed.joint_identifier = i
+        #     # if joint_speed.joint_identifier == 0:
+        #     #     joint_speed.value = 0.01
+        #     # else:
+        #     joint_speed.value = self._action[i]
+        #     joint_speed.duration = 1
+        #     joint_speeds.append(joint_speed)
+        # joint_speeds_struct.joint_speeds = joint_speeds
+        # # Publish the message
+        # self.pub_kinova.publish(joint_speeds_struct)
         
         # my_joint_angles = JointAngles()
         # joint_angles = []
