@@ -106,7 +106,7 @@ class KinovaFabricsNode(GenericFabricsNode):
         if self._q is not None:
             print("self._q", self._q)
             print("action:", action)
-            action_pos = self._q + 100*action
+            action_pos = self._q + 10*action
         else:
             action_pos = np.zeros(self.dof)
         # action_new = self._q + np.array(action)*0.01
