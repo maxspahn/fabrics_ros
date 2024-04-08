@@ -7,7 +7,7 @@ from kortex_driver.msg import *
 class SafetySwitchNode():
     def __init__(self):
         rospy.init_node("safety_switch_node")
-        self._dt = 0.1
+        self._dt = 0.05
         self.msg = None
         self.vel_topic = '/arm/in/joint_velocity' #'/joints_velocity_controller/command'
         self.joystick_topic = '/bluetooth_teleop/joy'
@@ -64,7 +64,7 @@ class SafetySwitchNode():
         self.vel_cmd_msg = self.msg
 
         self.actuate_if_deadman_switch()
-        print("self.msg:", self.msg)
+        #print("self.msg:", self.msg)
 
     def run(self):
         while not rospy.is_shutdown():

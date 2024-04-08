@@ -72,7 +72,11 @@ class KinovaFabricsNode(GenericFabricsNode):
                 Base_JointSpeeds, 
                 queue_size=10
             )
-            
+            self._kinova_current_publisher = rospy.Publisher(
+                 '/current_velocities', #'/joints_velocity_controller/command'
+                 Float64MultiArray, 
+                 queue_size=10
+             )
 
         self._obstacle_planner_publisher = rospy.Publisher(
             '/fabrics/planning_obs',
@@ -143,6 +147,7 @@ class KinovaFabricsNode(GenericFabricsNode):
         #self._action_pos = self.integrate_to_pos_command(self._action)
         #print("action_pos:", self._action_pos)
         action_msg = Float64MultiArray(data=self._action)
+        vel_current_msg = Float64MultiArray(data=self._qdot)
         
         if self.sim_on:
             self._kinova_command_publisher.publish(action_msg)
@@ -154,15 +159,16 @@ class KinovaFabricsNode(GenericFabricsNode):
             for i in range(6):
                 joint_speed = JointSpeed()
                 joint_speed.joint_identifier = i
-                # if joint_speed.joint_identifier == 0:
-                #     joint_speed.value = 0.01
-                # else:
-                joint_speed.value = self._action[i]
-                joint_speed.duration = 1
+                if joint_speed.joint_identifier == 5:
+                    joint_speed.value = -0.1
+                else:
+                    joint_speed.value = 0. #self._action[i]
+                joint_speed.duration = 1000
                 joint_speeds.append(joint_speed)
             joint_speeds_struct.joint_speeds = joint_speeds
             # Publish the message
             self._kinova_command_publisher.publish(joint_speeds_struct)
+            self._kinova_current_publisher.publish(vel_current_msg)
             # self.pub_kinova.publish(joint_speeds_struct)
             #print("joint_speed_struct:", joint_speeds_struct)
         # desired_vel.linear.x = self._action[0]
