@@ -30,12 +30,12 @@ class KinovaFabricsNode(GenericFabricsNode):
         rospack = rospkg.RosPack()
         self._planner_folder = rospack.get_path("fabrics_bridge") + "/planner/kinova/"
         # absolute_path = os.path.dirname(os.path.abspath(__file__))
-        robot_model = RobotModel('kinova', model_name='gen3_6dof')
-        urdf_file = robot_model.get_urdf_path()
-        with open(urdf_file, "r", encoding="utf-8") as file:
-            self.urdf = file.read()
-        # with open(rospack.get_path("fabrics_bridge")+"/config/dingo_kinova.urdf", "r", encoding="utf-8") as file:
+        # robot_model = RobotModel('kinova', model_name='gen3_6dof')
+        # urdf_file = robot_model.get_urdf_path()
+        # with open(urdf_file, "r", encoding="utf-8") as file:
         #     self.urdf = file.read()
+        with open(rospack.get_path("fabrics_bridge")+"/config/kinova.urdf", "r", encoding="utf-8") as file:
+            self.urdf = file.read()
         self._forward_kinematics = GenericURDFFk(
             self.urdf,
             rootLink=rospy.get_param("/root_link"),
@@ -54,7 +54,7 @@ class KinovaFabricsNode(GenericFabricsNode):
 
     def init_publishers(self):
         self._kinova_command_publisher = rospy.Publisher(
-            '/joints_position_controller/command', #'/command_fabrics',
+            '/joints_velocity_controller/command', #'/command_fabrics',
             Float64MultiArray, 
             queue_size=10
         )
@@ -68,7 +68,7 @@ class KinovaFabricsNode(GenericFabricsNode):
         # self.pub_kinova = rospy.Publisher('/my_gen3/joint_angles', JointAngles, queue_size=10)
         
         # Create a publisher
-        self.pub_kinova = rospy.Publisher('/arm/in/joint_velocity', Base_JointSpeeds, queue_size=10)
+        self.pub_kinova = rospy.Publisher('/joints_velocity_controller/command', Base_JointSpeeds, queue_size=10)
 
     def init_joint_states_subscriber(self):
         self._q = np.zeros(self.dof)
@@ -99,14 +99,14 @@ class KinovaFabricsNode(GenericFabricsNode):
         self._runtime_arguments['qdot'] = self._qdot
 
     def joint_states_callback(self, msg: JointState):
-        self._q = np.array(msg.position[3:self.dof+3])
-        self._qdot = np.array(msg.velocity[3:self.dof+3])
+        self._q = np.array(msg.position[:self.dof]) #3:self.dof+3
+        self._qdot = np.array(msg.velocity[:self.dof]) #3:self.dof+3
 
     def integrate_to_pos_command(self, action):
         if self._q is not None:
-            print("self._q", self._q)
-            print("action:", action)
-            action_pos = self._q + 10*action
+            #print("self._q", self._q)
+            #print("action:", action)
+            action_pos = self._q + action
         else:
             action_pos = np.zeros(self.dof)
         # action_new = self._q + np.array(action)*0.01
@@ -122,8 +122,9 @@ class KinovaFabricsNode(GenericFabricsNode):
             action_msg = Float64MultiArray(data=self._action)
             self._kinova_command_publisher.publish(action_msg)
             return
-        self._action_pos = self.integrate_to_pos_command(self._action)
-        action_msg = Float64MultiArray(data=self._action_pos)
+        #self._action_pos = self.integrate_to_pos_command(self._action)
+        #print("action_pos:", self._action_pos)
+        action_msg = Float64MultiArray(data=self._action)
         
         self._kinova_command_publisher.publish(action_msg)
         # print("action_msg:", action_msg)

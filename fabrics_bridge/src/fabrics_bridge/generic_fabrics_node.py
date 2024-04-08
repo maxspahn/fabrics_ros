@@ -410,7 +410,7 @@ class GenericFabricsNode(ABC):
         x_goal = self._runtime_arguments['x_goal_0'][0:self._dim_state]
         q = self._runtime_arguments['q']
         x_state = self._forward_kinematics.fk(q, self.root_link, self.end_link, positionOnly=True)[0:self._dim_state]
-        # print("x_state:", x_state)
+        print("x_state:", x_state)
         distance = self.dist_goal_ee(x_state, x_goal)
         if distance <= self.positional_goal_tolerance and self.goal_reached == False:
             self.q_final = copy.deepcopy(self._q)
@@ -445,7 +445,10 @@ class GenericFabricsNode(ABC):
                 **self._runtime_arguments,
             )
         else:
-            action = np.zeros_like(self._action)
+            action = self._planner.compute_action(
+                **self._runtime_arguments,
+            )
+            #action = np.zeros_like(self._action)
         #print("action:", action)
         return action
 
@@ -470,7 +473,7 @@ class GenericFabricsNode(ABC):
             self._action = action
             self._action = self._action * alpha + action * (1-alpha)
             self._action = np.clip(self._action, self._min_vel, self._max_vel)
-            # print("action:", self._action)
+            #print("action:", self._action)
             self.publish_action()
             self.check_goal_reached()
             # print("after goal reached!")
