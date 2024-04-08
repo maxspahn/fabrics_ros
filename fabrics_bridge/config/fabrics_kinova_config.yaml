@@ -1,6 +1,7 @@
 positional_goal_tolerance : 0.05
 robot_type: "my_gen3"
 planner_type: "holonomic"
+simulation: False
 degrees_of_freedom: 6
 dim_state: 3
 m_arm: 5.0

@@ -410,7 +410,7 @@ class GenericFabricsNode(ABC):
         x_goal = self._runtime_arguments['x_goal_0'][0:self._dim_state]
         q = self._runtime_arguments['q']
         x_state = self._forward_kinematics.fk(q, self.root_link, self.end_link, positionOnly=True)[0:self._dim_state]
-        print("x_state:", x_state)
+        #print("x_state:", x_state)
         distance = self.dist_goal_ee(x_state, x_goal)
         if distance <= self.positional_goal_tolerance and self.goal_reached == False:
             self.q_final = copy.deepcopy(self._q)
@@ -434,12 +434,12 @@ class GenericFabricsNode(ABC):
         self.compose_runtime_obstacles_argument()
         self.goal_wrapper.compose_runtime_arguments(self._goal, self._runtime_arguments)
         self.set_joint_states_values()
-        # print("self.goal: ", self._runtime_arguments['x_goal_0'])
+        #print("self.goal: ", self._runtime_arguments['x_goal_0'])
         # print("self._runtime_arguments, angle_goal1:", self._runtime_arguments['angle_goal_1'])
         # # print("self._runtime_arguments, weight_goal1:", self._runtime_arguments['weight_goal_1'])
-        # print("self._runtime_arguments, q:", self._runtime_arguments['q'])
+        #print("self._runtime_arguments, q:", self._runtime_arguments['q'])
         #print("self._runtime_arguments, qdot:", self._runtime_arguments['qdot'])  
-        # print("self._runtime_arguments, x_obst:", self._runtime_arguments['x_obst'])
+        #print("self._runtime_arguments, x_obst:", self._runtime_arguments['x_obst'])
         if self.goal_reached == False:
             action = self._planner.compute_action(
                 **self._runtime_arguments,

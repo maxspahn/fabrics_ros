@@ -23,6 +23,8 @@ class KinovaFabricsNode(GenericFabricsNode):
     def init_robot_specifics(self):
         print("Init_robot_specifics")
         self.dof = rospy.get_param("/degrees_of_freedom")
+        self.sim_on = rospy.get_param("/simulation")
+        print("self.sim_on: ", self.sim_on)
         print("self.dof:", self.dof)
         self.joint_names = [f'kinova_joint{i+1}' for i in range(self.dof)]
         self._action = np.zeros(self.dof)
@@ -53,22 +55,24 @@ class KinovaFabricsNode(GenericFabricsNode):
         print("end init robot specifics")
 
     def init_publishers(self):
-        self._kinova_command_publisher = rospy.Publisher(
-            '/joints_velocity_controller/command', #'/command_fabrics',
-            Float64MultiArray, 
-            queue_size=10
-        )
+        if self.sim_on:
+            self._kinova_command_publisher = rospy.Publisher(
+                "/joints_velocity_controller/command",
+                Float64MultiArray, 
+                queue_size=10
+            )
+        else:
+            self._kinova_command_publisher = rospy.Publisher(
+                '/command_fabrics', #'/joints_velocity_controller/command'
+                Float64MultiArray, 
+                queue_size=10
+            )
 
         self._obstacle_planner_publisher = rospy.Publisher(
             '/fabrics/planning_obs',
             FabricsObstacleArray, 
             queue_size=10
         )
-        
-        # self.pub_kinova = rospy.Publisher('/my_gen3/joint_angles', JointAngles, queue_size=10)
-        
-        # Create a publisher
-        self.pub_kinova = rospy.Publisher('/joints_velocity_controller/command', Base_JointSpeeds, queue_size=10)
 
     def init_joint_states_subscriber(self):
         self._q = np.zeros(self.dof)
@@ -79,12 +83,20 @@ class KinovaFabricsNode(GenericFabricsNode):
         #     self.joint_states_callback,
         #     tcp_nodelay=True,
         # )
-        self.joint_state_subscriber = rospy.Subscriber(
-            "/joint_states",
+        if self.sim_on:
+            self.joint_state_subscriber = rospy.Subscriber(
+                "/joint_states",
+                JointState,
+                self.joint_states_callback,
+                tcp_nodelay=True,
+            )
+        else:
+            self.joint_state_subscriber = rospy.Subscriber(
+            "/arm/base_feedback/joint_state",
             JointState,
             self.joint_states_callback,
             tcp_nodelay=True,
-        )
+            )
 
     def init_obstacle_subscriber(self):
         self.obstacle_subscriber = rospy.Subscriber('vicon/obstacle1', PoseWithCovarianceStamped, self.cb_obstacle1, tcp_nodelay=True)
@@ -126,7 +138,10 @@ class KinovaFabricsNode(GenericFabricsNode):
         #print("action_pos:", self._action_pos)
         action_msg = Float64MultiArray(data=self._action)
         
-        self._kinova_command_publisher.publish(action_msg)
+        if self.sim_on:
+            self._kinova_command_publisher.publish(action_msg)
+        else:
+            self._kinova_command_publisher.publish(action_msg)
         # print("action_msg:", action_msg)
         # desired_vel.linear.x = self._action[0]
         # desired_vel.linear.y = self._action[1]
