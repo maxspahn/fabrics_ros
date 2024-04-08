@@ -2,6 +2,7 @@
 import rospy
 from sensor_msgs.msg import Joy
 from std_msgs.msg import Float64MultiArray
+from kortex_driver.msg import *
 
 class SafetySwitchNode():
     def __init__(self):
@@ -19,18 +20,18 @@ class SafetySwitchNode():
 
     def establish_ros_connections(self):
 
-        self._vel_pub = rospy.Publisher(self.vel_topic, Float64MultiArray, queue_size=1)
+        self._vel_pub = rospy.Publisher(self.vel_topic, Base_JointSpeeds, queue_size=1)
 
         self.joystick_sub = rospy.Subscriber(self.joystick_topic, Joy, self.joystick_cb, queue_size=1)
         
         self.action_subscriber = rospy.Subscriber(
             "/command_fabrics",
-            Float64MultiArray,
+            Base_JointSpeeds,
             self.action_fabrics_callback,
             tcp_nodelay=True,
         )
         
-    def action_fabrics_callback(self, msg: Float64MultiArray):
+    def action_fabrics_callback(self, msg: Base_JointSpeeds):
         self.msg = msg
 
     def joystick_cb(self, msg):
@@ -51,13 +52,15 @@ class SafetySwitchNode():
             #print("publishing output")
         else:
             if self.vel_cmd_msg is not None:
-                self.vel_cmd_msg.data = [0., 0., 0., 0., 0., 0.] #todo: remove hardcoded!
+                for joint_speed in self.vel_cmd_msg.joint_speeds:
+                    joint_speed.value = 0.
+                # self.vel_cmd_msg.data = [0., 0., 0., 0., 0., 0.] #todo: remove hardcoded!
                 self._vel_pub.publish(self.vel_cmd_msg)
                 #print("I am here2222")
             self.enable_output = False
 
     def act(self):
-        self.vel_cmd_msg = Float64MultiArray()
+        self.vel_cmd_msg = Base_JointSpeeds()
         self.vel_cmd_msg = self.msg
 
         self.actuate_if_deadman_switch()

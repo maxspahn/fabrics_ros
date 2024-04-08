@@ -11,7 +11,7 @@
     <node pkg="fabrics_bridge" type="kinova_fabrics_node" name="kinova_fabrics_node" output="screen"/>
 
     <!-- safety switch for real-world experiments (keep button pressed on joystick) -->
-    <!-- <node pkg="fabrics_bridge" type="safety_switch_node" name="safety_switch_node" output="screen"/> -->
+    <node pkg="fabrics_bridge" type="safety_switch_node" name="safety_switch_node" output="screen"/>
 
     <include file="$(find vicon_bridge)/launch/vicon.launch">
         <arg name="only_use_object_specific" default="true"/>
