@@ -46,10 +46,15 @@ class KukaFabricsNode(GenericFabricsNode):
 
     def init_publishers(self):
         self._kuka_command_publisher = rospy.Publisher(
-            '/%s/control_request' % "iiwa14",
+            '/%s/control_request' % "iiwa14", #todo: turn on in case that you just want to use this script!
             ControlRequest, 
             queue_size=10
         )
+        self._fabrics_action_publisher = rospy.Publisher(
+            '/fabrics/action', # % "iiwa14", #todo: change to iiwa7!
+             Float64MultiArray,
+            queue_size=10
+        )    
 
         self._obstacle_planner_publisher = rospy.Publisher(
             '/fabrics/planning_obs',
@@ -92,6 +97,11 @@ class KukaFabricsNode(GenericFabricsNode):
         self._kuka_command_publisher.publish(msg)
         return True
     
+    def send_action(self, action):
+        action_msg = Float64MultiArray(data=self._action)
+        self._fabrics_action_publisher.publish(action_msg)
+        return True
+    
     def clean_list_actions(self):
         len_list = len(self.action_list)
         self.action_list = self.action_list[len_list-200:len_list]
@@ -111,6 +121,13 @@ class KukaFabricsNode(GenericFabricsNode):
         print("action_avg:", action_avg)
         return action_avg
     
+    def integrate_to_vel(self, action):
+        if self._qdot is not None:
+            q_dot_d = action/self._frequency
+            return q_dot_d
+        else:
+            return np.zeros((rospy.get_param("/degrees_of_freedom"), 1))
+    
     def publish_action(self):
         if np.isnan(self._action).any():
             rospy.logwarn(f"Action not a number {self._action}")
@@ -120,11 +137,15 @@ class KukaFabricsNode(GenericFabricsNode):
             return
         self.action_list.append(self._action)
         # self._action = self.filter_action(self._action)
-        if self.goal_reached == False:
-            self.send_request(q_d = self._q, q_dot_d = self._action)
+        self.send_action(action=self._action)
+        if self.mode=="acc":
+            q_dot_d = self.integrate_to_vel(self._action)
         else:
-            # print("self.q_final: ", self.q_final)
-            self.send_request(q_d = self.q_final, q_dot_d = self._action)
+            q_dot_d = self._action
+        if self.goal_reached == False:
+            self.send_request(q_d = self._q, q_dot_d = q_dot_d)
+        else:
+            self.send_request(q_d = self.q_final, q_dot_d = q_dot_d)
         return
         
 

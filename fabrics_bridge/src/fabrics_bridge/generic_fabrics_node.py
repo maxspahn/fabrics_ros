@@ -42,7 +42,7 @@ class GenericFabricsNode(ABC):
         self.init_robot_specifics()
         self._goal = None
         self._goal_string = 'none'
-        self._frequency = 100
+        self._frequency = 500
         self.rate = rospy.Rate(self._frequency)
         self._robot_type = rospy.get_param('/robot_type') 
         self._dim_state = rospy.get_param('/dim_state')
@@ -120,9 +120,15 @@ class GenericFabricsNode(ABC):
             
 
     def load_parameters(self):
+        self.mode = rospy.get_param("/mode")
         scaling_factor = rospy.get_param('/velocity_scaling')
-        self._max_vel = np.array(rospy.get_param("/velocity_limits/upper")) * scaling_factor
-        self._min_vel = np.array(rospy.get_param("/velocity_limits/lower")) * scaling_factor
+        if self.mode == "acc":
+            self._max_acc = np.array(rospy.get_param("/acceleration_limits/upper"))
+            self._min_acc = np.array(rospy.get_param("/acceleration_limits/lower"))
+        else:
+            print("wronggggg")
+            self._max_vel = np.array(rospy.get_param("/velocity_limits/upper")) * scaling_factor
+            self._min_vel = np.array(rospy.get_param("/velocity_limits/lower")) * scaling_factor
         self.num_sphere_obstacles = rospy.get_param("/num_sphere_obs")
         self.num_box_obstacles = rospy.get_param("/num_box_obs")
         # robot_description should be global because it's not part of fabrics ns
@@ -225,7 +231,8 @@ class GenericFabricsNode(ABC):
             # number_obstacles_cuboid=self.num_box_obstacles,
             # number_plane_constraints=self.num_plane_constraints
         )
-        planner.concretize(mode='vel', time_step = 1/self._frequency)
+        print("self.mode: ", self.mode)
+        planner.concretize(mode=self.mode, time_step = 1/self._frequency)
         t1 = time.perf_counter()
         composition_time = (t1-t0) * 1
         # serializing the planner
@@ -449,7 +456,7 @@ class GenericFabricsNode(ABC):
                 **self._runtime_arguments,
             )
             #action = np.zeros_like(self._action)
-        #print("action:", action)
+        print("action:", action)
         return action
 
     @abstractmethod
@@ -472,7 +479,10 @@ class GenericFabricsNode(ABC):
             action = self.compute_action()
             self._action = action
             self._action = self._action * alpha + action * (1-alpha)
-            self._action = np.clip(self._action, self._min_vel, self._max_vel)
+            if self.mode == "acc":
+                self._action = np.clip(self._action, self._min_acc, self._max_acc)
+            else:
+                self._action = np.clip(self._action, self._min_vel, self._max_vel)
             #print("action:", self._action)
             self.publish_action()
             self.check_goal_reached()
